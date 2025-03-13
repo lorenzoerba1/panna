@@ -21,5 +21,6 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(Catch2)
 
+include_directories("test/include")
 add_executable(tests test/tests.cpp)
 target_link_libraries(tests PRIVATE Catch2::Catch2WithMain)
