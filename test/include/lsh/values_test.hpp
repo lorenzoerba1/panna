@@ -1,6 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include "panna/typedefs.hpp"
+#include "panna/lsh/values.hpp"
 
 TEST_CASE( "Bit hashes interleaving" ) {
     using namespace panna;
