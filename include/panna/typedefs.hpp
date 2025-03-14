@@ -4,26 +4,28 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <type_traits>
+#include <array>
 
 namespace panna {
     //! Places zeros between the bits of the given value.
     //! Only the 16 less significant bits will appear in the output.
     //! The least significant bit will remain where it is.
-    constexpr static uint32_t intersperse_zero(uint32_t val) {
+    constexpr static uint32_t intersperse_zero( uint32_t val ) {
         uint32_t mask = 1;
         uint32_t shift = 0;
 
         uint32_t res = 0;
-        for (unsigned i=0; i < sizeof(uint32_t)*8/2; i++) {
-            res |= (val & mask) << shift;
+        for ( unsigned i = 0; i < sizeof( uint32_t ) * 8 / 2; i++ ) {
+            res |= ( val & mask ) << shift;
             mask <<= 1;
             shift++;
         }
         return res;
     }
     // An example of a call to the function above
-    static_assert(intersperse_zero(0xFF) == 0x5555, "");
+    static_assert( intersperse_zero( 0xFF ) == 0x5555, "" );
 
     // clang-format off
     static constexpr uint32_t BITWISE_HASH_MASKS[] = {
@@ -66,8 +68,12 @@ namespace panna {
     template <uint8_t K>
     struct BitwiseLshValue {
     private:
+        static_assert( K <= 32, "you can have at most 32 hash functions" );
         //! The bits of this hash value
         uint32_t bits;
+
+        // To allow the implementation of `interleave` to work
+        friend struct BitwiseLshValue<2 * K>;
 
     public:
         //! How many concatenated hash values are stored in this value?
@@ -114,15 +120,13 @@ namespace panna {
             return this->bits == other.bits;
         }
 
-        constexpr inline BitwiseLshValue<2*K>
-        interleave( BitwiseLshValue<K> other ) {
-            uint32_t abits = intersperse_zero(this->bits);
-            uint32_t bbits = intersperse_zero(other.bits);
-            uint32_t res = (abits << 1) | bbits;
-            printf("%x\n", res);
-            return BitwiseLshValue<2*K>::make(res);
+        static constexpr inline BitwiseLshValue<K>
+        interleave( BitwiseLshValue<K / 2> a, BitwiseLshValue<K / 2> b ) {
+            uint32_t abits = intersperse_zero( a.bits );
+            uint32_t bbits = intersperse_zero( b.bits );
+            uint32_t res = ( abits << 1 ) | bbits;
+            return BitwiseLshValue<K>::make( res );
         }
-
     };
 
     // simple static tests on the hash data type, checked at compile time
@@ -139,7 +143,10 @@ namespace panna {
     struct BytewiseLshValue {
     private:
         //! The hash values
-        uint8_t hashes[K];
+        std::array<uint8_t, K> hashes;
+        
+        // To allow the implementation of `interleave` to work
+        friend struct BytewiseLshValue<2 * K>;
 
     public:
         //! How many concatenated hash values are stored in this value?
@@ -147,8 +154,9 @@ namespace panna {
 
         // we use a factory function rather than a constructor to keep this
         // struct Plain Old Data.
-        constexpr static BytewiseLshValue<K> make( uint8_t bytes[K] ) {
+        constexpr static BytewiseLshValue<K> make( std::array<uint8_t, K> bytes ) {
             BytewiseLshValue<K> hash;
+            // memccpy( hash.hashes, bytes, 0, K );
             hash.hashes = bytes;
             return hash;
         }
@@ -186,8 +194,8 @@ namespace panna {
             static_assert( K % 2 == 0, "K should be even" );
             BytewiseLshValue<K> out;
             for ( size_t i = 0; i < K / 2; i++ ) {
-                out[2 * i] = a[i];
-                out[2 * i + 1] = b[i];
+                out.hashes[2 * i] = a.hashes[i];
+                out.hashes[2 * i + 1] = b.hashes[i];
             }
             return out;
         }
