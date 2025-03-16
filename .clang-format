@@ -30,7 +30,7 @@ ConstructorInitializerAllOnOneLineOrOnePerLine: "true"
 DerivePointerAlignment: "false"
 FixNamespaceComments: "true"
 IndentCaseLabels: "false"
-IndentPPDirectives: AfterHash
+IndentPPDirectives: BeforeHash
 IndentWidth: "4"
 NamespaceIndentation: All
 PointerAlignment: Left
