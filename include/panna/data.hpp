@@ -127,6 +127,18 @@ namespace panna {
             }
         }
 
+        void push_back_random_normal() {
+            auto rng = panna::get_global_rng();
+            std::normal_distribution<float> normal_distribution( 0.0, 1.0 );
+
+            std::vector<float> values;
+            for ( unsigned int i = 0; i < dimensions; i++ ) {
+                values.push_back( normal_distribution( rng ) );
+            }
+
+            push_back(values);
+        }
+
         size_t size() const { return chunks.size() / chunks_per_point; }
     };
 } // namespace panna
