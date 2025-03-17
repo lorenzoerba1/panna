@@ -1,7 +1,9 @@
 #pragma once
 
 #include <cassert>
+#include <cmath>
 #include <cstddef>
+#include <cstring>
 #include <stdexcept>
 #include <vector>
 
@@ -19,7 +21,7 @@ namespace panna {
         DummyPoints( size_t dimensions ): dimensions( dimensions ) {}
 
         void push_back_random_normal() {
-            auto rng = panna::get_global_rng();
+            auto& rng = panna::get_global_rng();
             std::normal_distribution<float> normal_distribution( 0.0, 1.0 );
 
             std::vector<float> values;
@@ -45,7 +47,7 @@ namespace panna {
     //! even when stored in a std::vector.
     struct alignas( 32 ) Uint16Chunk {
         static constexpr size_t CHUNK_SIZE = 16;
-        uint16_t chunk[CHUNK_SIZE];
+        int16_t chunk[CHUNK_SIZE];
     };
     static_assert( sizeof( Uint16Chunk ) == 256 / 8,
                    "Uint16 chunk should fill 256 bits" );
@@ -64,12 +66,11 @@ namespace panna {
     }
 
     struct UnitNormPointHandle {
-        Uint16Chunk* chunks;
+        Uint16Chunk const* chunks;
         size_t num_chunks;
     };
 
     class UnitNormPoints {
-        using PointHandle = UnitNormPointHandle;
 
         size_t dimensions;
         size_t padding;
@@ -80,18 +81,22 @@ namespace panna {
         std::vector<Uint16Chunk> chunks;
 
     public:
+        using PointHandle = UnitNormPointHandle;
+
         UnitNormPoints( size_t dimensions ):
             dimensions( dimensions ),
             padding( ( Uint16Chunk::CHUNK_SIZE -
                        ( dimensions % Uint16Chunk::CHUNK_SIZE ) ) %
                      Uint16Chunk::CHUNK_SIZE ),
-            chunks_per_point( dimensions / Uint16Chunk::CHUNK_SIZE ) {}
+            chunks_per_point(
+                std::ceil( ( (float)dimensions ) / Uint16Chunk::CHUNK_SIZE ) ) {
+        }
 
         size_t get_padding() const { return padding; }
 
         size_t get_chunks_per_point() const { return chunks_per_point; }
 
-        PointHandle operator[]( size_t i ) {
+        PointHandle operator[]( size_t i ) const {
             assert( i * chunks_per_point < chunks.size() );
             UnitNormPointHandle handle;
             handle.chunks = &chunks[i * chunks_per_point];
@@ -115,10 +120,10 @@ namespace panna {
 
             auto norm = std::sqrt( sq_norm );
             for ( size_t i = 0; i < dimensions; i++ ) {
-                uint16_t code = ( norm == 0.0 ) ? vec[i] : vec[i] / norm;
+                float normalized = ( norm == 0.0 ) ? vec[i] : vec[i] / norm;
                 chunks[base_chunk_idx + i / Uint16Chunk::CHUNK_SIZE]
                     .chunk[i % Uint16Chunk::CHUNK_SIZE] =
-                    to_16bit_fixed_point( code );
+                    to_16bit_fixed_point( normalized );
             }
             for ( size_t i = dimensions; i < dimensions + padding; i++ ) {
                 chunks[base_chunk_idx + i / Uint16Chunk::CHUNK_SIZE]
@@ -127,8 +132,9 @@ namespace panna {
             }
         }
 
-        void push_back_random_normal() {
-            auto rng = panna::get_global_rng();
+        PointHandle push_back_random_normal() {
+            // FIXME: check that it's actually random data
+            auto& rng = panna::get_global_rng();
             std::normal_distribution<float> normal_distribution( 0.0, 1.0 );
 
             std::vector<float> values;
@@ -136,7 +142,8 @@ namespace panna {
                 values.push_back( normal_distribution( rng ) );
             }
 
-            push_back(values);
+            push_back( values );
+            return operator[]( size() - 1 );
         }
 
         size_t size() const { return chunks.size() / chunks_per_point; }

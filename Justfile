@@ -1,5 +1,5 @@
 test: build-tests
-    build/tests
+    build/tests 
 
 build-tests:
     cmake --build build -j --config Debug --target tests

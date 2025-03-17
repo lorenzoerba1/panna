@@ -30,4 +30,11 @@ namespace panna {
         REQUIRE( UnitNormPoints( 16 ).get_padding() == 0 );
         REQUIRE( UnitNormPoints( 17 ).get_padding() == 15 );
     }
+
+    TEST_CASE( "chunks per point" ) {
+        REQUIRE( UnitNormPoints( 0 ).get_chunks_per_point() == 0 );
+        REQUIRE( UnitNormPoints( 1 ).get_chunks_per_point() == 1 );
+        REQUIRE( UnitNormPoints( 16 ).get_chunks_per_point() == 1 );
+        REQUIRE( UnitNormPoints( 17 ).get_chunks_per_point() == 2 );
+    }
 } // namespace panna
