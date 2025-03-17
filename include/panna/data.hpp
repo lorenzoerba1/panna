@@ -89,8 +89,7 @@ namespace panna {
                        ( dimensions % Int16Chunk::CHUNK_SIZE ) ) %
                      Int16Chunk::CHUNK_SIZE ),
             chunks_per_point(
-                std::ceil( ( (float)dimensions ) / Int16Chunk::CHUNK_SIZE ) ) {
-        }
+                std::ceil( ( (float)dimensions ) / Int16Chunk::CHUNK_SIZE ) ) {}
 
         size_t get_padding() const { return padding; }
 
@@ -133,7 +132,6 @@ namespace panna {
         }
 
         PointHandle push_back_random_normal() {
-            // FIXME: check that it's actually random data
             auto& rng = panna::get_global_rng();
             std::normal_distribution<float> normal_distribution( 0.0, 1.0 );
 
@@ -147,5 +145,57 @@ namespace panna {
         }
 
         size_t size() const { return chunks.size() / chunks_per_point; }
+    };
+
+    struct NormedPointHandle {
+        UnitNormPointHandle inner;
+        float sq_norm;
+
+        float squared_norm() const { return sq_norm; }
+    };
+
+    class NormedPoints {
+        size_t dimensions;
+        UnitNormPoints normalized_points;
+        std::vector<float> squared_norms;
+
+    public:
+        using PointHandle = NormedPointHandle;
+
+        NormedPoints( size_t dimensions ):
+            dimensions( dimensions ), normalized_points( dimensions ) {}
+
+        PointHandle operator[]( size_t i ) const {
+            PointHandle handle;
+            handle.inner = normalized_points[i];
+            handle.sq_norm = squared_norms[i];
+            return handle;
+        }
+
+        template <typename FloatVec>
+        void push_back( FloatVec& vec ) {
+            float sq_norm = 0.0;
+            for ( size_t i = 0; i < dimensions; i++ ) {
+                float v = vec[i];
+                sq_norm += v * v;
+            }
+            normalized_points.push_back( vec );
+            squared_norms.push_back( sq_norm );
+        }
+
+        PointHandle push_back_random_normal() {
+            auto& rng = panna::get_global_rng();
+            std::normal_distribution<float> normal_distribution( 0.0, 1.0 );
+
+            std::vector<float> values;
+            for ( unsigned int i = 0; i < dimensions; i++ ) {
+                values.push_back( normal_distribution( rng ) );
+            }
+
+            push_back( values );
+            return operator[]( size() - 1 );
+        }
+
+        size_t size() const { return squared_norms.size(); }
     };
 } // namespace panna

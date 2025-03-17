@@ -161,6 +161,10 @@ namespace panna {
             return hash;
         }
 
+        void set(size_t idx, uint8_t value) {
+            hashes[idx] = value;
+        }
+
         inline bool prefix_eq( BytewiseLshValue<K> other,
                                uint8_t prefix ) const {
             assert( prefix <= K );

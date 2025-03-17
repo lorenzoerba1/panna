@@ -51,4 +51,17 @@ namespace panna {
         }
     };
 
+    template <uint8_t K, typename Dataset>
+    class SimhashBuilder {
+        size_t dimensions = 0;
+
+    public:
+        using Output = Simhash<K, Dataset>;
+
+        SimhashBuilder( size_t dimensions ): dimensions( dimensions ) {}
+
+        Output build( size_t repetitions ) const {
+            return Simhash<K, Dataset>( dimensions, repetitions );
+        }
+    };
 } // namespace panna

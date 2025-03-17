@@ -4,20 +4,23 @@
 
 #include "panna/data.hpp"
 #include "panna/distance.hpp"
+#include "panna/lsh/euclidean.hpp"
 #include "panna/lsh/simhash.hpp"
 #include "panna/rand.hpp"
 
 namespace panna {
 
-    template <typename Dataset, typename Distance, typename Hasher>
+    template <typename Dataset, typename Distance, typename HasherBuilder>
     void
-    test_hash_collision_probability( unsigned int dimensions,
+    test_hash_collision_probability( HasherBuilder builder,
+                                     unsigned int dimensions,
                                      unsigned int repetitions,
                                      unsigned int num_experiments = 1000 ) {
+        using Hasher = typename HasherBuilder::Output;
         const float ACCEPTED_DEVIATION = 0.05;
         seed_global_rng( 1234 );
 
-        Hasher hasher( dimensions, repetitions );
+        Hasher hasher = builder.build( repetitions );
 
         std::vector<typename Hasher::Value> output_a;
         std::vector<typename Hasher::Value> output_b;
@@ -46,15 +49,25 @@ namespace panna {
 
     TEST_CASE( "Simhash collision probability" ) {
         using Dataset = UnitNormPoints;
-        test_hash_collision_probability<Dataset,
-                                        AngularDistance,
-                                        Simhash<1, Dataset>>( 10, 4096 );
-        test_hash_collision_probability<Dataset,
-                                        AngularDistance,
-                                        Simhash<1, Dataset>>( 100, 4096 );
-        test_hash_collision_probability<Dataset,
-                                        AngularDistance,
-                                        Simhash<1, Dataset>>( 200, 4096 );
+        for ( size_t dimensions : { 10, 100, 200 } ) {
+            SimhashBuilder<1, Dataset> builder( dimensions );
+            test_hash_collision_probability<Dataset,
+                                            AngularDistance,
+                                            SimhashBuilder<1, Dataset>>(
+                builder, dimensions, 4096 );
+        }
+    }
+
+    TEST_CASE( "E2LSH collision probability" ) {
+        using Dataset = NormedPoints;
+        float r = 1.0;
+        for ( size_t dimensions : { 10, 100, 200 } ) {
+            E2LSHBuilder<1, Dataset> builder( r, dimensions );
+            test_hash_collision_probability<Dataset,
+                                            EuclideanDistance,
+                                            E2LSHBuilder<1, Dataset>>(
+                builder, dimensions, 4096 );
+        }
     }
 
 } // namespace panna

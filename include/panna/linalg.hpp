@@ -49,7 +49,7 @@ namespace panna {
                 _mm256_load_si256( (__m256i*)rhs.chunks[i].chunk ) );
             res = _mm256_add_epi16( res, tmp );
         }
-        return reduce_sum(res);
+        return reduce_sum( res );
     }
 #endif
 
@@ -85,6 +85,14 @@ namespace panna {
     template <>
     float dot_product( UnitNormPointHandle a, UnitNormPointHandle b ) {
         return from_16bit_fixed_point( dot_product_chunks16( a, b ) );
+    }
+
+    template <>
+    float dot_product( NormedPointHandle a, NormedPointHandle b ) {
+        float inner_dot =
+            from_16bit_fixed_point( dot_product_chunks16( a.inner, b.inner ) );
+        return std::sqrt( a.squared_norm() ) * std::sqrt( b.squared_norm() ) *
+               inner_dot;
     }
 
 } // namespace panna
