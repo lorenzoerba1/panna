@@ -42,17 +42,17 @@ namespace panna {
         }
     };
 
-    //! A chunk of a longer vector of unsigned 16bit integers.
+    //! A chunk of a longer vector of 16bit integers.
     //! On C++17 this class is guaranteed to be aligned to the 256-bit boundary
     //! even when stored in a std::vector.
-    struct alignas( 32 ) Uint16Chunk {
+    struct alignas( 32 ) Int16Chunk {
         static constexpr size_t CHUNK_SIZE = 16;
         int16_t chunk[CHUNK_SIZE];
     };
-    static_assert( sizeof( Uint16Chunk ) == 256 / 8,
-                   "Uint16 chunk should fill 256 bits" );
-    static_assert( alignof( Uint16Chunk ) == 256 / 8,
-                   "Uint16 chunk should align to 256 bits" );
+    static_assert( sizeof( Int16Chunk ) == 256 / 8,
+                   "int16 chunk should fill 256 bits" );
+    static_assert( alignof( Int16Chunk ) == 256 / 8,
+                   "int16 chunk should align to 256 bits" );
 
     static constexpr int16_t to_16bit_fixed_point( float val ) {
         assert( val >= -1.0 && val <= 1.0 );
@@ -66,7 +66,7 @@ namespace panna {
     }
 
     struct UnitNormPointHandle {
-        Uint16Chunk const* chunks;
+        Int16Chunk const* chunks;
         size_t num_chunks;
     };
 
@@ -78,18 +78,18 @@ namespace panna {
 
         // Since C++17 the allocation of std::vector respects the alignment of
         // the template argument.
-        std::vector<Uint16Chunk> chunks;
+        std::vector<Int16Chunk> chunks;
 
     public:
         using PointHandle = UnitNormPointHandle;
 
         UnitNormPoints( size_t dimensions ):
             dimensions( dimensions ),
-            padding( ( Uint16Chunk::CHUNK_SIZE -
-                       ( dimensions % Uint16Chunk::CHUNK_SIZE ) ) %
-                     Uint16Chunk::CHUNK_SIZE ),
+            padding( ( Int16Chunk::CHUNK_SIZE -
+                       ( dimensions % Int16Chunk::CHUNK_SIZE ) ) %
+                     Int16Chunk::CHUNK_SIZE ),
             chunks_per_point(
-                std::ceil( ( (float)dimensions ) / Uint16Chunk::CHUNK_SIZE ) ) {
+                std::ceil( ( (float)dimensions ) / Int16Chunk::CHUNK_SIZE ) ) {
         }
 
         size_t get_padding() const { return padding; }
@@ -121,13 +121,13 @@ namespace panna {
             auto norm = std::sqrt( sq_norm );
             for ( size_t i = 0; i < dimensions; i++ ) {
                 float normalized = ( norm == 0.0 ) ? vec[i] : vec[i] / norm;
-                chunks[base_chunk_idx + i / Uint16Chunk::CHUNK_SIZE]
-                    .chunk[i % Uint16Chunk::CHUNK_SIZE] =
+                chunks[base_chunk_idx + i / Int16Chunk::CHUNK_SIZE]
+                    .chunk[i % Int16Chunk::CHUNK_SIZE] =
                     to_16bit_fixed_point( normalized );
             }
             for ( size_t i = dimensions; i < dimensions + padding; i++ ) {
-                chunks[base_chunk_idx + i / Uint16Chunk::CHUNK_SIZE]
-                    .chunk[i % Uint16Chunk::CHUNK_SIZE] =
+                chunks[base_chunk_idx + i / Int16Chunk::CHUNK_SIZE]
+                    .chunk[i % Int16Chunk::CHUNK_SIZE] =
                     to_16bit_fixed_point( 0.0 );
             }
         }
