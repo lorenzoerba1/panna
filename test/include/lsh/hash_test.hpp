@@ -4,6 +4,7 @@
 
 #include "panna/data.hpp"
 #include "panna/distance.hpp"
+#include "panna/lsh/crosspolytope.hpp"
 #include "panna/lsh/euclidean.hpp"
 #include "panna/lsh/simhash.hpp"
 #include "panna/rand.hpp"
@@ -15,9 +16,9 @@ namespace panna {
     test_hash_collision_probability( HasherBuilder builder,
                                      unsigned int dimensions,
                                      unsigned int repetitions,
-                                     unsigned int num_experiments = 1000 ) {
+                                     unsigned int num_experiments = 1000,
+                                     float accepted_deviation = 0.05 ) {
         using Hasher = typename HasherBuilder::Output;
-        const float ACCEPTED_DEVIATION = 0.05;
         seed_global_rng( 1234 );
 
         Hasher hasher = builder.build( repetitions );
@@ -43,7 +44,7 @@ namespace panna {
                 if ( output_a[i] == output_b[i] ) { empirical += 1; }
             }
             empirical /= repetitions;
-            REQUIRE( std::abs( empirical - prob ) <= ACCEPTED_DEVIATION );
+            REQUIRE( std::abs( empirical - prob ) <= accepted_deviation );
         }
     }
 
@@ -54,6 +55,17 @@ namespace panna {
             test_hash_collision_probability<Dataset,
                                             AngularDistance,
                                             SimhashBuilder<1, Dataset>>(
+                builder, dimensions, 4096 );
+        }
+    }
+
+    TEST_CASE( "CrossPolytope collision probability" ) {
+        using Dataset = UnitNormPoints;
+        for ( size_t dimensions : { 10, 100, 200 } ) {
+            CrossPolytopeBuilder<1, Dataset> builder( dimensions, 8192 );
+            test_hash_collision_probability<Dataset,
+                                            AngularDistance,
+                                            CrossPolytopeBuilder<1, Dataset>>(
                 builder, dimensions, 4096 );
         }
     }

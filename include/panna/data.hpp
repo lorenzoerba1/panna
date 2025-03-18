@@ -35,6 +35,18 @@ namespace panna {
     struct UnitNormPointHandle {
         Int16Chunk const* chunks;
         size_t num_chunks;
+        size_t dimensions;
+
+        void into_vec(std::vector<float> & vec) const {
+            size_t i=0;
+            for (size_t chunk_idx=0; chunk_idx < num_chunks; chunk_idx++) {
+                Int16Chunk chunk = chunks[chunk_idx];
+                for (size_t j=0; j < Int16Chunk::CHUNK_SIZE; j++) {
+                    vec[i] = from_16bit_fixed_point(chunk.chunk[j]);
+                    i++;
+                }
+            }
+        }
     };
 
     class UnitNormPoints {
@@ -67,6 +79,7 @@ namespace panna {
             UnitNormPointHandle handle;
             handle.chunks = &chunks[i * chunks_per_point];
             handle.num_chunks = chunks_per_point;
+            handle.dimensions = dimensions;
             return handle;
         }
 
