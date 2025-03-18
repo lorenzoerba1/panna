@@ -4,7 +4,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstring>
-#include <stdexcept>
 #include <vector>
 
 #include "panna/rand.hpp"

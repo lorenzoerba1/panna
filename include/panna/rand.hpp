@@ -12,8 +12,6 @@ namespace panna {
     static void seed_global_rng( const uint64_t seed ) {
         auto& rng = get_global_rng();
         rng.seed( seed );
-        printf( "reseeded random number generator. First sample: %ld\n",
-                rng() );
     }
 
     static float sample_random_normal() {

@@ -1,12 +1,12 @@
 #pragma once
 
+#include <array>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <type_traits>
-#include <array>
 
 namespace panna {
     //! Places zeros between the bits of the given value.
@@ -139,14 +139,14 @@ namespace panna {
     static_assert( std::is_trivial<BitwiseLshValue<24>>(),
                    "BitwiseLshValue must be trivial" );
 
-    template <uint8_t K>
-    struct BytewiseLshValue {
+    template <typename Symbol, uint8_t K>
+    struct SymbolLshValue {
     private:
         //! The hash values
-        std::array<uint8_t, K> hashes;
-        
+        std::array<Symbol, K> hashes;
+
         // To allow the implementation of `interleave` to work
-        friend struct BytewiseLshValue<2 * K>;
+        friend struct SymbolLshValue<Symbol, 2 * K>;
 
     public:
         //! How many concatenated hash values are stored in this value?
@@ -154,18 +154,16 @@ namespace panna {
 
         // we use a factory function rather than a constructor to keep this
         // struct Plain Old Data.
-        constexpr static BytewiseLshValue<K> make( std::array<uint8_t, K> bytes ) {
-            BytewiseLshValue<K> hash;
-            // memccpy( hash.hashes, bytes, 0, K );
+        constexpr static SymbolLshValue<Symbol, K>
+        make( std::array<Symbol, K> bytes ) {
+            SymbolLshValue<Symbol, K> hash;
             hash.hashes = bytes;
             return hash;
         }
 
-        void set(size_t idx, uint8_t value) {
-            hashes[idx] = value;
-        }
+        void set( size_t idx, uint8_t value ) { hashes[idx] = value; }
 
-        inline bool prefix_eq( BytewiseLshValue<K> other,
+        inline bool prefix_eq( SymbolLshValue<Symbol, K> other,
                                uint8_t prefix ) const {
             assert( prefix <= K );
             for ( uint8_t i = 0; i < prefix; i++ ) {
@@ -174,7 +172,7 @@ namespace panna {
             return true;
         }
 
-        inline bool prefix_less( BytewiseLshValue<K> other,
+        inline bool prefix_less( SymbolLshValue<Symbol, K> other,
                                  uint8_t prefix ) const {
             // OPTIMIZE: maybe we can do it with SIMD, but probably the compiler
             // is smart enough to figure out on its own.
@@ -185,18 +183,21 @@ namespace panna {
             return true;
         }
 
-        constexpr inline bool operator<( BytewiseLshValue<K> other ) const {
+        constexpr inline bool
+        operator<( SymbolLshValue<Symbol, K> other ) const {
             return this->hashes < other.hashes;
         }
 
-        constexpr inline bool operator==( BytewiseLshValue<K> other ) const {
+        constexpr inline bool
+        operator==( SymbolLshValue<Symbol, K> other ) const {
             return this->hashes == other.hashes;
         }
 
-        static constexpr inline BytewiseLshValue<K>
-        interleave( BytewiseLshValue<K / 2> a, BytewiseLshValue<K / 2> b ) {
+        static constexpr inline SymbolLshValue<Symbol, K>
+        interleave( SymbolLshValue<Symbol, K / 2> a,
+                    SymbolLshValue<Symbol, K / 2> b ) {
             static_assert( K % 2 == 0, "K should be even" );
-            BytewiseLshValue<K> out;
+            SymbolLshValue<Symbol, K> out;
             for ( size_t i = 0; i < K / 2; i++ ) {
                 out.hashes[2 * i] = a.hashes[i];
                 out.hashes[2 * i + 1] = b.hashes[i];
@@ -204,6 +205,12 @@ namespace panna {
             return out;
         }
     };
+
+    template <uint8_t K>
+    using BytewiseLshValue = SymbolLshValue<int8_t, K>;
+
+    template <uint8_t K>
+    using ShortLshValue = SymbolLshValue<int16_t, K>;
 
     static_assert( sizeof( BytewiseLshValue<8> ) == 8,
                    "BytewiseLshValue must use exactly K bytes" );
@@ -213,4 +220,13 @@ namespace panna {
                    "BytewiseLshValue must be trivially copiable" );
     static_assert( std::is_trivial<BytewiseLshValue<8>>(),
                    "BytewiseLshValue must be trivial" );
+
+    static_assert( sizeof( ShortLshValue<4> ) == 8,
+                   "ShortLshValue must use exactly K bytes" );
+    static_assert( std::is_pod<ShortLshValue<4>>(),
+                   "ShortLshValue must be Plain Old Data" );
+    static_assert( std::is_trivially_copyable<ShortLshValue<4>>(),
+                   "ShortLshValue must be trivially copiable" );
+    static_assert( std::is_trivial<ShortLshValue<4>>(),
+                   "ShortLshValue must be trivial" );
 } // namespace panna
