@@ -1,9 +1,11 @@
 #pragma once
 
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <cstddef>
 #include <cstring>
+#include <stdexcept>
 #include <vector>
 
 #include "panna/rand.hpp"
@@ -171,5 +173,86 @@ namespace panna {
         }
 
         size_t size() const { return squared_norms.size(); }
+    };
+
+    class SparseSetHandle {
+        size_t set_size;
+        const uint32_t * tokens;
+
+        friend class SparseSets;
+
+        public:
+            size_t size() const {
+                return set_size;
+            }            
+
+            size_t intersection_size(SparseSetHandle other) const {
+                size_t asize = set_size;
+                size_t bsize = other.set_size;
+
+                size_t res = 0;
+                size_t aidx = 0;
+                size_t bidx = 0;
+
+                while (aidx < asize && bidx < bsize) {
+                    if (tokens[aidx] == other.tokens[bidx]) {
+                        res++;
+                        aidx++;
+                        bidx++;
+                    } else if (tokens[aidx] < other.tokens[bidx]) {
+                        aidx++;
+                    } else {
+                        bidx++;
+                    }
+                }
+
+                return res;
+            }
+    };
+
+    class SparseSets {
+        size_t dimensions;
+        std::vector<uint32_t> set_data;
+        std::vector<size_t> starts;
+
+    public:
+        using PointHandle = SparseSetHandle;
+
+        SparseSets( size_t dimensions ):
+            dimensions( dimensions ) {
+                starts.push_back(set_data.size());
+            }
+
+        PointHandle operator[]( size_t i ) const {
+            assert(starts.size() == set_data.size() + 1);
+            PointHandle handle;
+            handle.tokens = &set_data[starts[i]];
+            handle.set_size = starts[i+1] - starts[i];
+            return handle;
+        }
+
+        template <typename IntVec>
+        void push_back( std::vector<uint32_t>& set) {
+            std::sort(set.begin(), set.end());
+            for (uint32_t token : set) {
+                if (token > dimensions) {
+                    throw std::invalid_argument("token outside of the universe");
+                }
+                set_data.push_back(token);
+            }
+            starts.push_back(set_data.size());
+        }
+
+        // PointHandle push_back_random() {
+        //     std::vector<float> values;
+        //     for ( unsigned int i = 0; i < dimensions; i++ ) {
+        //         values.push_back(sample_random_normal());
+        //     }
+
+        //     push_back( values );
+        //     return operator[]( size() - 1 );
+        // }
+
+        size_t size() const { return starts.size()-1; }
     };
 } // namespace panna
