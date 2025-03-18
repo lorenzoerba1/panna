@@ -32,16 +32,20 @@ namespace panna {
             eps( eps ) {
             // adapted from
             // https://github.com/puffinn/puffinn/blob/master/include/puffinn/hash/crosspolytope.hpp
-            printf( "Start estimation\n" );
-            std::normal_distribution<double> standard_normal( 0, 1 );
-            auto& rng = get_global_rng();
 
             auto log_dimensions = ceil_log( dimensions );
             probabilities = std::vector<float>();
+            size_t num_probabilities = 2 / eps;
+            probabilities.resize( num_probabilities );
 
-            double alpha = -1;
             // foreach [alpha, alpha+eps) segment
-            while ( alpha <= 1 ) {
+#pragma omp parallel for
+            for ( size_t i = 0; i < num_probabilities; i++ ) {
+                float alpha = -1 + eps * i;
+                std::normal_distribution<double> standard_normal( 0, 1 );
+                std::mt19937_64 rng;
+                rng.seed( 1234 + i );
+
                 size_t collisions = 0;
 
                 for ( size_t i = 0; i < num_repetitions; i++ ) {
@@ -94,10 +98,10 @@ namespace panna {
                     prob = 1.0;
                 }
                 assert( prob <= 1.0 );
-                probabilities.push_back( prob );
-                alpha += eps;
+                probabilities[i] = prob;
+                // probabilities.push_back( prob );
+                // alpha += eps;
             }
-            printf( "End estimation" );
         }
 
         float get_collision_probability( float dotp ) const {
@@ -229,7 +233,10 @@ namespace panna {
             estimation_eps( estimation_eps ) {}
 
         Output build( size_t repetitions ) const {
-            return CrossPolytope<K, Dataset>( dimensions, repetitions, estimation_repetitions, estimation_eps );
+            return CrossPolytope<K, Dataset>( dimensions,
+                                              repetitions,
+                                              estimation_repetitions,
+                                              estimation_eps );
         }
     };
 
