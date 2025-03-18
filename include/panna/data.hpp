@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstring>
+#include <random>
 #include <stdexcept>
 #include <vector>
 
@@ -39,12 +40,12 @@ namespace panna {
         size_t num_chunks;
         size_t dimensions;
 
-        void into_vec(std::vector<float> & vec) const {
-            size_t i=0;
-            for (size_t chunk_idx=0; chunk_idx < num_chunks; chunk_idx++) {
+        void into_vec( std::vector<float>& vec ) const {
+            size_t i = 0;
+            for ( size_t chunk_idx = 0; chunk_idx < num_chunks; chunk_idx++ ) {
                 Int16Chunk chunk = chunks[chunk_idx];
-                for (size_t j=0; j < Int16Chunk::CHUNK_SIZE; j++) {
-                    vec[i] = from_16bit_fixed_point(chunk.chunk[j]);
+                for ( size_t j = 0; j < Int16Chunk::CHUNK_SIZE; j++ ) {
+                    vec[i] = from_16bit_fixed_point( chunk.chunk[j] );
                     i++;
                 }
             }
@@ -116,7 +117,7 @@ namespace panna {
         PointHandle push_back_random_normal() {
             std::vector<float> values;
             for ( unsigned int i = 0; i < dimensions; i++ ) {
-                values.push_back(sample_random_normal());
+                values.push_back( sample_random_normal() );
             }
 
             push_back( values );
@@ -165,7 +166,7 @@ namespace panna {
         PointHandle push_back_random_normal() {
             std::vector<float> values;
             for ( unsigned int i = 0; i < dimensions; i++ ) {
-                values.push_back(sample_random_normal());
+                values.push_back( sample_random_normal() );
             }
 
             push_back( values );
@@ -177,37 +178,38 @@ namespace panna {
 
     class SparseSetHandle {
         size_t set_size;
-        const uint32_t * tokens;
+        const uint32_t* tokens;
 
         friend class SparseSets;
 
-        public:
-            size_t size() const {
-                return set_size;
-            }            
+    public:
+        const uint32_t* begin() const { return tokens; }
+        const uint32_t* end() const { return tokens + set_size; }
 
-            size_t intersection_size(SparseSetHandle other) const {
-                size_t asize = set_size;
-                size_t bsize = other.set_size;
+        size_t size() const { return set_size; }
 
-                size_t res = 0;
-                size_t aidx = 0;
-                size_t bidx = 0;
+        size_t intersection_size( SparseSetHandle other ) const {
+            size_t asize = set_size;
+            size_t bsize = other.set_size;
 
-                while (aidx < asize && bidx < bsize) {
-                    if (tokens[aidx] == other.tokens[bidx]) {
-                        res++;
-                        aidx++;
-                        bidx++;
-                    } else if (tokens[aidx] < other.tokens[bidx]) {
-                        aidx++;
-                    } else {
-                        bidx++;
-                    }
+            size_t res = 0;
+            size_t aidx = 0;
+            size_t bidx = 0;
+
+            while ( aidx < asize && bidx < bsize ) {
+                if ( tokens[aidx] == other.tokens[bidx] ) {
+                    res++;
+                    aidx++;
+                    bidx++;
+                } else if ( tokens[aidx] < other.tokens[bidx] ) {
+                    aidx++;
+                } else {
+                    bidx++;
                 }
-
-                return res;
             }
+
+            return res;
+        }
     };
 
     class SparseSets {
@@ -218,41 +220,46 @@ namespace panna {
     public:
         using PointHandle = SparseSetHandle;
 
-        SparseSets( size_t dimensions ):
-            dimensions( dimensions ) {
-                starts.push_back(set_data.size());
-            }
+        SparseSets( size_t dimensions ): dimensions( dimensions ) {
+            starts.push_back( set_data.size() );
+        }
 
         PointHandle operator[]( size_t i ) const {
-            assert(starts.size() == set_data.size() + 1);
+            assert( starts.size() == set_data.size() + 1 );
             PointHandle handle;
             handle.tokens = &set_data[starts[i]];
-            handle.set_size = starts[i+1] - starts[i];
+            handle.set_size = starts[i + 1] - starts[i];
             return handle;
         }
 
-        template <typename IntVec>
-        void push_back( std::vector<uint32_t>& set) {
-            std::sort(set.begin(), set.end());
-            for (uint32_t token : set) {
-                if (token > dimensions) {
-                    throw std::invalid_argument("token outside of the universe");
+        void push_back( std::vector<uint32_t>& set ) {
+            std::sort( set.begin(), set.end() );
+            for ( uint32_t token : set ) {
+                if ( token > dimensions ) {
+                    throw std::invalid_argument(
+                        "token outside of the universe" );
                 }
-                set_data.push_back(token);
+                set_data.push_back( token );
             }
-            starts.push_back(set_data.size());
+            starts.push_back( set_data.size() );
         }
 
-        // PointHandle push_back_random() {
-        //     std::vector<float> values;
-        //     for ( unsigned int i = 0; i < dimensions; i++ ) {
-        //         values.push_back(sample_random_normal());
-        //     }
+        PointHandle push_back_random() {
+            auto& rng = get_global_rng();
+            std::bernoulli_distribution coin( 0.3 );
+            std::vector<uint32_t> values;
 
-        //     push_back( values );
-        //     return operator[]( size() - 1 );
-        // }
+            for ( unsigned int i = 0; i < dimensions; i++ ) {
+                if ( coin( rng ) ) {
+                    //
+                    values.push_back( i );
+                }
+            }
 
-        size_t size() const { return starts.size()-1; }
+            push_back( values );
+            return operator[]( size() - 1 );
+        }
+
+        size_t size() const { return starts.size() - 1; }
     };
 } // namespace panna

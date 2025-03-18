@@ -212,6 +212,9 @@ namespace panna {
     template <uint8_t K>
     using ShortLshValue = SymbolLshValue<int16_t, K>;
 
+    template <uint8_t K>
+    using IntLshValue = SymbolLshValue<int32_t, K>;
+
     static_assert( sizeof( BytewiseLshValue<8> ) == 8,
                    "BytewiseLshValue must use exactly K bytes" );
     static_assert( std::is_pod<BytewiseLshValue<8>>(),
