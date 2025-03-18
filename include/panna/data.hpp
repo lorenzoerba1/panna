@@ -10,38 +10,6 @@
 #include "panna/rand.hpp"
 
 namespace panna {
-    //! A dummy storage for points, only for testing purposes.
-    class DummyPoints {
-        using PointHandle = std::vector<float>;
-
-        size_t dimensions;
-        std::vector<std::vector<float>> points;
-
-    public:
-        DummyPoints( size_t dimensions ): dimensions( dimensions ) {}
-
-        void push_back_random_normal() {
-            auto& rng = panna::get_global_rng();
-            std::normal_distribution<float> normal_distribution( 0.0, 1.0 );
-
-            std::vector<float> values;
-            for ( unsigned int i = 0; i < dimensions; i++ ) {
-                values.push_back( normal_distribution( rng ) );
-            }
-
-            points.push_back( values );
-        }
-
-        void push_back( std::vector<float> v ) { points.push_back( v ); }
-
-        size_t size() const { return points.size(); }
-
-        PointHandle operator[]( size_t i ) {
-            assert( i < points.size() );
-            return points[i];
-        }
-    };
-
     //! A chunk of a longer vector of 16bit integers.
     //! On C++17 this class is guaranteed to be aligned to the 256-bit boundary
     //! even when stored in a std::vector.
@@ -132,12 +100,9 @@ namespace panna {
         }
 
         PointHandle push_back_random_normal() {
-            auto& rng = panna::get_global_rng();
-            std::normal_distribution<float> normal_distribution( 0.0, 1.0 );
-
             std::vector<float> values;
             for ( unsigned int i = 0; i < dimensions; i++ ) {
-                values.push_back( normal_distribution( rng ) );
+                values.push_back(sample_random_normal());
             }
 
             push_back( values );
@@ -184,12 +149,9 @@ namespace panna {
         }
 
         PointHandle push_back_random_normal() {
-            auto& rng = panna::get_global_rng();
-            std::normal_distribution<float> normal_distribution( 0.0, 1.0 );
-
             std::vector<float> values;
             for ( unsigned int i = 0; i < dimensions; i++ ) {
-                values.push_back( normal_distribution( rng ) );
+                values.push_back(sample_random_normal());
             }
 
             push_back( values );

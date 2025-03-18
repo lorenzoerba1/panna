@@ -6,6 +6,35 @@
 
 namespace panna {
 
+    //! A dummy storage for points, only for testing purposes.
+    class DummyPoints {
+        using PointHandle = std::vector<float>;
+
+        size_t dimensions;
+        std::vector<std::vector<float>> points;
+
+    public:
+        DummyPoints( size_t dimensions ): dimensions( dimensions ) {}
+
+        void push_back_random_normal() {
+            std::vector<float> values;
+            for ( unsigned int i = 0; i < dimensions; i++ ) {
+                values.push_back( sample_random_normal() );
+            }
+
+            points.push_back( values );
+        }
+
+        void push_back( std::vector<float> v ) { points.push_back( v ); }
+
+        size_t size() const { return points.size(); }
+
+        PointHandle operator[]( size_t i ) {
+            assert( i < points.size() );
+            return points[i];
+        }
+    };
+
     TEST_CASE( "UnitVectorFormat::to_16bit_fixed_point" ) {
         REQUIRE( to_16bit_fixed_point( 0.99999 ) == INT16_MAX );
         REQUIRE( to_16bit_fixed_point( 1.0 ) == INT16_MAX );
