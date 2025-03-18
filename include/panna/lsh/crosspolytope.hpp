@@ -3,7 +3,6 @@
 #include <random>
 #include <vector>
 
-#include "dbg.h"
 #include "external/ffht/fht_header_only.h"
 #include "panna/lsh/values.hpp"
 #include "panna/rand.hpp"
@@ -99,8 +98,6 @@ namespace panna {
                 }
                 assert( prob <= 1.0 );
                 probabilities[i] = prob;
-                // probabilities.push_back( prob );
-                // alpha += eps;
             }
         }
 
