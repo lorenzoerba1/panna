@@ -25,7 +25,7 @@ namespace panna {
             }
         }
 
-        static size_t get_concatenations() { return K; }
+        static constexpr size_t get_concatenations() { return K; }
 
         size_t get_repetitions() const { return repetitions; }
 

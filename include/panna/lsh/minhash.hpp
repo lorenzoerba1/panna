@@ -45,6 +45,8 @@ namespace panna {
             }
         }
 
+        static constexpr size_t get_concatenations() { return K; }
+
         uint32_t hash_single( typename Dataset::PointHandle set,
                               size_t concatenation,
                               size_t repetition ) const {

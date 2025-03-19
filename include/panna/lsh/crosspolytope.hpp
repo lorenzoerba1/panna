@@ -160,6 +160,9 @@ namespace panna {
         }
 
     public:
+
+        static constexpr size_t get_concatenations() { return K; }
+
         CrossPolytope( size_t dimensions,
                        size_t repetitions,
                        size_t estimation_repetitions = 8 * 4096,

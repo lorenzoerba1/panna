@@ -76,6 +76,8 @@ namespace panna {
         friend struct BitwiseLshValue<2 * K>;
 
     public:
+        using DoubleWidth = BitwiseLshValue<2*K>;
+
         //! How many concatenated hash values are stored in this value?
         constexpr static uint8_t num_hashes() { return K; };
 
@@ -149,6 +151,8 @@ namespace panna {
         friend struct SymbolLshValue<Symbol, 2 * K>;
 
     public:
+        using DoubleWidth = SymbolLshValue<Symbol, 2*K>;
+
         //! How many concatenated hash values are stored in this value?
         constexpr static uint8_t num_hashes() { return K; };
 
