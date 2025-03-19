@@ -3,7 +3,7 @@
 #include <random>
 #include <vector>
 
-#include "external/ffht/fht_header_only.h"
+#include "ffht/fht_header_only.h"
 #include "panna/lsh/values.hpp"
 #include "panna/rand.hpp"
 
