@@ -13,8 +13,8 @@ namespace panna {
 
             for ( unsigned i = 0; i < reps; i++ ) {
                 UnitNormPoints dataset( dims );
-                dataset.push_back_random_normal();
-                dataset.push_back_random_normal();
+                dataset.push_back_random();
+                dataset.push_back_random();
                 UnitNormPointHandle a = dataset[0];
                 UnitNormPointHandle b = dataset[1];
 

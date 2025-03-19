@@ -36,7 +36,7 @@ namespace panna {
             std::uniform_real_distribution<float> uniform( 0.0,
                                                            quantization_width );
             for ( size_t vec_idx = 0; vec_idx < repetitions * K; vec_idx++ ) {
-                random_vectors.push_back_random_normal();
+                random_vectors.push_back_random();
                 offsets.push_back( uniform( rng ) );
             }
         }

@@ -21,7 +21,7 @@ namespace panna {
         Simhash( size_t dimensions, size_t repetitions ):
             repetitions( repetitions ), random_vectors( dimensions ) {
             for ( size_t vec_idx = 0; vec_idx < repetitions * K; vec_idx++ ) {
-                random_vectors.push_back_random_normal();
+                random_vectors.push_back_random();
             }
         }
 

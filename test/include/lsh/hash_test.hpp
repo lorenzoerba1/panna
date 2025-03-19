@@ -6,18 +6,18 @@
 #include "panna/distance.hpp"
 #include "panna/lsh/crosspolytope.hpp"
 #include "panna/lsh/euclidean.hpp"
+#include "panna/lsh/minhash.hpp"
 #include "panna/lsh/simhash.hpp"
 #include "panna/rand.hpp"
 
 namespace panna {
 
     template <typename Dataset, typename Distance, typename HasherBuilder>
-    void
-    test_hash_collision_probability( HasherBuilder builder,
-                                     unsigned int dimensions,
-                                     unsigned int repetitions,
-                                     unsigned int num_experiments = 1000,
-                                     float accepted_deviation = 0.05 ) {
+    void test_hash_collision_probability( HasherBuilder builder,
+                                          unsigned int dimensions,
+                                          unsigned int repetitions,
+                                          unsigned int num_experiments = 1000,
+                                          float accepted_deviation = 0.05 ) {
         using Hasher = typename HasherBuilder::Output;
         seed_global_rng( 1234 );
 
@@ -27,8 +27,8 @@ namespace panna {
         std::vector<typename Hasher::Value> output_b;
         for ( unsigned int i = 0; i < num_experiments; i++ ) {
             Dataset dataset( dimensions );
-            dataset.push_back_random_normal();
-            dataset.push_back_random_normal();
+            dataset.push_back_random();
+            dataset.push_back_random();
 
             typename Dataset::PointHandle vec_a = dataset[0];
             typename Dataset::PointHandle vec_b = dataset[1];
@@ -79,6 +79,28 @@ namespace panna {
                                             EuclideanDistance,
                                             E2LSHBuilder<1, Dataset>>(
                 builder, dimensions, 4096 );
+        }
+    }
+
+    TEST_CASE( "MinHash collision probability" ) {
+        using Dataset = SparseSets;
+        for ( size_t dimensions : { 20000 } ) {
+            MinhashBuilder<1, Dataset> builder;
+            test_hash_collision_probability<Dataset,
+                                            JaccardDistance,
+                                            MinhashBuilder<1, Dataset>>(
+                builder, dimensions, 4096 );
+        }
+    }
+
+    TEST_CASE( "MinHash1Bit collision probability" ) {
+        using Dataset = SparseSets;
+        for ( size_t dimensions : { 200000 } ) {
+            Minhash1BitBuilder<1, Dataset> builder;
+            test_hash_collision_probability<Dataset,
+                                            JaccardDistance,
+                                            Minhash1BitBuilder<1, Dataset>>(
+                builder, dimensions, 4096, 10 );
         }
     }
 

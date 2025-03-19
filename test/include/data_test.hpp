@@ -16,7 +16,7 @@ namespace panna {
     public:
         DummyPoints( size_t dimensions ): dimensions( dimensions ) {}
 
-        void push_back_random_normal() {
+        void push_back_random() {
             std::vector<float> values;
             for ( unsigned int i = 0; i < dimensions; i++ ) {
                 values.push_back( sample_random_normal() );

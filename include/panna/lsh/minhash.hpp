@@ -32,15 +32,15 @@ namespace panna {
     };
 
     template <uint8_t K, typename Dataset>
-    class MinHash {
+    class Minhash {
         size_t repetitions;
         std::vector<TabulationHash> hashes;
 
     public:
         using Value = IntLshValue<K>;
 
-        MinHash( size_t repetitions ): repetitions( repetitions ) {
-            for ( size_t i; i < repetitions * K; i++ ) {
+        Minhash( size_t repetitions ): repetitions( repetitions ) {
+            for ( size_t i=0; i < repetitions * K; i++ ) {
                 hashes.push_back( TabulationHash() );
             }
         }
@@ -51,7 +51,7 @@ namespace panna {
             TabulationHash hash = hashes[repetition * K + concatenation];
             uint64_t min_hash = std::numeric_limits<uint64_t>::max();
             uint32_t min_token = 0;
-            for ( uint32_t* it = set.begin(); it != set.end(); it++ ) {
+            for ( const uint32_t* it = set.begin(); it != set.end(); it++ ) {
                 uint64_t h = hash( *it );
                 if ( h < min_hash ) {
                     min_hash = h;
@@ -69,7 +69,7 @@ namespace panna {
             Value cur;
             for ( size_t rep = 0; rep < repetitions; rep++ ) {
                 for ( size_t concat = 0; concat < K; concat++ ) {
-                    int16_t code = hash_single( point, concat, rep );
+                    int32_t code = hash_single( point, concat, rep );
                     cur.set( concat, code );
                 }
                 output.push_back( cur );
@@ -85,12 +85,57 @@ namespace panna {
     template <uint8_t K, typename Dataset>
     class MinhashBuilder {
     public:
-        using Output = MinHash<K, Dataset>;
+        using Output = Minhash<K, Dataset>;
 
         MinhashBuilder() {}
 
         Output build( size_t repetitions ) const {
-            return MinHash<K, Dataset>( repetitions );
+            return Minhash<K, Dataset>( repetitions );
+        }
+    };
+
+    template <uint8_t K, typename Dataset>
+    class Minhash1Bit {
+        size_t repetitions;
+        Minhash<K, Dataset> minhash;
+
+    public:
+        using Value = BitwiseLshValue<K>;
+
+        Minhash1Bit( size_t repetitions ): repetitions(repetitions), minhash( repetitions ) {
+        }
+
+        void hash( typename Dataset::PointHandle point,
+                   std::vector<Value>& output ) {
+            // OPTIMIZE: TabulationHasher gives 64 bit hashes, hence we could use
+            // its output to hash two repetitions/concatenations
+            output.clear();
+            uint32_t cur;
+            for ( size_t rep = 0; rep < repetitions; rep++ ) {
+                for ( size_t concat = 0; concat < K; concat++ ) {
+                    int32_t code = minhash.hash_single( point, concat, rep ) % 2;
+                    cur = (cur << 1) | code;
+                }
+                output.push_back( Value::make(cur));
+                cur = 0;
+            }
+        }
+
+        float collision_probability(float distance) const {
+            float similarity = 1 - distance;
+            return (1 + similarity) / 2;
+        }
+    };
+
+    template <uint8_t K, typename Dataset>
+    class Minhash1BitBuilder {
+    public:
+        using Output = Minhash1Bit<K, Dataset>;
+
+        Minhash1BitBuilder() {}
+
+        Output build( size_t repetitions ) const {
+            return Minhash1Bit<K, Dataset>( repetitions );
         }
     };
 } // namespace panna

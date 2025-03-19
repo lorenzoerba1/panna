@@ -114,7 +114,7 @@ namespace panna {
             }
         }
 
-        PointHandle push_back_random_normal() {
+        PointHandle push_back_random() {
             std::vector<float> values;
             for ( unsigned int i = 0; i < dimensions; i++ ) {
                 values.push_back( sample_random_normal() );
@@ -163,7 +163,7 @@ namespace panna {
             squared_norms.push_back( sq_norm );
         }
 
-        PointHandle push_back_random_normal() {
+        PointHandle push_back_random() {
             std::vector<float> values;
             for ( unsigned int i = 0; i < dimensions; i++ ) {
                 values.push_back( sample_random_normal() );
@@ -225,7 +225,6 @@ namespace panna {
         }
 
         PointHandle operator[]( size_t i ) const {
-            assert( starts.size() == set_data.size() + 1 );
             PointHandle handle;
             handle.tokens = &set_data[starts[i]];
             handle.set_size = starts[i + 1] - starts[i];
