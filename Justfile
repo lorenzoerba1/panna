@@ -1,15 +1,15 @@
 test: build-tests
-    build/tests
+    build/tests "Failure probability independent" 
 
 build-tests:
-    cmake --build build -j --config Debug --target tests
+    cmake --build build -j --target tests
 
 clean:
     cd build && make clean
 
 setup-cmake:
     test -d build || mkdir build
-    cd build && cmake ..
+    cd build && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ..
 
 generate-compile-commands:
     just clean

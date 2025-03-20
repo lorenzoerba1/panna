@@ -14,12 +14,13 @@ IncludeCategories:
   - Regex: <.*>
     Priority: 3
 
-AllowShortBlocksOnASingleLine: Always
+AllowShortBlocksOnASingleLine: false
 AllowShortEnumsOnASingleLine: false
-AllowShortFunctionsOnASingleLine: All
-AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortFunctionsOnASingleLine: false
+AllowShortIfStatementsOnASingleLine: false
 AllowShortLambdasOnASingleLine: Inline
 
+ColumnLimit: 100
 AccessModifierOffset: "-4"
 AlignEscapedNewlines: Left
 AllowAllConstructorInitializersOnNextLine: "true"
