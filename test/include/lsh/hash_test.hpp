@@ -58,7 +58,7 @@ namespace panna {
         using Dataset = UnitNormPoints;
         for ( size_t dimensions : { 10, 100, 200 } ) {
             SimhashBuilder<1, Dataset> builder( dimensions );
-            test_hash_collision_probability<Dataset, AngularDistance, SimhashBuilder<1, Dataset>>(
+            test_hash_collision_probability<Dataset, CosineDistance, SimhashBuilder<1, Dataset>>(
                 builder, dimensions, 4096 );
         }
     }
@@ -68,7 +68,7 @@ namespace panna {
         for ( size_t dimensions : { 10, 100, 200 } ) {
             CrossPolytopeBuilder<1, Dataset> builder( dimensions, 8192 );
             test_hash_collision_probability<Dataset,
-                                            AngularDistance,
+                                            CosineDistance,
                                             CrossPolytopeBuilder<1, Dataset>>(
                 builder, dimensions, 4096 );
         }
@@ -177,7 +177,6 @@ namespace panna {
                 for ( size_t rep = 0; rep < repetitions; rep++ ) {
                     float actual = counters[k - 1][rep] / samples_per_experiment;
                     float exp = expected[k - 1][rep];
-                    dbg( k, rep, actual, exp );
                     // We check that the actual failure probability is lower than the expected one
                     REQUIRE( actual < exp + 0.03 );
                 }
@@ -189,16 +188,18 @@ namespace panna {
         using Dataset = UnitNormPoints;
         for ( size_t dimensions : { 10 } ) {
             SimhashBuilder<24, Dataset> builder( dimensions );
-            test_failure_probability<Dataset, AngularDistance, SimhashBuilder<24, Dataset>>(
+            test_failure_probability<Dataset, CosineDistance, SimhashBuilder<24, Dataset>>(
                 builder, dimensions, 128 );
         }
+    }
 
+    TEST_CASE( "Failure probability tensoring" ) {
         using Dataset = UnitNormPoints;
         for ( size_t dimensions : { 10 } ) {
             SimhashBuilder<12, Dataset> inner_builder( dimensions );
             TensoringBuilder<SimhashBuilder<12, Dataset>, Dataset> builder( inner_builder );
             test_failure_probability<Dataset,
-                                     AngularDistance,
+                                     CosineDistance,
                                      TensoringBuilder<SimhashBuilder<12, Dataset>, Dataset>>(
                 builder, dimensions, 128 );
         }

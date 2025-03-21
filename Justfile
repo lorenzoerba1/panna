@@ -1,5 +1,5 @@
 test: build-tests
-    build/tests "Failure probability independent" 
+    build/tests 
 
 build-tests:
     cmake --build build -j --target tests

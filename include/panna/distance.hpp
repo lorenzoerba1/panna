@@ -3,7 +3,7 @@
 #include "panna/linalg.hpp"
 
 namespace panna {
-    struct AngularDistance {
+    struct CosineDistance {
         //! Works on any `Point` type for which `panna::dot_product` is
         //! implemented. Assumes (but does not check) that the points have
         //! unit-norm.

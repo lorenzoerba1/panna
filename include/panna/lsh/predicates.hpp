@@ -61,9 +61,10 @@ namespace panna {
             1.0 - std::pow( 1.0 - right_last_prob, cur_repetitions );
         auto last_lower_right_prob =
             1.0 - std::pow( 1.0 - right_last_prob, last_repetitions );
+        // TODO: there are two components commented out down below: including those two makes the failure probability too optimistic
         return ( 1 - cur_upper_left_prob * cur_upper_right_prob ) *
-               ( 1 - last_upper_left_prob * last_upper_right_prob ) *
-               ( 1 - last_lower_left_prob * last_upper_right_prob ) *
-               ( 1 - last_lower_left_prob * last_lower_right_prob );
+               // ( 1 - last_upper_left_prob * last_upper_right_prob );
+               ( 1 - last_lower_left_prob * last_upper_right_prob );
+               // ( 1 - last_lower_left_prob * last_lower_right_prob );
     }
 } // namespace panna
