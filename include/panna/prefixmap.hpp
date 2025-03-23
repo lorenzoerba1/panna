@@ -3,16 +3,18 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
 #include "omp.h"
 
-namespace puffinn {
+namespace panna {
 
     //! Returns the index of the first element strictly larger than the `needle`, starting from
-    //! position `from`.
+    //! position `from`. "Larger" is defined in terms of the `prefix_less` method.
     template <typename T>
     static inline size_t
     gallop_right( const std::vector<T>& hashes, T needle, size_t from, uint8_t prefix ) {
@@ -80,6 +82,8 @@ namespace puffinn {
     template <typename THashValue>
     class PrefixMapCursor {
     private:
+        const std::vector<THashValue>& hashes;
+        const std::vector<uint32_t>& indices;
         THashValue hash;
         uint8_t prefix_length;
         size_t prev_range_start;
@@ -88,8 +92,15 @@ namespace puffinn {
         size_t range_end;
 
     public:
-        PrefixMapCursor( THashValue hash, const std::vector<THashValue>& hashes ):
-            hash( hash ), prefix_length( THashValue::NUM_HASHES ) {
+        using Iter = const uint32_t*;
+
+        PrefixMapCursor( THashValue hash,
+                         const std::vector<THashValue>& hashes,
+                         const std::vector<uint32_t>& indices ):
+            hashes( hashes ),
+            indices( indices ),
+            hash( hash ),
+            prefix_length( THashValue::get_concatenations() ) {
             assert( std::is_sorted( hashes.begin(), hashes.end() ) );
             // Find the position of the first hash that is strictly larger
             // than the given one, with binary search.
@@ -123,11 +134,20 @@ namespace puffinn {
         }
 
         // Shortens the prefix by one, and adjusts ranges accordingly
-        void shorten_prefix( const std::vector<THashValue>& hashes ) {
-            assert( prefix_length > 0 );
+        void shorten_prefix( size_t new_prefix ) {
+            if ( new_prefix > prefix_length ) {
+                throw std::invalid_argument( "the new prefix must be shorter than the old one" );
+            }
+            if ( prefix_length == 0 ) {
+                throw std::invalid_argument( "the new prefix must be positive" );
+            };
+            if ( new_prefix == prefix_length ) {
+                // nothing to do
+                return;
+            }
             prev_range_start = range_start;
             prev_range_end = range_end;
-            prefix_length -= 1;
+            prefix_length = new_prefix;
             range_start = gallop_left( hashes, hash, prev_range_start, prefix_length );
             range_end = gallop_right( hashes, hash, prev_range_end, prefix_length );
         }
@@ -135,6 +155,14 @@ namespace puffinn {
         std::array<std::pair<size_t, size_t>, 2> get_ranges() const {
             return { std::make_pair( range_start, prev_range_start ),
                      std::make_pair( prev_range_end, range_end ) };
+        }
+
+        std::array<std::pair<Iter, Iter>, 2> get_indices() const {
+            auto ranges = get_ranges();
+            return {
+                std::make_pair( &indices[ranges[0].first], &indices[ranges[0].second] ),
+                std::make_pair( &indices[ranges[1].first], &indices[ranges[1].second] ),
+            };
         }
     };
 
@@ -147,12 +175,10 @@ namespace puffinn {
     class PrefixMap {
         using HashedVecIdx = std::pair<uint32_t, THashValue>;
 
-    public: // TODO private
         // contents
         std::vector<uint32_t> indices;
         std::vector<THashValue> hashes;
         // Scratch space for use when rebuilding. The length and capacity is set to 0 otherwise.
-        // std::vector<HashedVecIdx> rebuilding_data;
         std::vector<std::vector<HashedVecIdx>> parallel_rebuilding_data;
 
     public:
@@ -171,9 +197,8 @@ namespace puffinn {
 
         // Reserve the correct amount of memory before inserting.
         void reserve( size_t size ) {
-            // TODO Divide equally across the vectors
             for ( auto& rd : parallel_rebuilding_data ) {
-                rd.reserve( size );
+                rd.reserve( size / parallel_rebuilding_data.size() );
             }
         }
 
@@ -218,20 +243,7 @@ namespace puffinn {
         }
 
         PrefixMapCursor<THashValue> create_cursor( THashValue hash ) const {
-            return PrefixMapCursor<THashValue>( hash, hashes );
-        }
-
-        std::array<std::pair<const uint32_t*, const uint32_t*>, 2>
-        get_next_ranges( PrefixMapCursor<THashValue>& cursor ) const {
-            auto ranges = cursor.get_ranges();
-            // FIXME: this is unnecessary in the last invocation,
-            // we might want to put it in the query code
-            cursor.shorten_prefix( hashes );
-
-            return {
-                std::make_pair( &indices[ranges[0].first], &indices[ranges[0].second] ),
-                std::make_pair( &indices[ranges[1].first], &indices[ranges[1].second] ),
-            };
+            return PrefixMapCursor<THashValue>( hash, hashes, indices );
         }
     };
 } // namespace puffinn
