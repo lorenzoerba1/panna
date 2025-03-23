@@ -1,0 +1,237 @@
+#pragma once
+
+#include <algorithm>
+#include <array>
+#include <cassert>
+#include <cstdint>
+#include <utility>
+#include <vector>
+
+#include "omp.h"
+
+namespace puffinn {
+
+    //! Returns the index of the first element strictly larger than the `needle`, starting from
+    //! position `from`.
+    template <typename T>
+    static inline size_t
+    gallop_right( const std::vector<T>& hashes, T needle, size_t from, uint8_t prefix ) {
+        // first do an exponential search
+        size_t offset = 1;
+        size_t lower = from;
+        size_t upper = from + offset;
+        while ( upper < hashes.size() && !needle.prefix_less( hashes[upper], prefix ) ) {
+            offset *= 2;
+            lower = upper;
+            upper = std::min( from + offset, hashes.size() );
+        }
+        // now do a binary search
+        size_t half = upper - lower;
+        while ( half != 0 ) {
+            half /= 2;
+            size_t mid = lower + half;
+            if ( mid >= hashes.size() ) {
+                return hashes.size();
+            }
+            lower = ( !needle.prefix_less( hashes[mid], prefix ) ) ? ( mid + 1 ) : lower;
+        }
+        return lower;
+    }
+
+    //! Returns the smallest index before `to` (excluded) of the hash with the same prefix as the
+    //! given needle. If there is no such index, returns `to`.
+    template <typename T>
+    static inline size_t
+    gallop_left( const std::vector<T>& hashes, T needle, size_t to, uint8_t prefix ) {
+        if ( to == 0 ) {
+            return to;
+        }
+        // first do an exponential search
+        size_t offset = 1;
+        size_t upper = to;
+        size_t lower = to - offset;
+        while ( lower > 0 && hashes[lower].prefix_eq( needle, prefix ) ) {
+            upper = lower;
+            lower = ( to > offset ) ? to - offset : 0;
+            offset *= 2;
+        }
+        assert( upper <= hashes.size() );
+        assert( lower < upper );
+
+        // TODO: cleanup this code
+        // now do a binary search
+        size_t half = upper - lower;
+        while ( half != 0 ) {
+            half /= 2;
+            size_t mid = lower + half;
+            if ( mid > upper ) {
+                return to;
+            }
+            assert( mid < hashes.size() );
+            lower = ( hashes[mid].prefix_less( needle, prefix ) ) ? ( mid + 1 ) : lower;
+        }
+        assert( lower < hashes.size() );
+        if ( !needle.prefix_eq( hashes[lower], prefix ) ) {
+            return to;
+        }
+        return lower;
+    }
+
+    template <typename THashValue>
+    class PrefixMapCursor {
+    private:
+        THashValue hash;
+        uint8_t prefix_length;
+        size_t prev_range_start;
+        size_t prev_range_end;
+        size_t range_start;
+        size_t range_end;
+
+    public:
+        PrefixMapCursor( THashValue hash, const std::vector<THashValue>& hashes ):
+            hash( hash ), prefix_length( THashValue::NUM_HASHES ) {
+            assert( std::is_sorted( hashes.begin(), hashes.end() ) );
+            // Find the position of the first hash that is strictly larger
+            // than the given one, with binary search.
+            size_t lower = 0;
+            size_t upper = hashes.size();
+            while ( lower < upper ) {
+                size_t mid = lower + ( upper - lower ) / 2;
+                if ( hash < hashes[mid] ) {
+                    upper = mid;
+                } else {
+                    lower = mid + 1;
+                }
+            }
+            range_end = std::min( lower, upper );
+            assert( range_end == hashes.size() || hash < hashes[range_end] );
+            assert( range_end == 0 || range_end == hashes.size() ||
+                    hashes[range_end - 1] < hashes[range_end] );
+
+            // find the position of the first element equal to the hash
+            range_start = gallop_left( hashes, hash, range_end, THashValue::NUM_HASHES );
+            assert( range_start == hashes.size() || range_start == range_end ||
+                    hashes[range_start] == hash );
+
+            // set the previous range to the empty range
+            prev_range_start = range_end;
+            prev_range_end = range_end;
+        }
+
+        size_t current_prefix() const {
+            return prefix_length;
+        }
+
+        // Shortens the prefix by one, and adjusts ranges accordingly
+        void shorten_prefix( const std::vector<THashValue>& hashes ) {
+            assert( prefix_length > 0 );
+            prev_range_start = range_start;
+            prev_range_end = range_end;
+            prefix_length -= 1;
+            range_start = gallop_left( hashes, hash, prev_range_start, prefix_length );
+            range_end = gallop_right( hashes, hash, prev_range_end, prefix_length );
+        }
+
+        std::array<std::pair<size_t, size_t>, 2> get_ranges() const {
+            return { std::make_pair( range_start, prev_range_start ),
+                     std::make_pair( prev_range_end, range_end ) };
+        }
+    };
+
+    // A PrefixMap stores all inserted values in sorted order by their hash codes.
+    //
+    // This allows querying all values that share a common prefix. The length of the prefix
+    // can be decreased to look at a larger set of values. When the prefix is decreased,
+    // previously queried values are not queried again.
+    template <typename THashValue>
+    class PrefixMap {
+        using HashedVecIdx = std::pair<uint32_t, THashValue>;
+
+    public: // TODO private
+        // contents
+        std::vector<uint32_t> indices;
+        std::vector<THashValue> hashes;
+        // Scratch space for use when rebuilding. The length and capacity is set to 0 otherwise.
+        // std::vector<HashedVecIdx> rebuilding_data;
+        std::vector<std::vector<HashedVecIdx>> parallel_rebuilding_data;
+
+    public:
+        // Construct a new prefix map over the specified dataset using the given hash functions.
+        PrefixMap() {
+            // Ensure that the map can be queried even if nothing is inserted.
+            rebuild();
+            auto max_threads = omp_get_max_threads();
+            parallel_rebuilding_data.resize( max_threads );
+        }
+
+        // Add a hash value, and associated index, to be included next time rebuild is called.
+        void insert( int tid, uint32_t idx, THashValue hash_value ) {
+            parallel_rebuilding_data[tid].push_back( { idx, hash_value } );
+        }
+
+        // Reserve the correct amount of memory before inserting.
+        void reserve( size_t size ) {
+            // TODO Divide equally across the vectors
+            for ( auto& rd : parallel_rebuilding_data ) {
+                rd.reserve( size );
+            }
+        }
+
+        void rebuild() {
+            size_t rebuilding_data_size = 0;
+            for ( auto& rd : parallel_rebuilding_data ) {
+                rebuilding_data_size += rd.size();
+            }
+
+            std::vector<std::pair<THashValue, uint32_t>> tmp;
+
+            if ( hashes.size() != 0 ) {
+                // Move data to temporary vector for sorting.
+                for ( size_t i = 0; i < hashes.size(); i++ ) {
+                    tmp.push_back( std::make_pair( hashes[i], indices[i] ) );
+                }
+            }
+            for ( auto& rebuilding_data : parallel_rebuilding_data ) {
+                for ( auto pair : rebuilding_data ) {
+                    tmp.push_back( std::make_pair( pair.second, pair.first ) );
+                }
+            }
+
+            // OPTIMIZE: use radix sort?
+            std::sort( tmp.begin(), tmp.end() );
+
+            indices.clear();
+            indices.reserve( tmp.size() );
+            hashes.clear();
+            hashes.reserve( tmp.size() );
+
+            for ( size_t i = 0; i < tmp.size(); i++ ) {
+                hashes.push_back( tmp[i].first );
+                indices.push_back( tmp[i].second );
+            }
+            assert( std::is_sorted( hashes.begin(), hashes.end() ) );
+
+            for ( auto& rd : parallel_rebuilding_data ) {
+                rd.clear();
+                rd.shrink_to_fit();
+            }
+        }
+
+        PrefixMapCursor<THashValue> create_cursor( THashValue hash ) const {
+            return PrefixMapCursor<THashValue>( hash, hashes );
+        }
+
+        std::array<std::pair<const uint32_t*, const uint32_t*>, 2>
+        get_next_ranges( PrefixMapCursor<THashValue>& cursor ) const {
+            auto ranges = cursor.get_ranges();
+            // FIXME: this is unnecessary in the last invocation,
+            // we might want to put it in the query code
+            cursor.shorten_prefix( hashes );
+
+            return {
+                std::make_pair( &indices[ranges[0].first], &indices[ranges[0].second] ),
+                std::make_pair( &indices[ranges[1].first], &indices[ranges[1].second] ),
+            };
+        }
+    };
+} // namespace puffinn
