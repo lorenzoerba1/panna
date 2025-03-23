@@ -65,6 +65,18 @@ namespace panna {
         }
     }
 
+    TEST_CASE( "Simhash collision probability (angular distance)" ) {
+        using Dataset = UnitNormPoints;
+        using Distance = AngularDistance;
+        for ( size_t dimensions : { 10, 100, 200 } ) {
+            SimhashBuilder<1, Dataset, Distance> builder( dimensions );
+            test_hash_collision_probability<Dataset,
+                                            Distance,
+                                            SimhashBuilder<1, Dataset, Distance>>(
+                builder, dimensions, 4096 );
+        }
+    }
+
     TEST_CASE( "CrossPolytope collision probability" ) {
         using Dataset = UnitNormPoints;
         using Distance = CosineDistance;
