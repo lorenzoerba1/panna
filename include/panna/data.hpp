@@ -73,6 +73,10 @@ namespace panna {
             chunks_per_point(
                 std::ceil( ( (float)dimensions ) / Int16Chunk::CHUNK_SIZE ) ) {}
 
+        void clear() {
+            chunks.clear();
+        }
+
         size_t get_padding() const { return padding; }
 
         size_t get_chunks_per_point() const { return chunks_per_point; }
@@ -144,6 +148,11 @@ namespace panna {
 
         NormedPoints( size_t dimensions ):
             dimensions( dimensions ), normalized_points( dimensions ) {}
+
+        void clear() {
+            normalized_points.clear();
+            squared_norms.clear();
+        }
 
         PointHandle operator[]( size_t i ) const {
             PointHandle handle;
@@ -222,6 +231,12 @@ namespace panna {
 
         SparseSets( size_t dimensions ): dimensions( dimensions ) {
             starts.push_back( set_data.size() );
+        }
+
+        void clear() {
+            set_data.clear();
+            starts.clear();
+            starts.push_back(set_data.size());
         }
 
         PointHandle operator[]( size_t i ) const {
