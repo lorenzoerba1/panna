@@ -57,19 +57,22 @@ namespace panna {
     TEST_CASE( "Simhash collision probability" ) {
         using Dataset = UnitNormPoints;
         for ( size_t dimensions : { 10, 100, 200 } ) {
-            SimhashBuilder<1, Dataset> builder( dimensions );
-            test_hash_collision_probability<Dataset, CosineDistance, SimhashBuilder<1, Dataset>>(
+            SimhashBuilder<1, Dataset, CosineDistance> builder( dimensions );
+            test_hash_collision_probability<Dataset,
+                                            CosineDistance,
+                                            SimhashBuilder<1, Dataset, CosineDistance>>(
                 builder, dimensions, 4096 );
         }
     }
 
     TEST_CASE( "CrossPolytope collision probability" ) {
         using Dataset = UnitNormPoints;
+        using Distance = CosineDistance;
         for ( size_t dimensions : { 10, 100, 200 } ) {
-            CrossPolytopeBuilder<1, Dataset> builder( dimensions, 8192 );
+            CrossPolytopeBuilder<1, Dataset, Distance> builder( dimensions, 8192 );
             test_hash_collision_probability<Dataset,
-                                            CosineDistance,
-                                            CrossPolytopeBuilder<1, Dataset>>(
+                                            Distance,
+                                            CrossPolytopeBuilder<1, Dataset, Distance>>(
                 builder, dimensions, 4096 );
         }
     }
@@ -187,8 +190,10 @@ namespace panna {
     TEST_CASE( "Failure probability independent" ) {
         using Dataset = UnitNormPoints;
         for ( size_t dimensions : { 10 } ) {
-            SimhashBuilder<24, Dataset> builder( dimensions );
-            test_failure_probability<Dataset, CosineDistance, SimhashBuilder<24, Dataset>>(
+            SimhashBuilder<24, Dataset, CosineDistance> builder( dimensions );
+            test_failure_probability<Dataset,
+                                     CosineDistance,
+                                     SimhashBuilder<24, Dataset, CosineDistance>>(
                 builder, dimensions, 128 );
         }
     }
@@ -196,23 +201,26 @@ namespace panna {
     TEST_CASE( "Failure probability tensoring" ) {
         using Dataset = UnitNormPoints;
         for ( size_t dimensions : { 10 } ) {
-            SimhashBuilder<12, Dataset> inner_builder( dimensions );
-            TensoringBuilder<SimhashBuilder<12, Dataset>, Dataset> builder( inner_builder );
-            test_failure_probability<Dataset,
-                                     CosineDistance,
-                                     TensoringBuilder<SimhashBuilder<12, Dataset>, Dataset>>(
+            SimhashBuilder<12, Dataset, CosineDistance> inner_builder( dimensions );
+            TensoringBuilder<SimhashBuilder<12, Dataset, CosineDistance>, Dataset> builder(
+                inner_builder );
+            test_failure_probability<
+                Dataset,
+                CosineDistance,
+                TensoringBuilder<SimhashBuilder<12, Dataset, CosineDistance>, Dataset>>(
                 builder, dimensions, 128 );
         }
     }
 
     TEST_CASE( "Tensoring" ) {
         using Dataset = UnitNormPoints;
-        using Hasher = CrossPolytope<2, Dataset>;
+        using Distance = CosineDistance;
+        using Hasher = CrossPolytope<2, Dataset, Distance>;
         using TensoredHasher = Tensoring<Hasher, Dataset>;
 
         const uint8_t K_HALF = 2;
         const size_t dimensions = 128;
-        CrossPolytopeBuilder<K_HALF, Dataset> builder( dimensions );
+        CrossPolytopeBuilder<K_HALF, Dataset, Distance> builder( dimensions );
 
         TensoredHasher tensored( builder, 4096 );
         static_assert( tensored.get_concatenations() == 2 * K_HALF,

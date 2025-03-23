@@ -23,7 +23,8 @@ namespace panna {
         std::vector<float> probabilities;
         float eps;
 
-        CrossPolytopeCollisionEstimates() {}
+        CrossPolytopeCollisionEstimates() {
+        }
 
         CrossPolytopeCollisionEstimates( unsigned int dimensions,
                                          unsigned int num_repetitions,
@@ -78,8 +79,7 @@ namespace panna {
                             }
                         }
                         // do the same for z*y[j]
-                        double h_y =
-                            alpha * z_1 + pow( 1 - pow( alpha, 2 ), 0.5 ) * z_2;
+                        double h_y = alpha * z_1 + pow( 1 - pow( alpha, 2 ), 0.5 ) * z_2;
                         if ( abs( h_y ) > v_y ) {
                             v_y = abs( h_y );
                             hash_y = j;
@@ -107,7 +107,7 @@ namespace panna {
         }
     };
 
-    template <uint8_t K, typename Dataset, uint8_t ROTATIONS = 3>
+    template <uint8_t K, typename Dataset, typename Distance, uint8_t ROTATIONS = 3>
     class CrossPolytope {
     public:
         //! The datatype of the output
@@ -138,17 +138,13 @@ namespace panna {
         }
 
         // Hash a single repetition of the given vector
-        int16_t hash_single( std::vector<float>& vec,
-                             size_t concatenation,
-                             size_t repetition ) {
+        int16_t hash_single( std::vector<float>& vec, size_t concatenation, size_t repetition ) {
             const size_t rotation_len = ( 1 << log_dimensions );
-            for ( unsigned int rotation = 0; rotation < ROTATIONS;
-                  rotation++ ) {
+            for ( unsigned int rotation = 0; rotation < ROTATIONS; rotation++ ) {
                 // Multiply by a diagonal +-1 matrix.
-                size_t base_idx =
-                    ( concatenation * repetitions * ROTATIONS * rotation_len ) +
-                    ( repetition * ROTATIONS * rotation_len ) +
-                    ( rotation * rotation_len );
+                size_t base_idx = ( concatenation * repetitions * ROTATIONS * rotation_len ) +
+                                  ( repetition * ROTATIONS * rotation_len ) +
+                                  ( rotation * rotation_len );
                 for ( size_t i = 0; i < rotation_len; i++ ) {
                     vec[i] *= random_signs[base_idx + i];
                 }
@@ -160,8 +156,9 @@ namespace panna {
         }
 
     public:
-
-        static constexpr size_t get_concatenations() { return K; }
+        static constexpr size_t get_concatenations() {
+            return K;
+        }
 
         CrossPolytope( size_t dimensions,
                        size_t repetitions,
@@ -169,39 +166,31 @@ namespace panna {
                        float estimation_eps = 5e-3 ):
             repetitions( repetitions ),
             dimensions( dimensions ),
-            estimates( ( 1 << ceil_log( dimensions ) ),
-                       estimation_repetitions,
-                       estimation_eps ) {
+            estimates( ( 1 << ceil_log( dimensions ) ), estimation_repetitions, estimation_eps ) {
             log_dimensions = ceil_log( dimensions );
 
-            int random_signs_len =
-                K * repetitions * ROTATIONS * ( 1 << log_dimensions );
+            int random_signs_len = K * repetitions * ROTATIONS * ( 1 << log_dimensions );
             random_signs.reserve( random_signs_len );
 
             rotated_vector.resize( 1 << log_dimensions );
 
-            std::uniform_int_distribution<int_fast32_t> sign_distribution( 0,
-                                                                           1 );
+            std::uniform_int_distribution<int_fast32_t> sign_distribution( 0, 1 );
             auto& generator = get_global_rng();
             for ( int i = 0; i < random_signs_len; i++ ) {
-                random_signs.push_back( sign_distribution( generator ) * 2 -
-                                        1 );
+                random_signs.push_back( sign_distribution( generator ) * 2 - 1 );
             }
         }
 
         //! Requires Dataset::PointHandle to support the operation
         //! `PointHandle::into_vec` that copies the contents of the
         //! point into the given vector, without changing its length.
-        void hash( typename Dataset::PointHandle point,
-                   std::vector<Value>& output ) {
+        void hash( typename Dataset::PointHandle point, std::vector<Value>& output ) {
             output.clear();
             Value cur;
             for ( size_t rep = 0; rep < repetitions; rep++ ) {
                 for ( size_t concat = 0; concat < K; concat++ ) {
                     point.into_vec( rotated_vector );
-                    std::fill( rotated_vector.begin() + dimensions,
-                               rotated_vector.end(),
-                               0.0 );
+                    std::fill( rotated_vector.begin() + dimensions, rotated_vector.end(), 0.0 );
                     int16_t code = hash_single( rotated_vector, concat, rep );
                     cur.set( concat, code );
                 }
@@ -211,32 +200,31 @@ namespace panna {
         }
 
         float collision_probability( float distance ) const {
-            float similarity = 1 - distance;
-            return estimates.get_collision_probability( similarity );
+            float dotp = Distance::to_dot_product( distance );
+            return estimates.get_collision_probability( dotp );
         }
     };
 
-    template <uint8_t K, typename Dataset>
+    template <uint8_t K, typename Dataset, typename Distance>
     class CrossPolytopeBuilder {
         size_t dimensions = 0;
         size_t estimation_repetitions = 1024;
         float estimation_eps = 5e-3;
 
     public:
-        using Output = CrossPolytope<K, Dataset>;
+        using Output = CrossPolytope<K, Dataset, Distance>;
 
         CrossPolytopeBuilder( size_t dimensions,
                               size_t estimation_repetitions = 1024,
                               float estimation_eps = 5e-3 ):
             dimensions( dimensions ),
             estimation_repetitions( estimation_repetitions ),
-            estimation_eps( estimation_eps ) {}
+            estimation_eps( estimation_eps ) {
+        }
 
         Output build( size_t repetitions ) const {
-            return CrossPolytope<K, Dataset>( dimensions,
-                                              repetitions,
-                                              estimation_repetitions,
-                                              estimation_eps );
+            return CrossPolytope<K, Dataset, Distance>(
+                dimensions, repetitions, estimation_repetitions, estimation_eps );
         }
     };
 

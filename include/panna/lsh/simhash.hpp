@@ -7,7 +7,7 @@
 
 namespace panna {
 
-    template <uint8_t K, typename Dataset>
+    template <uint8_t K, typename Dataset, typename Distance>
     class Simhash {
     public:
         //! The datatype of the output
@@ -46,22 +46,22 @@ namespace panna {
         }
 
         float collision_probability( float distance ) const {
-            float dotp = 1 - distance;
-            return 1.0 - std::acos( dotp ) / M_PI;
+            float angle = Distance::to_angle(distance);
+            return 1.0 - angle / M_PI;
         }
     };
 
-    template <uint8_t K, typename Dataset>
+    template <uint8_t K, typename Dataset, typename Distance>
     class SimhashBuilder {
         size_t dimensions = 0;
 
     public:
-        using Output = Simhash<K, Dataset>;
+        using Output = Simhash<K, Dataset, Distance>;
 
         SimhashBuilder( size_t dimensions ): dimensions( dimensions ) {}
 
         Output build( size_t repetitions ) const {
-            return Simhash<K, Dataset>( dimensions, repetitions );
+            return Simhash<K, Dataset, Distance>( dimensions, repetitions );
         }
     };
 } // namespace panna
