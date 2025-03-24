@@ -15,7 +15,7 @@ clean:
 
 setup-cmake:
     test -d build || mkdir build
-    cd build && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ..
+    cd build && cmake -DCMAKE_BUILD_TYPE=Debug ..
 
 generate-compile-commands:
     just clean

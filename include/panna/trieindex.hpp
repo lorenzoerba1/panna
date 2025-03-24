@@ -1,7 +1,10 @@
 #pragma once
 
+#include <algorithm>
+#include <chrono>
 #include <queue>
 
+#include "panna/lsh/predicates.hpp"
 #include "panna/prefixmap.hpp"
 
 namespace panna {
@@ -41,6 +44,7 @@ namespace panna {
 
         void rebuild() {
             std::vector<THashValue> hashes;
+#pragma omp parallel for private( hashes )
             for ( size_t i = hashed_points; i < dataset.size(); i++ ) {
                 auto tid = omp_get_thread_num();
                 hasher.hash( dataset[i], hashes );
@@ -51,7 +55,7 @@ namespace panna {
 
 #pragma omp parallel for
             for ( size_t rep = 0; rep < lsh_maps.size(); rep++ ) {
-                lsh_maps.rebuild();
+                lsh_maps[rep].rebuild();
             }
 
             hashed_points = dataset.size();
@@ -60,11 +64,12 @@ namespace panna {
         template <typename InputPoint>
         void search_brute_force( InputPoint& query,
                                  size_t k,
-                                 std::vector<std::pair<float, size_t>>& output ) {
+                                 std::vector<std::pair<float, uint32_t>>& output ) {
+            auto timer = std::chrono::steady_clock::now();
             current_query.clear();
             current_query.push_back( query );
 
-            std::priority_queue<std::pair<float, size_t>> top;
+            std::priority_queue<std::pair<float, uint32_t>> top;
 
             PointHandle q = current_query[0];
 
@@ -82,6 +87,76 @@ namespace panna {
                 top.pop();
             }
             std::sort( output.begin(), output.end() );
+            auto elapsed = std::chrono::steady_clock::now() - timer;
+            dbg( std::chrono::duration_cast<std::chrono::microseconds>( elapsed ).count() );
+        }
+
+        template <typename InputPoint>
+        void search( InputPoint& query,
+                     size_t k,
+                     float delta,
+                     std::vector<std::pair<float, uint32_t>>& output ) {
+            auto timer = std::chrono::steady_clock::now();
+            size_t collisions = 0;
+            // Setup
+            output.clear();
+            current_query.clear();
+            current_query.push_back( query );
+            PointHandle q = current_query[0];
+
+            // FIXME: remove this allocation
+            std::vector<typename Hasher::Value> q_hashes;
+            hasher.hash( q, q_hashes );
+
+            // FIXME: remove this allocation
+            std::vector<PrefixMapCursor<typename Hasher::Value>> cursors;
+            for ( size_t rep = 0; rep < lsh_maps.size(); rep++ ) {
+                cursors.push_back( lsh_maps[rep].create_cursor( q_hashes[rep] ) );
+            }
+
+            // Search
+            bool stop = false;
+            size_t max_concat = hasher.get_concatenations();
+            for ( size_t concat = max_concat; concat > 0; concat-- ) {
+                if ( stop ) {
+                    break;
+                }
+                for ( size_t rep = 0; rep < lsh_maps.size(); rep++ ) {
+                    cursors[rep].shorten_prefix( concat );
+                    for ( auto range : cursors[rep].get_indices() ) {
+                        for ( const uint32_t* it = range.first; it != range.second; it++ ) {
+                            PointHandle x = dataset[*it];
+                            float dist = Distance::compute( q, x );
+                            collisions++;
+                            if ( std::find( output.begin(),
+                                            output.end(),
+                                            std::make_pair( dist, *it ) ) == output.end() ) {
+                                output.push_back( std::make_pair( dist, *it ) );
+                                std::push_heap( output.begin(), output.end() );
+                                // TODO: remove duplicates from the priority queue
+                                while ( output.size() > k ) {
+                                    std::pop_heap( output.begin(), output.end() );
+                                    output.pop_back();
+                                }
+                            }
+                        }
+                    }
+
+                    // check stopping condition
+                    if ( output.size() == k ) {
+                        float topdist = output.back().first;
+                        float fp = failure_probability(
+                            hasher, topdist, concat, rep + 1, lsh_maps.size() );
+                        // dbg( concat, rep, topdist, collisions, fp );
+                        if ( fp <= delta ) {
+                            stop = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            auto elapsed = std::chrono::steady_clock::now() - timer;
+            dbg( std::chrono::duration_cast<std::chrono::microseconds>( elapsed ).count() );
         }
     };
 } // namespace panna

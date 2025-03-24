@@ -101,6 +101,7 @@ namespace panna {
             indices( indices ),
             hash( hash ),
             prefix_length( THashValue::get_concatenations() ) {
+            assert( hashes.size() > 0 );
             assert( std::is_sorted( hashes.begin(), hashes.end() ) );
             // Find the position of the first hash that is strictly larger
             // than the given one, with binary search.
@@ -120,7 +121,7 @@ namespace panna {
                     hashes[range_end - 1] < hashes[range_end] );
 
             // find the position of the first element equal to the hash
-            range_start = gallop_left( hashes, hash, range_end, THashValue::NUM_HASHES );
+            range_start = gallop_left( hashes, hash, range_end, THashValue::get_concatenations() );
             assert( range_start == hashes.size() || range_start == range_end ||
                     hashes[range_start] == hash );
 
@@ -246,4 +247,4 @@ namespace panna {
             return PrefixMapCursor<THashValue>( hash, hashes, indices );
         }
     };
-} // namespace puffinn
+} // namespace panna

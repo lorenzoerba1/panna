@@ -79,7 +79,7 @@ namespace panna {
         using DoubleWidth = BitwiseLshValue<2*K>;
 
         //! How many concatenated hash values are stored in this value?
-        constexpr static uint8_t num_hashes() { return K; };
+        constexpr static uint8_t get_concatenations() { return K; };
 
         // we use a factory function rather than a constructor to keep this
         // struct Plain Old Data.
@@ -154,7 +154,7 @@ namespace panna {
         using DoubleWidth = SymbolLshValue<Symbol, 2*K>;
 
         //! How many concatenated hash values are stored in this value?
-        constexpr static uint8_t num_hashes() { return K; };
+        constexpr static uint8_t get_concatenations() { return K; };
 
         // we use a factory function rather than a constructor to keep this
         // struct Plain Old Data.
