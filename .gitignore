@@ -3,3 +3,4 @@
 .venv
 build
 compile_commands.json
+glove-100-angular.hdf5

@@ -31,6 +31,7 @@
           llvmPackages.libcxx
           rr
           valgrind
+          highfive
         ] ++ ( with python310Packages; [
           setuptools
           wheel

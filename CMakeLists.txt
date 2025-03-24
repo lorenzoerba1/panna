@@ -31,3 +31,11 @@ FetchContent_MakeAvailable(dbg_macro)
 include_directories("test/include")
 add_executable(tests test/tests.cpp)
 target_link_libraries(tests PRIVATE Catch2::Catch2WithMain dbg_macro)
+
+
+find_package(HighFive)
+if (HighFive_FOUND)
+  add_executable(glove examples/glove.cpp)
+  target_link_libraries(glove HighFive dbg_macro)
+endif()
+

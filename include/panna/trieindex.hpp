@@ -1,12 +1,13 @@
 #pragma once
 
 #include <queue>
+
 #include "panna/prefixmap.hpp"
 
 namespace panna {
     template <typename Dataset, typename Hasher, typename Distance>
     class Index {
-        using PointHandle = typename Dataset::Handle;
+        using PointHandle = typename Dataset::PointHandle;
         using THashValue = typename Hasher::Value;
 
         // The actual data points
@@ -24,6 +25,15 @@ namespace panna {
         size_t hashed_points = 0;
 
     public:
+        template <typename HasherBuilder>
+        Index( size_t dimensions, HasherBuilder builder, size_t repetitions ):
+            dataset( dimensions ),
+            current_query( dimensions ),
+            hasher( builder.build( repetitions ) ),
+            hashed_points( 0 ) {
+            lsh_maps.resize( repetitions );
+        }
+
         template <typename InputPoint>
         void insert( InputPoint& point ) {
             dataset.push_back( point );
@@ -49,7 +59,7 @@ namespace panna {
 
         template <typename InputPoint>
         void search_brute_force( InputPoint& query,
-                                 size_t k ,
+                                 size_t k,
                                  std::vector<std::pair<float, size_t>>& output ) {
             current_query.clear();
             current_query.push_back( query );
@@ -58,20 +68,20 @@ namespace panna {
 
             PointHandle q = current_query[0];
 
-            for (size_t i=0; i<dataset.size(); i++) {
-                float dist = Distance::compute(q, dataset[i]);
-                top.emplace(dist, i);
-                while (top.size() > k) {
+            for ( size_t i = 0; i < dataset.size(); i++ ) {
+                float dist = Distance::compute( q, dataset[i] );
+                top.emplace( dist, i );
+                while ( top.size() > k ) {
                     top.pop();
                 }
             }
 
             output.clear();
-            while (top.size() > 0) {
-                output.push_back(top.top());
+            while ( top.size() > 0 ) {
+                output.push_back( top.top() );
                 top.pop();
             }
-            std::sort(output.begin(), output.end());
+            std::sort( output.begin(), output.end() );
         }
     };
 } // namespace panna

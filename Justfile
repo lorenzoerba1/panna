@@ -1,3 +1,9 @@
+example: build-example
+    build/glove
+
+build-example:
+    cmake --build build -j --target glove
+
 test: build-tests
     build/tests 
 
