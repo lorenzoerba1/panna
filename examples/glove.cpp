@@ -24,8 +24,8 @@ float compute_recall(std::vector<std::pair<float, uint32_t>> &ground, std::vecto
 int main( int argc, char* argv[] ) {
     using Distance = panna::CosineDistance;
     using Dataset = panna::UnitNormPoints;
-    using HasherBuilder = panna::SimhashBuilder<24, Dataset, Distance>;
-    // using HasherBuilder = panna::CrossPolytopeBuilder<4, Dataset, Distance>;
+    // using HasherBuilder = panna::SimhashBuilder<24, Dataset, Distance>;
+    using HasherBuilder = panna::CrossPolytopeBuilder<4, Dataset, Distance>;
     using Hasher = HasherBuilder::Output;
 
     H5Easy::File file( "glove-100-angular.hdf5", H5Easy::File::ReadOnly );
@@ -43,7 +43,7 @@ int main( int argc, char* argv[] ) {
     size_t cnt = 0;
     for ( auto v : data ) {
         index.insert( v );
-        if (cnt++ > 10000) {
+        if (cnt++ > 1000) {
             break;
         }
     }
@@ -57,6 +57,7 @@ int main( int argc, char* argv[] ) {
 
     auto q = queries[0];
     index.search_brute_force( q, k, res );
+    dbg(res.back().first);
     index.search( q, k, delta, res_prob );
     float recall = compute_recall(res, res_prob);
     dbg(recall);

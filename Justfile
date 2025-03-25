@@ -1,6 +1,9 @@
 example: build-example
     build/glove
 
+profile-example: build-example
+    samply record build/glove
+
 build-example:
     cmake --build build -j --target glove
 

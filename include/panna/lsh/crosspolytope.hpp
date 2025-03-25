@@ -162,7 +162,7 @@ namespace panna {
 
         CrossPolytope( size_t dimensions,
                        size_t repetitions,
-                       size_t estimation_repetitions = 8 * 4096,
+                       size_t estimation_repetitions = 2 * 4096,
                        float estimation_eps = 5e-3 ):
             repetitions( repetitions ),
             dimensions( dimensions ),

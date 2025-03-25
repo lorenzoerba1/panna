@@ -4,6 +4,15 @@
 #include "panna/lsh/values.hpp"
 
 namespace panna {
+    TEST_CASE( "prefix_less" ) {
+        ShortLshValue<4> a = ShortLshValue<4>::make( { 0x7d, 0x4, 0x56, 0x74 } );
+        ShortLshValue<4> b = ShortLshValue<4>::make( { 0x7d, 0x8, 0x78, 0x46 } );
+        ShortLshValue<4> c = ShortLshValue<4>::make( { 0x7d, 0x16, 0x83, 0xe8 } );
+
+        REQUIRE( a.prefix_less( b, 4 ) );
+        REQUIRE( b.prefix_less( c, 4 ) );
+    }
+
     TEST_CASE( "Bit hashes interleaving" ) {
         BitwiseLshValue<16> a = BitwiseLshValue<16>::make( 0xaaaa );
         BitwiseLshValue<16> b = BitwiseLshValue<16>::make( 0xaaaa );
@@ -17,8 +26,7 @@ namespace panna {
         std::array<int8_t, 8> bytes_expected = { 0, 1, 2, 3, 4, 5, 6, 7 };
         BytewiseLshValue<4> a = BytewiseLshValue<4>::make( bytes_a );
         BytewiseLshValue<4> b = BytewiseLshValue<4>::make( bytes_b );
-        BytewiseLshValue<8> expected =
-            BytewiseLshValue<8>::make( bytes_expected );
+        BytewiseLshValue<8> expected = BytewiseLshValue<8>::make( bytes_expected );
         REQUIRE( BytewiseLshValue<8>::interleave( a, b ) == expected );
     }
 } // namespace panna

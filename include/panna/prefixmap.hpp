@@ -5,6 +5,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <ostream>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -59,8 +60,8 @@ namespace panna {
         }
         assert( upper <= hashes.size() );
         assert( lower < upper );
+        // dbg( lower, upper, to );
 
-        // TODO: cleanup this code
         // now do a binary search
         size_t half = upper - lower;
         while ( half != 0 ) {
@@ -116,22 +117,63 @@ namespace panna {
                 }
             }
             range_end = std::min( lower, upper );
-            assert( range_end == hashes.size() || hash < hashes[range_end] );
-            assert( range_end == 0 || range_end == hashes.size() ||
-                    hashes[range_end - 1] < hashes[range_end] );
-
-            // find the position of the first element equal to the hash
             range_start = gallop_left( hashes, hash, range_end, THashValue::get_concatenations() );
-            assert( range_start == hashes.size() || range_start == range_end ||
-                    hashes[range_start] == hash );
 
             // set the previous range to the empty range
             prev_range_start = range_end;
             prev_range_end = range_end;
+            check_invariant();
         }
 
         size_t current_prefix() const {
             return prefix_length;
+        }
+
+        // The data structure maintains that
+        //
+        //  - if the range is empty (range start == range end) in which case
+        //    range_start is positioned _after_ the hash whose prefix is strictly
+        //    smaller than the needle and _at_ the hash whose prefix is strictly
+        //    larger than the needle
+        //  - if the range is not empty, range_start is positioned at the first hash
+        //    whose prefix matches the needle
+        //  - if the range is not empty, range_end is positioned at the first hash
+        //    whose prefix is strictly larger than the needle
+        bool check_invariant() const {
+            assert( range_start <= range_end );
+            assert( prev_range_start <= prev_range_end );
+            assert( range_start <= prev_range_start );
+            assert( prev_range_end <= range_end );
+            if ( range_start == range_end ) {
+                dbg( (size_t)prefix_length,
+                     range_start,
+                     range_end,
+                     hashes[range_start],
+                     hash,
+                     hashes[range_end] );
+                if ( range_start > 0 ) {
+                    assert( hashes[range_start - 1].prefix_less( hash, prefix_length ) );
+                }
+                if ( range_end < hashes.size() ) {
+                    bool cond = hash.prefix_less( hashes[range_end], prefix_length );
+                    dbg(cond);
+                    assert( cond );
+                }
+            } else {
+                dbg( (size_t)prefix_length,
+                     range_start,
+                     range_end,
+                     hashes[range_start],
+                     hash,
+                     hashes[range_end] );
+                assert( range_start < hashes.size() );
+                assert( hash.prefix_eq( hashes[range_start], prefix_length ) );
+                assert( range_start == 0 ||
+                        hashes[range_start - 1].prefix_less( hash, prefix_length ) );
+                assert( range_end == hashes.size() ||
+                        hash.prefix_less( hashes[range_end], prefix_length ) );
+                assert( hash.prefix_eq( hashes[range_end - 1], prefix_length ) );
+            }
         }
 
         // Shortens the prefix by one, and adjusts ranges accordingly
@@ -151,6 +193,8 @@ namespace panna {
             prefix_length = new_prefix;
             range_start = gallop_left( hashes, hash, prev_range_start, prefix_length );
             range_end = gallop_right( hashes, hash, prev_range_end, prefix_length );
+
+            // check_invariant();
         }
 
         std::array<std::pair<size_t, size_t>, 2> get_ranges() const {

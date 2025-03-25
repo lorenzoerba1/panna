@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
+#include <limits>
 #include <queue>
 
 #include "panna/lsh/predicates.hpp"
@@ -133,7 +135,6 @@ namespace panna {
                                             std::make_pair( dist, *it ) ) == output.end() ) {
                                 output.push_back( std::make_pair( dist, *it ) );
                                 std::push_heap( output.begin(), output.end() );
-                                // TODO: remove duplicates from the priority queue
                                 while ( output.size() > k ) {
                                     std::pop_heap( output.begin(), output.end() );
                                     output.pop_back();
@@ -147,13 +148,15 @@ namespace panna {
                         float topdist = output.back().first;
                         float fp = failure_probability(
                             hasher, topdist, concat, rep + 1, lsh_maps.size() );
-                        // dbg( concat, rep, topdist, collisions, fp );
                         if ( fp <= delta ) {
+                            dbg( concat, rep, topdist, collisions, fp );
                             stop = true;
                             break;
                         }
                     }
                 }
+                float topdist = (output.size() > 0)? output.back().first : std::numeric_limits<float>::infinity();
+                dbg( concat, collisions, topdist );
             }
             auto elapsed = std::chrono::steady_clock::now() - timer;
             dbg( std::chrono::duration_cast<std::chrono::microseconds>( elapsed ).count() );

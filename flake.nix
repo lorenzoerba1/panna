@@ -30,8 +30,10 @@
           llvmPackages.openmp
           llvmPackages.libcxx
           rr
+          gdbgui
           valgrind
           highfive
+          samply
         ] ++ ( with python310Packages; [
           setuptools
           wheel
