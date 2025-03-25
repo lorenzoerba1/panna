@@ -11,6 +11,11 @@ namespace panna {
 
         REQUIRE( a.prefix_less( b, 4 ) );
         REQUIRE( b.prefix_less( c, 4 ) );
+
+        ShortLshValue<4> x = ShortLshValue<4>::make( { 0x61, 0x0, 0x0, 0x0 } );
+        ShortLshValue<4> y = ShortLshValue<4>::make( { 0x1, 0x2f, 0xbd, 0xbf } );
+        REQUIRE( !x.prefix_less(y, 4) );
+
     }
 
     TEST_CASE( "Bit hashes interleaving" ) {

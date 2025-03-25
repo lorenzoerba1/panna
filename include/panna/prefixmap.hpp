@@ -60,7 +60,6 @@ namespace panna {
         }
         assert( upper <= hashes.size() );
         assert( lower < upper );
-        // dbg( lower, upper, to );
 
         // now do a binary search
         size_t half = upper - lower;
@@ -104,75 +103,52 @@ namespace panna {
             prefix_length( THashValue::get_concatenations() ) {
             assert( hashes.size() > 0 );
             assert( std::is_sorted( hashes.begin(), hashes.end() ) );
-            // Find the position of the first hash that is strictly larger
-            // than the given one, with binary search.
-            size_t lower = 0;
-            size_t upper = hashes.size();
-            while ( lower < upper ) {
-                size_t mid = lower + ( upper - lower ) / 2;
-                if ( hash < hashes[mid] ) {
-                    upper = mid;
-                } else {
-                    lower = mid + 1;
-                }
-            }
-            range_end = std::min( lower, upper );
-            range_start = gallop_left( hashes, hash, range_end, THashValue::get_concatenations() );
+            assert(
+                std::is_sorted( hashes.begin(), hashes.end(), [&]( const auto& a, const auto& b ) {
+                    return a.prefix_less( b, prefix_length );
+                } ) );
+            update_range_start();
+            update_range_end();
+            assert( range_start <= range_end );
 
             // set the previous range to the empty range
             prev_range_start = range_end;
             prev_range_end = range_end;
-            check_invariant();
         }
 
         size_t current_prefix() const {
             return prefix_length;
         }
 
-        // The data structure maintains that
-        //
-        //  - if the range is empty (range start == range end) in which case
-        //    range_start is positioned _after_ the hash whose prefix is strictly
-        //    smaller than the needle and _at_ the hash whose prefix is strictly
-        //    larger than the needle
-        //  - if the range is not empty, range_start is positioned at the first hash
-        //    whose prefix matches the needle
-        //  - if the range is not empty, range_end is positioned at the first hash
-        //    whose prefix is strictly larger than the needle
-        bool check_invariant() const {
-            assert( range_start <= range_end );
-            assert( prev_range_start <= prev_range_end );
-            assert( range_start <= prev_range_start );
-            assert( prev_range_end <= range_end );
-            if ( range_start == range_end ) {
-                dbg( (size_t)prefix_length,
-                     range_start,
-                     range_end,
-                     hashes[range_start],
-                     hash,
-                     hashes[range_end] );
-                if ( range_start > 0 ) {
-                    assert( hashes[range_start - 1].prefix_less( hash, prefix_length ) );
-                }
-                if ( range_end < hashes.size() ) {
-                    bool cond = hash.prefix_less( hashes[range_end], prefix_length );
-                    dbg(cond);
-                    assert( cond );
-                }
-            } else {
-                dbg( (size_t)prefix_length,
-                     range_start,
-                     range_end,
-                     hashes[range_start],
-                     hash,
-                     hashes[range_end] );
-                assert( range_start < hashes.size() );
-                assert( hash.prefix_eq( hashes[range_start], prefix_length ) );
-                assert( range_start == 0 ||
-                        hashes[range_start - 1].prefix_less( hash, prefix_length ) );
-                assert( range_end == hashes.size() ||
-                        hash.prefix_less( hashes[range_end], prefix_length ) );
-                assert( hash.prefix_eq( hashes[range_end - 1], prefix_length ) );
+        // Find the first index such that the prefix is >= the given hash.
+        // In other words, in the first part the hashes are all < the given hash.
+        void update_range_start() {
+            // range_start = std::distance(
+            //     hashes.begin(),
+            //     std::partition_point( hashes.begin(), hashes.end(), [&]( const auto& h ) {
+            //         return hash.prefix_less( h, prefix_length );
+            //     } ) );
+            range_start = std::distance(
+                hashes.begin(), std::find_if( hashes.begin(), hashes.end(), [&]( const auto& h ) {
+                    return !h.prefix_less( hash, prefix_length );
+                } ) );
+            if ( range_start < hashes.size() ) {
+                // assert(!hashes[range_start].prefix_less(hash, prefix_length));
+            }
+        }
+
+        // Find the first index such that the prefix is > the given hash (**strictly** larger).
+        // In other words, in the first part the hashes are all <= the given hash.
+        void update_range_end() {
+            range_end = std::distance(
+                hashes.begin(), std::find_if( hashes.begin(), hashes.end(), [&]( const auto& h ) {
+                    return hash.prefix_less( h, prefix_length );
+                } ) );
+            // std::partition_point( hashes.begin(), hashes.end(), [&]( const auto& h ) {
+            //     return !h.prefix_less( hash, prefix_length );
+            // } ) );
+            if ( range_end < hashes.size() ) {
+                // assert(hash.prefix_less(hashes[range_end], prefix_length));
             }
         }
 
@@ -191,10 +167,10 @@ namespace panna {
             prev_range_start = range_start;
             prev_range_end = range_end;
             prefix_length = new_prefix;
-            range_start = gallop_left( hashes, hash, prev_range_start, prefix_length );
-            range_end = gallop_right( hashes, hash, prev_range_end, prefix_length );
+            update_range_start();
+            update_range_end();
 
-            // check_invariant();
+            assert( range_start <= range_end );
         }
 
         std::array<std::pair<size_t, size_t>, 2> get_ranges() const {

@@ -33,6 +33,7 @@ namespace panna {
             // adapted from
             // https://github.com/puffinn/puffinn/blob/master/include/puffinn/hash/crosspolytope.hpp
 
+            printf("estimating collision probabilities\n");
             auto log_dimensions = ceil_log( dimensions );
             probabilities = std::vector<float>();
             size_t num_probabilities = 2 / eps;
@@ -99,6 +100,7 @@ namespace panna {
                 assert( prob <= 1.0 );
                 probabilities[i] = prob;
             }
+            printf("collision probabilities estimated!\n");
         }
 
         float get_collision_probability( float dotp ) const {

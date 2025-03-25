@@ -93,6 +93,7 @@ namespace panna {
             dbg( std::chrono::duration_cast<std::chrono::microseconds>( elapsed ).count() );
         }
 
+        // TODO: collect statistics of the execution, including the average distance of the collisions
         template <typename InputPoint>
         void search( InputPoint& query,
                      size_t k,
@@ -149,17 +150,17 @@ namespace panna {
                         float fp = failure_probability(
                             hasher, topdist, concat, rep + 1, lsh_maps.size() );
                         if ( fp <= delta ) {
-                            dbg( concat, rep, topdist, collisions, fp );
+                            // dbg( concat, rep, topdist, collisions, fp );
                             stop = true;
                             break;
                         }
                     }
                 }
                 float topdist = (output.size() > 0)? output.back().first : std::numeric_limits<float>::infinity();
-                dbg( concat, collisions, topdist );
+                // dbg( concat, collisions, topdist );
             }
             auto elapsed = std::chrono::steady_clock::now() - timer;
-            dbg( std::chrono::duration_cast<std::chrono::microseconds>( elapsed ).count() );
+            // dbg( std::chrono::duration_cast<std::chrono::microseconds>( elapsed ).count() );
         }
     };
 } // namespace panna

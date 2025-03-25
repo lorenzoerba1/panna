@@ -188,24 +188,25 @@ namespace panna {
             return true;
         }
 
-        inline constexpr bool prefix_less( const SymbolLshValue<Symbol, K> &other, uint8_t prefix ) const {
-            // OPTIMIZE: maybe we can do it with SIMD, but probably the compiler
-            // is smart enough to figure out on its own.
+        inline constexpr bool prefix_less( const SymbolLshValue<Symbol, K>& other,
+                                           uint8_t prefix ) const {
             assert( prefix <= K );
             for ( uint8_t i = 0; i < prefix; i++ ) {
                 if ( hashes[i] < other.hashes[i] ) {
                     return true;
+                } else if ( hashes[i] > other.hashes[i] ) {
+                    return false;
                 }
             }
             return false;
         }
 
         constexpr inline bool operator<( SymbolLshValue<Symbol, K> other ) const {
-            return this->hashes < other.hashes;
+            return this->prefix_less( other, K );
         }
 
         constexpr inline bool operator==( SymbolLshValue<Symbol, K> other ) const {
-            return this->hashes == other.hashes;
+            return this->prefix_eq( other, K );
         }
 
         static constexpr inline SymbolLshValue<Symbol, K>
