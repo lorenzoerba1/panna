@@ -123,33 +123,19 @@ namespace panna {
         // Find the first index such that the prefix is >= the given hash.
         // In other words, in the first part the hashes are all < the given hash.
         void update_range_start() {
-            // range_start = std::distance(
-            //     hashes.begin(),
-            //     std::partition_point( hashes.begin(), hashes.end(), [&]( const auto& h ) {
-            //         return hash.prefix_less( h, prefix_length );
-            //     } ) );
             range_start = std::distance(
-                hashes.begin(), std::find_if( hashes.begin(), hashes.end(), [&]( const auto& h ) {
-                    return !h.prefix_less( hash, prefix_length );
+                hashes.begin(), std::partition_point( hashes.begin(), hashes.end(), [&]( const auto& h ) {
+                    return h.prefix_less( hash, prefix_length );
                 } ) );
-            if ( range_start < hashes.size() ) {
-                // assert(!hashes[range_start].prefix_less(hash, prefix_length));
-            }
         }
 
         // Find the first index such that the prefix is > the given hash (**strictly** larger).
         // In other words, in the first part the hashes are all <= the given hash.
         void update_range_end() {
             range_end = std::distance(
-                hashes.begin(), std::find_if( hashes.begin(), hashes.end(), [&]( const auto& h ) {
-                    return hash.prefix_less( h, prefix_length );
+                hashes.begin(), std::partition_point( hashes.begin(), hashes.end(), [&]( const auto& h ) {
+                    return !hash.prefix_less( h, prefix_length );
                 } ) );
-            // std::partition_point( hashes.begin(), hashes.end(), [&]( const auto& h ) {
-            //     return !h.prefix_less( hash, prefix_length );
-            // } ) );
-            if ( range_end < hashes.size() ) {
-                // assert(hash.prefix_less(hashes[range_end], prefix_length));
-            }
         }
 
         // Shortens the prefix by one, and adjusts ranges accordingly

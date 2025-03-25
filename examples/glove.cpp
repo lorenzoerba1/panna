@@ -1,4 +1,5 @@
 #include <highfive/H5Easy.hpp>
+#include <chrono>
 
 #include "dbg.h"
 #include "panna/data.hpp"
@@ -25,8 +26,8 @@ float compute_recall( std::vector<std::pair<float, uint32_t>>& ground,
 int main( int argc, char* argv[] ) {
     using Distance = panna::CosineDistance;
     using Dataset = panna::UnitNormPoints;
-    using HasherBuilder = panna::SimhashBuilder<24, Dataset, Distance>;
-    // using HasherBuilder = panna::CrossPolytopeBuilder<3, Dataset, Distance>;
+    // using HasherBuilder = panna::SimhashBuilder<24, Dataset, Distance>;
+    using HasherBuilder = panna::CrossPolytopeBuilder<3, Dataset, Distance>;
     using Hasher = HasherBuilder::Output;
 
     H5Easy::File file( "glove-100-angular.hdf5", H5Easy::File::ReadOnly );
@@ -41,10 +42,10 @@ int main( int argc, char* argv[] ) {
     size_t dimensions = data[0].size();
     HasherBuilder hbuilder( dimensions );
 
-    panna::Index<Dataset, Hasher, Distance> index( dimensions, hbuilder, 128 );
+    panna::Index<Dataset, Hasher, Distance> index( dimensions, hbuilder, 128);
     size_t cnt = 0;
     for ( auto v : data ) {
-        if ( cnt > 100000 ) {
+        if ( cnt > 1000000 ) {
             break;
         }
         index.insert( v );
@@ -59,8 +60,9 @@ int main( int argc, char* argv[] ) {
     std::vector<std::pair<float, uint32_t>> res;
     std::vector<std::pair<float, uint32_t>> res_prob;
 
+    auto start = std::chrono::steady_clock::now();
     for ( auto q : queries ) {
-        if ( q_cnt > 0 ) {
+        if ( q_cnt > 1000 ) {
             break;
         }
         // index.search_brute_force( q, k, res );
@@ -70,4 +72,8 @@ int main( int argc, char* argv[] ) {
         // dbg( recall );
         q_cnt++;
     }
+    auto end = std::chrono::steady_clock::now();
+    double elapsed_s = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / (1000.0 * 1000.0);
+    double qps = q_cnt / elapsed_s;
+    std::cout << "qps: " << qps << std::endl;
 }
