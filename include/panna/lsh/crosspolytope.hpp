@@ -6,18 +6,10 @@
 #include "ffht/fht_header_only.h"
 #include "panna/lsh/values.hpp"
 #include "panna/rand.hpp"
+#include "panna/linalg.hpp"
 
 namespace panna {
 
-    constexpr static unsigned int ceil_log( unsigned int value ) {
-        unsigned int log = 0;
-        unsigned int power_of_two = 1;
-        while ( power_of_two < value ) {
-            log++;
-            power_of_two *= 2;
-        }
-        return log;
-    }
 
     struct CrossPolytopeCollisionEstimates {
         std::vector<float> probabilities;

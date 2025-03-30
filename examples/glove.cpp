@@ -41,11 +41,11 @@ int main( int argc, char* argv[] ) {
 
     size_t dimensions = data[0].size();
     HasherBuilder hbuilder( dimensions );
-
-    panna::Index<Dataset, Hasher, Distance> index( dimensions, hbuilder, 128);
+    
+    panna::Index<Dataset, Hasher, Distance> index( dimensions, hbuilder, 380);
     size_t cnt = 0;
     for ( auto v : data ) {
-        if ( cnt > 1000000 ) {
+        if ( cnt > 10000 ) {
             break;
         }
         index.insert( v );

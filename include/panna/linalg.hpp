@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "ffht/fht_header_only.h"
 #include "panna/data.hpp"
 
 #if defined( __AVX2__ ) || defined( __AVX__ )
@@ -40,39 +41,34 @@ namespace panna {
     inline static int16_t dot_product_chunks16_avx2( UnitNormPointHandle lhs,
                                                      UnitNormPointHandle rhs ) {
         assert( lhs.num_chunks == rhs.num_chunks );
-        __m256i res = _mm256_mulhrs_epi16(
-            _mm256_load_si256( (__m256i*)lhs.chunks[0].chunk ),
-            _mm256_load_si256( (__m256i*)rhs.chunks[0].chunk ) );
+        __m256i res = _mm256_mulhrs_epi16( _mm256_load_si256( (__m256i*)lhs.chunks[0].chunk ),
+                                           _mm256_load_si256( (__m256i*)rhs.chunks[0].chunk ) );
         for ( size_t i = 1; i < lhs.num_chunks; i += 1 ) {
-            __m256i tmp = _mm256_mulhrs_epi16(
-                _mm256_load_si256( (__m256i*)lhs.chunks[i].chunk ),
-                _mm256_load_si256( (__m256i*)rhs.chunks[i].chunk ) );
+            __m256i tmp = _mm256_mulhrs_epi16( _mm256_load_si256( (__m256i*)lhs.chunks[i].chunk ),
+                                               _mm256_load_si256( (__m256i*)rhs.chunks[i].chunk ) );
             res = _mm256_add_epi16( res, tmp );
         }
         return reduce_sum( res );
     }
 #endif
 
-    inline static int16_t
-    dot_product_chunks16_simple( UnitNormPointHandle lhs,
-                                 UnitNormPointHandle rhs ) {
+    inline static int16_t dot_product_chunks16_simple( UnitNormPointHandle lhs,
+                                                       UnitNormPointHandle rhs ) {
         assert( lhs.num_chunks == rhs.num_chunks );
         const static unsigned int VALUES_PER_CHUNK = 16;
 
         int16_t res = 0;
         for ( size_t chunk_idx = 0; chunk_idx < lhs.num_chunks; chunk_idx++ ) {
             for ( size_t i = 0; i < VALUES_PER_CHUNK; i++ ) {
-                int32_t precise =
-                    static_cast<int32_t>( lhs.chunks[chunk_idx].chunk[i] ) *
-                    static_cast<int32_t>( rhs.chunks[chunk_idx].chunk[i] );
+                int32_t precise = static_cast<int32_t>( lhs.chunks[chunk_idx].chunk[i] ) *
+                                  static_cast<int32_t>( rhs.chunks[chunk_idx].chunk[i] );
                 res += static_cast<int16_t>( ( ( precise >> 14 ) + 1 ) >> 1 );
             }
         }
         return res;
     }
 
-    static inline int16_t dot_product_chunks16( UnitNormPointHandle lhs,
-                                                UnitNormPointHandle rhs ) {
+    static inline int16_t dot_product_chunks16( UnitNormPointHandle lhs, UnitNormPointHandle rhs ) {
 #ifdef __AVX2__
         return dot_product_chunks16_avx2( lhs, rhs );
 #else
@@ -89,10 +85,53 @@ namespace panna {
 
     template <>
     float dot_product( NormedPointHandle a, NormedPointHandle b ) {
-        float inner_dot =
-            from_16bit_fixed_point( dot_product_chunks16( a.inner, b.inner ) );
-        return std::sqrt( a.squared_norm() ) * std::sqrt( b.squared_norm() ) *
-               inner_dot;
+        float inner_dot = from_16bit_fixed_point( dot_product_chunks16( a.inner, b.inner ) );
+        return std::sqrt( a.squared_norm() ) * std::sqrt( b.squared_norm() ) * inner_dot;
     }
+
+    constexpr static unsigned int ceil_log( unsigned int value ) {
+        unsigned int log = 0;
+        unsigned int power_of_two = 1;
+        while ( power_of_two < value ) {
+            log++;
+            power_of_two *= 2;
+        }
+        return log;
+    }
+
+    // Perform the dot product with many random vetors at once using the
+    // Fast Hadamard Transform
+    template <uint8_t ROTATIONS = 3>
+    class RandomDotProducts {
+        size_t num_products;
+        size_t log_num_products;
+        std::vector<int8_t> random_signs;
+
+    public:
+        RandomDotProducts( size_t num_products ):
+            num_products( num_products ), log_num_products( ceil_log( num_products ) ) {
+
+            int random_signs_len = ROTATIONS * ( 1 << log_num_products );
+            random_signs.reserve( random_signs_len );
+
+            std::uniform_int_distribution<int8_t> sign_distribution( 0, 1 );
+            auto& generator = get_global_rng();
+            for ( int i = 0; i < random_signs_len; i++ ) {
+                random_signs.push_back( sign_distribution( generator ) * 2 - 1 );
+            }
+        }
+
+        void compute( std::vector<float>& in_out ) const {
+            for ( uint8_t rotation = 0; rotation < ROTATIONS; rotation++ ) {
+                // Multiply by a diagonal +-1 matrix.
+                size_t base_idx = rotation * log_num_products;
+                for ( size_t i = 0; i < log_num_products; i++ ) {
+                    in_out[i] *= random_signs[base_idx + i];
+                }
+                // Apply the fast hadamard transform
+                fht( in_out.data(), log_num_products );
+            }
+        }
+    };
 
 } // namespace panna
