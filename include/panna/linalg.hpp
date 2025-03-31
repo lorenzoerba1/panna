@@ -42,11 +42,13 @@ namespace panna {
     inline static int16_t dot_product_chunks16_avx2( UnitNormPointHandle lhs,
                                                      UnitNormPointHandle rhs ) {
         assert( lhs.num_chunks == rhs.num_chunks );
-        __m256i res = _mm256_mulhrs_epi16( _mm256_load_si256( (__m256i*)lhs.chunks[0].chunk ),
-                                           _mm256_load_si256( (__m256i*)rhs.chunks[0].chunk ) );
+        __m256i res =
+            _mm256_mulhrs_epi16( _mm256_load_si256( (__m256i*)lhs.chunks[0].chunk.data() ),
+                                 _mm256_load_si256( (__m256i*)rhs.chunks[0].chunk.data() ) );
         for ( size_t i = 1; i < lhs.num_chunks; i += 1 ) {
-            __m256i tmp = _mm256_mulhrs_epi16( _mm256_load_si256( (__m256i*)lhs.chunks[i].chunk ),
-                                               _mm256_load_si256( (__m256i*)rhs.chunks[i].chunk ) );
+            __m256i tmp =
+                _mm256_mulhrs_epi16( _mm256_load_si256( (__m256i*)lhs.chunks[i].chunk.data() ),
+                                     _mm256_load_si256( (__m256i*)rhs.chunks[i].chunk.data() ) );
             res = _mm256_add_epi16( res, tmp );
         }
         return reduce_sum( res );
@@ -109,6 +111,8 @@ namespace panna {
         std::vector<float> random_signs;
 
     public:
+        RandomDotProducts() {}
+
         RandomDotProducts( size_t num_products ):
             num_products( num_products ), log_num_products( ceil_log( num_products ) ) {
 
@@ -122,16 +126,26 @@ namespace panna {
             }
         }
 
+        template <typename Archive>
+        void serialize( Archive& ar ) {
+            ar( num_products, log_num_products, random_signs );
+        }
+
+        friend bool operator==( const RandomDotProducts<ROTATIONS>& a,
+                                const RandomDotProducts<ROTATIONS>& b ) {
+            return a.num_products == b.num_products && a.log_num_products == b.log_num_products &&
+                   a.random_signs == b.random_signs;
+        }
         std::vector<float> allocate_scratch() const {
             std::vector<float> scratch;
-            scratch.resize(1 << log_num_products);
+            scratch.resize( 1 << log_num_products );
             return scratch;
         }
 
         void compute( std::vector<float>& in_out ) const {
             for ( uint8_t rotation = 0; rotation < ROTATIONS; rotation++ ) {
                 // Multiply by a diagonal +-1 matrix.
-                size_t base_idx = rotation * (1 << log_num_products);
+                size_t base_idx = rotation * ( 1 << log_num_products );
                 for ( size_t i = 0; i < ( 1 << log_num_products ); i++ ) {
                     // OPTIMIZE use simd, this takes half as much time as the fht transform below
                     in_out[i] *= random_signs[base_idx + i];

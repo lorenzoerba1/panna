@@ -18,11 +18,22 @@ namespace panna {
         Dataset random_vectors;
 
     public:
+        Simhash() {}
+
         Simhash( size_t dimensions, size_t repetitions ):
             repetitions( repetitions ), random_vectors( dimensions ) {
             for ( size_t vec_idx = 0; vec_idx < repetitions * K; vec_idx++ ) {
                 random_vectors.push_back_random();
             }
+        }
+
+        template<typename Archive>
+        void serialize(Archive & ar) {
+            ar(repetitions, random_vectors);
+        }
+
+        friend bool operator==(const Simhash<K, Dataset, Distance> & a, const Simhash<K, Dataset, Distance> & b) {
+            return a.repetitions == b.repetitions && a.random_vectors == b.random_vectors;
         }
 
         static constexpr size_t get_concatenations() { return K; }

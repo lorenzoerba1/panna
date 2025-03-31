@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cmath>
 #include <cstddef>
@@ -9,6 +10,8 @@
 #include <stdexcept>
 #include <vector>
 
+#include "cereal/types/array.hpp"
+#include "cereal/types/vector.hpp"
 #include "panna/rand.hpp"
 
 namespace panna {
@@ -17,12 +20,20 @@ namespace panna {
     //! even when stored in a std::vector.
     struct alignas( 32 ) Int16Chunk {
         static constexpr size_t CHUNK_SIZE = 16;
-        int16_t chunk[CHUNK_SIZE];
+        // int16_t chunk[CHUNK_SIZE];
+        std::array<int16_t, CHUNK_SIZE> chunk;
+
+        template <typename Archive>
+        void serialize( Archive& ar ) {
+            ar( chunk );
+        }
+
+        friend bool operator==( const Int16Chunk& a, const Int16Chunk& b ) {
+            return a.chunk == b.chunk;
+        }
     };
-    static_assert( sizeof( Int16Chunk ) == 256 / 8,
-                   "int16 chunk should fill 256 bits" );
-    static_assert( alignof( Int16Chunk ) == 256 / 8,
-                   "int16 chunk should align to 256 bits" );
+    static_assert( sizeof( Int16Chunk ) == 256 / 8, "int16 chunk should fill 256 bits" );
+    static_assert( alignof( Int16Chunk ) == 256 / 8, "int16 chunk should align to 256 bits" );
 
     static constexpr int16_t to_16bit_fixed_point( float val ) {
         assert( val >= -1.0 && val <= 1.0 );
@@ -54,9 +65,9 @@ namespace panna {
 
     class UnitNormPoints {
 
-        size_t dimensions;
-        size_t padding;
-        size_t chunks_per_point;
+        size_t dimensions = 0;
+        size_t padding = 0;
+        size_t chunks_per_point = 0;
 
         // Since C++17 the allocation of std::vector respects the alignment of
         // the template argument.
@@ -65,21 +76,37 @@ namespace panna {
     public:
         using PointHandle = UnitNormPointHandle;
 
+        UnitNormPoints() {
+        }
+
         UnitNormPoints( size_t dimensions ):
             dimensions( dimensions ),
-            padding( ( Int16Chunk::CHUNK_SIZE -
-                       ( dimensions % Int16Chunk::CHUNK_SIZE ) ) %
+            padding( ( Int16Chunk::CHUNK_SIZE - ( dimensions % Int16Chunk::CHUNK_SIZE ) ) %
                      Int16Chunk::CHUNK_SIZE ),
-            chunks_per_point(
-                std::ceil( ( (float)dimensions ) / Int16Chunk::CHUNK_SIZE ) ) {}
+            chunks_per_point( std::ceil( ( (float)dimensions ) / Int16Chunk::CHUNK_SIZE ) ) {
+        }
+
+        template <typename Archive>
+        void serialize( Archive& ar ) {
+            ar( dimensions, padding, chunks_per_point, chunks );
+        }
+
+        friend bool operator==( const UnitNormPoints& a, const UnitNormPoints& b ) {
+            return a.dimensions == b.dimensions && a.padding == b.padding && a.chunks_per_point &&
+                   b.chunks_per_point && a.chunks == b.chunks;
+        }
 
         void clear() {
             chunks.clear();
         }
 
-        size_t get_padding() const { return padding; }
+        size_t get_padding() const {
+            return padding;
+        }
 
-        size_t get_chunks_per_point() const { return chunks_per_point; }
+        size_t get_chunks_per_point() const {
+            return chunks_per_point;
+        }
 
         PointHandle operator[]( size_t i ) const {
             assert( i * chunks_per_point < chunks.size() );
@@ -108,13 +135,11 @@ namespace panna {
             for ( size_t i = 0; i < dimensions; i++ ) {
                 float normalized = ( norm == 0.0 ) ? vec[i] : vec[i] / norm;
                 chunks[base_chunk_idx + i / Int16Chunk::CHUNK_SIZE]
-                    .chunk[i % Int16Chunk::CHUNK_SIZE] =
-                    to_16bit_fixed_point( normalized );
+                    .chunk[i % Int16Chunk::CHUNK_SIZE] = to_16bit_fixed_point( normalized );
             }
             for ( size_t i = dimensions; i < dimensions + padding; i++ ) {
                 chunks[base_chunk_idx + i / Int16Chunk::CHUNK_SIZE]
-                    .chunk[i % Int16Chunk::CHUNK_SIZE] =
-                    to_16bit_fixed_point( 0.0 );
+                    .chunk[i % Int16Chunk::CHUNK_SIZE] = to_16bit_fixed_point( 0.0 );
             }
         }
 
@@ -128,14 +153,18 @@ namespace panna {
             return operator[]( size() - 1 );
         }
 
-        size_t size() const { return chunks.size() / chunks_per_point; }
+        size_t size() const {
+            return chunks.size() / chunks_per_point;
+        }
     };
 
     struct NormedPointHandle {
         UnitNormPointHandle inner;
         float sq_norm;
 
-        float squared_norm() const { return sq_norm; }
+        float squared_norm() const {
+            return sq_norm;
+        }
     };
 
     class NormedPoints {
@@ -147,7 +176,18 @@ namespace panna {
         using PointHandle = NormedPointHandle;
 
         NormedPoints( size_t dimensions ):
-            dimensions( dimensions ), normalized_points( dimensions ) {}
+            dimensions( dimensions ), normalized_points( dimensions ) {
+        }
+
+        template <typename Archive>
+        void serialize( Archive& ar ) {
+            ar( dimensions, normalized_points, squared_norms );
+        }
+
+        friend bool operator==( const NormedPoints& a, const NormedPoints& b ) {
+            return a.dimensions == b.dimensions && a.normalized_points == b.normalized_points &&
+                   a.squared_norms == b.squared_norms;
+        }
 
         void clear() {
             normalized_points.clear();
@@ -182,7 +222,9 @@ namespace panna {
             return operator[]( size() - 1 );
         }
 
-        size_t size() const { return squared_norms.size(); }
+        size_t size() const {
+            return squared_norms.size();
+        }
     };
 
     class SparseSetHandle {
@@ -192,10 +234,16 @@ namespace panna {
         friend class SparseSets;
 
     public:
-        const uint32_t* begin() const { return tokens; }
-        const uint32_t* end() const { return tokens + set_size; }
+        const uint32_t* begin() const {
+            return tokens;
+        }
+        const uint32_t* end() const {
+            return tokens + set_size;
+        }
 
-        size_t size() const { return set_size; }
+        size_t size() const {
+            return set_size;
+        }
 
         size_t intersection_size( SparseSetHandle other ) const {
             size_t asize = set_size;
@@ -233,10 +281,15 @@ namespace panna {
             starts.push_back( set_data.size() );
         }
 
+        template <typename Archive>
+        void serialize( Archive& ar ) {
+            ar( dimensions, set_data, starts );
+        }
+
         void clear() {
             set_data.clear();
             starts.clear();
-            starts.push_back(set_data.size());
+            starts.push_back( set_data.size() );
         }
 
         PointHandle operator[]( size_t i ) const {
@@ -250,8 +303,7 @@ namespace panna {
             std::sort( set.begin(), set.end() );
             for ( uint32_t token : set ) {
                 if ( token > dimensions ) {
-                    throw std::invalid_argument(
-                        "token outside of the universe" );
+                    throw std::invalid_argument( "token outside of the universe" );
                 }
                 set_data.push_back( token );
             }
@@ -274,6 +326,8 @@ namespace panna {
             return operator[]( size() - 1 );
         }
 
-        size_t size() const { return starts.size() - 1; }
+        size_t size() const {
+            return starts.size() - 1;
+        }
     };
 } // namespace panna

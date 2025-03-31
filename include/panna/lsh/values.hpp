@@ -9,6 +9,7 @@
 #include <ostream>
 #include <type_traits>
 
+
 namespace panna {
     //! Places zeros between the bits of the given value.
     //! Only the 16 less significant bits will appear in the output.
@@ -83,6 +84,11 @@ namespace panna {
         constexpr static uint8_t get_concatenations() {
             return K;
         };
+
+        template <typename Archive>
+        void serialize( Archive& ar ) {
+            ar( bits );
+        }
 
         // we use a factory function rather than a constructor to keep this
         // struct Plain Old Data.
@@ -160,6 +166,11 @@ namespace panna {
 
     public:
         using DoubleWidth = SymbolLshValue<Symbol, 2 * K>;
+
+        template <typename Archive>
+        void serialize( Archive& ar ) {
+            ar( hashes );
+        }
 
         //! How many concatenated hash values are stored in this value?
         constexpr static uint8_t get_concatenations() {

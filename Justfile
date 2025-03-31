@@ -8,7 +8,7 @@ build-example:
     cmake --build build -j --target glove
 
 test: build-tests
-    build/tests
+    build/tests "serialization"
 
 build-tests:
     cmake --build build -j --target tests

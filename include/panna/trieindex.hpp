@@ -30,6 +30,9 @@ namespace panna {
         size_t hashed_points = 0;
 
     public:
+        Index() {
+        }
+
         template <typename HasherBuilder>
         Index( size_t dimensions, HasherBuilder builder, size_t repetitions ):
             dataset( dimensions ),
@@ -37,6 +40,18 @@ namespace panna {
             hasher( builder.build( repetitions ) ),
             hashed_points( 0 ) {
             lsh_maps.resize( repetitions );
+        }
+
+        template <typename Archive>
+        void serialize( Archive& ar ) {
+            ar( dataset, current_query, lsh_maps, hasher, hashed_points );
+        }
+
+        friend bool operator==( const Index<Dataset, Hasher, Distance>& a,
+                                const Index<Dataset, Hasher, Distance>& b ) {
+            return a.dataset == b.dataset && a.current_query == b.current_query &&
+                   a.lsh_maps == b.lsh_maps && a.hasher == b.hasher &&
+                   a.hashed_points == b.hashed_points;
         }
 
         template <typename InputPoint>
@@ -52,7 +67,7 @@ namespace panna {
             //     tl_hash_values[i].resize(lsh_maps.size());
             // }
 
-#pragma omp parallel for private(hashes)
+#pragma omp parallel for private( hashes )
             for ( size_t i = hashed_points; i < dataset.size(); i++ ) {
                 auto tid = omp_get_thread_num();
                 // auto & hashes = tl_hash_values[tid];
@@ -97,7 +112,8 @@ namespace panna {
             std::sort( output.begin(), output.end() );
         }
 
-        // TODO: collect statistics of the execution, including the average distance of the collisions
+        // TODO: collect statistics of the execution, including the average distance of the
+        // collisions
         template <typename InputPoint>
         void search( InputPoint& query,
                      size_t k,

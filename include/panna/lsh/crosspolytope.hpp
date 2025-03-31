@@ -21,6 +21,11 @@ namespace panna {
             ar( probabilities, eps );
         }
 
+        friend bool operator==( const CrossPolytopeCollisionEstimates& a,
+                                const CrossPolytopeCollisionEstimates& b ) {
+            return a.probabilities == b.probabilities && a.eps == b.eps;
+        }
+
         CrossPolytopeCollisionEstimates( unsigned int dimensions,
                                          unsigned int num_repetitions,
                                          float eps ):
@@ -146,6 +151,8 @@ namespace panna {
             return K;
         }
 
+        CrossPolytope() {
+        }
         CrossPolytope( size_t dimensions,
                        size_t repetitions,
                        size_t estimation_repetitions = 2 * 4096,
@@ -162,6 +169,17 @@ namespace panna {
             for ( int i = 0; i < omp_get_max_threads(); i++ ) {
                 tl_rotated_vectors.push_back( random_dots[0].allocate_scratch() );
             }
+        }
+
+        template <typename Archive>
+        void serialize( Archive& ar ) {
+            ar( repetitions, dimensions, random_dots, tl_rotated_vectors, estimates );
+        }
+
+        friend bool operator==( const CrossPolytope<K, Dataset, Distance>& a,
+                                const CrossPolytope<K, Dataset, Distance>& b ) {
+            return a.repetitions == b.repetitions && a.dimensions == b.dimensions &&
+                   a.random_dots == b.random_dots && a.estimates == b.estimates;
         }
 
         //! Requires Dataset::PointHandle to support the operation

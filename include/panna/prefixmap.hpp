@@ -124,7 +124,8 @@ namespace panna {
         // In other words, in the first part the hashes are all < the given hash.
         void update_range_start() {
             range_start = std::distance(
-                hashes.begin(), std::partition_point( hashes.begin(), hashes.end(), [&]( const auto& h ) {
+                hashes.begin(),
+                std::partition_point( hashes.begin(), hashes.end(), [&]( const auto& h ) {
                     return h.prefix_less( hash, prefix_length );
                 } ) );
         }
@@ -133,7 +134,8 @@ namespace panna {
         // In other words, in the first part the hashes are all <= the given hash.
         void update_range_end() {
             range_end = std::distance(
-                hashes.begin(), std::partition_point( hashes.begin(), hashes.end(), [&]( const auto& h ) {
+                hashes.begin(),
+                std::partition_point( hashes.begin(), hashes.end(), [&]( const auto& h ) {
                     return !hash.prefix_less( h, prefix_length );
                 } ) );
         }
@@ -189,12 +191,21 @@ namespace panna {
         std::vector<std::vector<HashedVecIdx>> parallel_rebuilding_data;
 
     public:
-        // Construct a new prefix map over the specified dataset using the given hash functions.
         PrefixMap() {
             // Ensure that the map can be queried even if nothing is inserted.
             rebuild();
             auto max_threads = omp_get_max_threads();
             parallel_rebuilding_data.resize( max_threads );
+        }
+
+        template <typename Archive>
+        void serialize( Archive& ar ) {
+            ar( indices, hashes );
+        }
+
+        friend bool operator==( const PrefixMap<THashValue>& a, const PrefixMap<THashValue>& b ) {
+            return a.indices == b.indices && a.hashes == b.hashes &&
+                   a.parallel_rebuilding_data == b.parallel_rebuilding_data;
         }
 
         // Add a hash value, and associated index, to be included next time rebuild is called.
