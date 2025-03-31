@@ -1,11 +1,11 @@
 example: build-example
-    build/glove
+    build/fashion
 
 profile-example: build-example
-    samply record build/glove
+    samply record build/fashion
 
 build-example:
-    cmake --build build -j --target glove
+    cmake --build build -j --target fashion
 
 test: build-tests
     build/tests "serialization"

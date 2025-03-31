@@ -168,12 +168,14 @@ namespace panna {
     };
 
     class NormedPoints {
-        size_t dimensions;
+        size_t dimensions = 0;
         UnitNormPoints normalized_points;
         std::vector<float> squared_norms;
 
     public:
         using PointHandle = NormedPointHandle;
+
+        NormedPoints() {}
 
         NormedPoints( size_t dimensions ):
             dimensions( dimensions ), normalized_points( dimensions ) {
