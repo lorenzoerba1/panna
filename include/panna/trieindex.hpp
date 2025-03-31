@@ -46,9 +46,16 @@ namespace panna {
 
         void rebuild() {
             std::vector<THashValue> hashes;
-#pragma omp parallel for private( hashes )
+            // std::vector<std::vector<THashValue>> tl_hash_values;
+            // tl_hash_values.resize(omp_get_max_threads());
+            // for (size_t i=0; i < tl_hash_values.size(); i++) {
+            //     tl_hash_values[i].resize(lsh_maps.size());
+            // }
+
+#pragma omp parallel for private(hashes)
             for ( size_t i = hashed_points; i < dataset.size(); i++ ) {
                 auto tid = omp_get_thread_num();
+                // auto & hashes = tl_hash_values[tid];
                 hasher.hash( dataset[i], hashes );
                 for ( size_t rep = 0; rep < lsh_maps.size(); rep++ ) {
                     lsh_maps[rep].insert( tid, i, hashes[rep] );
@@ -67,7 +74,6 @@ namespace panna {
         void search_brute_force( InputPoint& query,
                                  size_t k,
                                  std::vector<std::pair<float, uint32_t>>& output ) {
-            auto timer = std::chrono::steady_clock::now();
             current_query.clear();
             current_query.push_back( query );
 
@@ -89,8 +95,6 @@ namespace panna {
                 top.pop();
             }
             std::sort( output.begin(), output.end() );
-            auto elapsed = std::chrono::steady_clock::now() - timer;
-            dbg( std::chrono::duration_cast<std::chrono::microseconds>( elapsed ).count() );
         }
 
         // TODO: collect statistics of the execution, including the average distance of the collisions
@@ -150,17 +154,12 @@ namespace panna {
                         float fp = failure_probability(
                             hasher, topdist, concat, rep + 1, lsh_maps.size() );
                         if ( fp <= delta ) {
-                            // dbg( concat, rep, topdist, collisions, fp );
                             stop = true;
                             break;
                         }
                     }
                 }
-                float topdist = (output.size() > 0)? output.back().first : std::numeric_limits<float>::infinity();
-                // dbg( concat, collisions, topdist );
             }
-            auto elapsed = std::chrono::steady_clock::now() - timer;
-            // dbg( std::chrono::duration_cast<std::chrono::microseconds>( elapsed ).count() );
         }
     };
 } // namespace panna

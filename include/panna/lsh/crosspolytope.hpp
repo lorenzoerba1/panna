@@ -1,21 +1,24 @@
 #pragma once
 #include <algorithm>
+#include <atomic>
+#include <omp.h>
 #include <random>
 #include <vector>
 
-#include "ffht/fht_header_only.h"
-#include "panna/lsh/values.hpp"
-#include "panna/rand.hpp"
 #include "panna/linalg.hpp"
+#include "panna/lsh/values.hpp"
 
 namespace panna {
-
-
     struct CrossPolytopeCollisionEstimates {
         std::vector<float> probabilities;
         float eps;
 
         CrossPolytopeCollisionEstimates() {
+        }
+
+        template <typename Archive>
+        void serialize( Archive& ar ) {
+            ar( probabilities, eps );
         }
 
         CrossPolytopeCollisionEstimates( unsigned int dimensions,
@@ -25,7 +28,7 @@ namespace panna {
             // adapted from
             // https://github.com/puffinn/puffinn/blob/master/include/puffinn/hash/crosspolytope.hpp
 
-            printf("estimating collision probabilities\n");
+            printf( "estimating collision probabilities\n" );
             auto log_dimensions = ceil_log( dimensions );
             probabilities = std::vector<float>();
             size_t num_probabilities = 2 / eps;
@@ -92,7 +95,7 @@ namespace panna {
                 assert( prob <= 1.0 );
                 probabilities[i] = prob;
             }
-            printf("collision probabilities estimated!\n");
+            printf( "collision probabilities estimated!\n" );
         }
 
         float get_collision_probability( float dotp ) const {
@@ -110,21 +113,21 @@ namespace panna {
     private:
         size_t repetitions;
         size_t dimensions;
-        size_t log_dimensions;
-        std::vector<int8_t> random_signs;
+        std::vector<RandomDotProducts<ROTATIONS>> random_dots;
         // scratch space
-        std::vector<float> rotated_vector;
+        std::vector<std::vector<float>> tl_rotated_vectors;
         CrossPolytopeCollisionEstimates estimates;
 
-        int16_t encode_closest_axis( std::vector<float>& vec ) const {
+        int16_t encode_closest_axis( const std::vector<float>& vec ) const {
             int res = 0;
             float max_sim = 0;
-            for ( int i = 0; i < ( 1 << log_dimensions ); i++ ) {
+            for ( int i = 0; i < dimensions; i++ ) {
                 if ( vec[i] > max_sim ) {
                     res = i;
                     max_sim = vec[i];
                 } else if ( -vec[i] > max_sim ) {
-                    res = i + ( 1 << log_dimensions );
+                    // TODO: check if -i works as well
+                    res = i + dimensions;
                     max_sim = -vec[i];
                 }
             }
@@ -133,19 +136,8 @@ namespace panna {
 
         // Hash a single repetition of the given vector
         int16_t hash_single( std::vector<float>& vec, size_t concatenation, size_t repetition ) {
-            const size_t rotation_len = ( 1 << log_dimensions );
-            for ( unsigned int rotation = 0; rotation < ROTATIONS; rotation++ ) {
-                // Multiply by a diagonal +-1 matrix.
-                size_t base_idx = ( concatenation * repetitions * ROTATIONS * rotation_len ) +
-                                  ( repetition * ROTATIONS * rotation_len ) +
-                                  ( rotation * rotation_len );
-                for ( size_t i = 0; i < rotation_len; i++ ) {
-                    vec[i] *= random_signs[base_idx + i];
-                }
-                // Apply the fast hadamard transform
-                fht( vec.data(), log_dimensions );
-            }
-
+            size_t idx = repetition * K + concatenation;
+            random_dots[idx].compute( vec );
             return encode_closest_axis( vec );
         }
 
@@ -161,17 +153,14 @@ namespace panna {
             repetitions( repetitions ),
             dimensions( dimensions ),
             estimates( ( 1 << ceil_log( dimensions ) ), estimation_repetitions, estimation_eps ) {
-            log_dimensions = ceil_log( dimensions );
 
-            int random_signs_len = K * repetitions * ROTATIONS * ( 1 << log_dimensions );
-            random_signs.reserve( random_signs_len );
+            for ( size_t i = 0; i < K * repetitions; i++ ) {
+                random_dots.emplace_back( dimensions );
+            }
 
-            rotated_vector.resize( 1 << log_dimensions );
-
-            std::uniform_int_distribution<int_fast32_t> sign_distribution( 0, 1 );
-            auto& generator = get_global_rng();
-            for ( int i = 0; i < random_signs_len; i++ ) {
-                random_signs.push_back( sign_distribution( generator ) * 2 - 1 );
+            // prepare thread local scratch space
+            for ( int i = 0; i < omp_get_max_threads(); i++ ) {
+                tl_rotated_vectors.push_back( random_dots[0].allocate_scratch() );
             }
         }
 
@@ -179,6 +168,7 @@ namespace panna {
         //! `PointHandle::into_vec` that copies the contents of the
         //! point into the given vector, without changing its length.
         void hash( typename Dataset::PointHandle point, std::vector<Value>& output ) {
+            auto& rotated_vector = tl_rotated_vectors[omp_get_thread_num()];
             output.clear();
             Value cur;
             for ( size_t rep = 0; rep < repetitions; rep++ ) {

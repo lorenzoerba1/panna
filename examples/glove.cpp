@@ -1,7 +1,6 @@
 #include <highfive/H5Easy.hpp>
 #include <chrono>
 
-#include "dbg.h"
 #include "panna/data.hpp"
 #include "panna/distance.hpp"
 #include "panna/lsh/crosspolytope.hpp"
@@ -37,43 +36,49 @@ int main( int argc, char* argv[] ) {
 
     std::vector<std::vector<float>> queries =
         H5Easy::load<std::vector<std::vector<float>>>( file, "/test" );
+    queries.resize(1000); // keep only 10000 queries
     std::cout << "data loaded" << std::endl;
 
     size_t dimensions = data[0].size();
     HasherBuilder hbuilder( dimensions );
     
-    panna::Index<Dataset, Hasher, Distance> index( dimensions, hbuilder, 380);
+    panna::Index<Dataset, Hasher, Distance> index( dimensions, hbuilder, 256);
     size_t cnt = 0;
     for ( auto v : data ) {
-        if ( cnt > 10000 ) {
-            break;
-        }
         index.insert( v );
         cnt++;
     }
     index.rebuild();
     std::cout << "index built" << std::endl;
+    std::cout << "calls to hash_single: " << panna::g_hash_count << std::endl;
+    std::cout << "calls to fhs: " << panna::g_fht_calls << std::endl;
 
-    size_t k = 1;
-    float delta = 0.1;
-    size_t q_cnt = 0;
-    std::vector<std::pair<float, uint32_t>> res;
-    std::vector<std::pair<float, uint32_t>> res_prob;
+    size_t k = 10;
+    float delta = 0.2;
+    std::vector<std::vector<std::pair<float, uint32_t>>> res;
+    std::vector<std::vector<std::pair<float, uint32_t>>> res_prob;
+    res.resize(queries.size());
+    res_prob.resize(queries.size());
 
+    std::cout << "compute ground truth" << std::endl;
+    size_t q_idx = 0;
+    for ( auto q : queries ) {
+        index.search_brute_force( q, k, res[q_idx++] );
+    }
+
+    std::cout << "run queries" << std::endl;
+    q_idx = 0;
     auto start = std::chrono::steady_clock::now();
     for ( auto q : queries ) {
-        if ( q_cnt > 1000 ) {
-            break;
-        }
-        // index.search_brute_force( q, k, res );
-        // dbg( res.back().first );
-        index.search( q, k, delta, res_prob );
-        // float recall = compute_recall( res, res_prob );
-        // dbg( recall );
-        q_cnt++;
+        index.search( q, k, delta, res_prob[q_idx++] );
     }
     auto end = std::chrono::steady_clock::now();
     double elapsed_s = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / (1000.0 * 1000.0);
-    double qps = q_cnt / elapsed_s;
-    std::cout << "qps: " << qps << std::endl;
+    double qps = res.size() / elapsed_s;
+    float avg_recall = 0.0;
+    for ( size_t q_idx = 0; q_idx < res.size(); q_idx++ ) {
+        avg_recall += compute_recall(res[q_idx], res_prob[q_idx]);
+    }
+    avg_recall /= res.size();
+    std::cout << res.size() << " queries "  << "qps: " << qps << " average rcall " << avg_recall << std::endl;
 }

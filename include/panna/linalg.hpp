@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -105,7 +106,7 @@ namespace panna {
     class RandomDotProducts {
         size_t num_products;
         size_t log_num_products;
-        std::vector<int8_t> random_signs;
+        std::vector<float> random_signs;
 
     public:
         RandomDotProducts( size_t num_products ):
@@ -121,11 +122,18 @@ namespace panna {
             }
         }
 
+        std::vector<float> allocate_scratch() const {
+            std::vector<float> scratch;
+            scratch.resize(1 << log_num_products);
+            return scratch;
+        }
+
         void compute( std::vector<float>& in_out ) const {
             for ( uint8_t rotation = 0; rotation < ROTATIONS; rotation++ ) {
                 // Multiply by a diagonal +-1 matrix.
-                size_t base_idx = rotation * log_num_products;
-                for ( size_t i = 0; i < log_num_products; i++ ) {
+                size_t base_idx = rotation * (1 << log_num_products);
+                for ( size_t i = 0; i < ( 1 << log_num_products ); i++ ) {
+                    // OPTIMIZE use simd, this takes half as much time as the fht transform below
                     in_out[i] *= random_signs[base_idx + i];
                 }
                 // Apply the fast hadamard transform
