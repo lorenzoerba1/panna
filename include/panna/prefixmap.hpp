@@ -5,7 +5,6 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <ostream>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -207,6 +206,7 @@ namespace panna {
             return a.indices == b.indices && a.hashes == b.hashes &&
                    a.parallel_rebuilding_data == b.parallel_rebuilding_data;
         }
+
 
         // Add a hash value, and associated index, to be included next time rebuild is called.
         void insert( int tid, uint32_t idx, THashValue hash_value ) {

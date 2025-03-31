@@ -5,3 +5,4 @@ build
 compile_commands.json
 glove-100-angular.hdf5
 profile.json.gz
+*.bin

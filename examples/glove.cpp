@@ -1,5 +1,7 @@
 #include <highfive/H5Easy.hpp>
+
 #include <chrono>
+#include <filesystem>
 
 #include "panna/data.hpp"
 #include "panna/distance.hpp"
@@ -7,8 +9,8 @@
 #include "panna/lsh/simhash.hpp"
 #include "panna/trieindex.hpp"
 
-float compute_recall( std::vector<std::pair<float, uint32_t>>& ground,
-                      std::vector<std::pair<float, uint32_t>>& actual ) {
+float compute_recall( const std::vector<std::pair<float, uint32_t>>& ground,
+                      const std::vector<std::pair<float, uint32_t>>& actual ) {
     size_t k = actual.size();
     float thresh = ground[k - 1].first;
 
@@ -25,9 +27,10 @@ float compute_recall( std::vector<std::pair<float, uint32_t>>& ground,
 int main( int argc, char* argv[] ) {
     using Distance = panna::CosineDistance;
     using Dataset = panna::UnitNormPoints;
-    // using HasherBuilder = panna::SimhashBuilder<24, Dataset, Distance>;
     using HasherBuilder = panna::CrossPolytopeBuilder<3, Dataset, Distance>;
     using Hasher = HasherBuilder::Output;
+
+    std::string index_path( "glove-100-angular-cp3-256.bin" );
 
     H5Easy::File file( "glove-100-angular.hdf5", H5Easy::File::ReadOnly );
 
@@ -36,29 +39,26 @@ int main( int argc, char* argv[] ) {
 
     std::vector<std::vector<float>> queries =
         H5Easy::load<std::vector<std::vector<float>>>( file, "/test" );
-    queries.resize(1000); // keep only 10000 queries
+    queries.resize( 1000 ); // keep only 10000 queries
     std::cout << "data loaded" << std::endl;
 
     size_t dimensions = data[0].size();
     HasherBuilder hbuilder( dimensions );
-    
-    panna::Index<Dataset, Hasher, Distance> index( dimensions, hbuilder, 256);
-    size_t cnt = 0;
-    for ( auto v : data ) {
-        index.insert( v );
-        cnt++;
-    }
-    index.rebuild();
-    std::cout << "index built" << std::endl;
-    std::cout << "calls to hash_single: " << panna::g_hash_count << std::endl;
-    std::cout << "calls to fhs: " << panna::g_fht_calls << std::endl;
 
-    size_t k = 10;
+    auto index = panna::Index<Dataset, Hasher, Distance>::build_or_load_from(
+        dimensions, hbuilder, 256, data, index_path );
+    if ( !std::filesystem::exists( index_path ) ) {
+        std::cerr << "saving index" << std::endl;
+        index.save_to( index_path );
+    }
+    std::cerr << "index ready" << std::endl;
+
+    size_t k = 1;
     float delta = 0.2;
     std::vector<std::vector<std::pair<float, uint32_t>>> res;
     std::vector<std::vector<std::pair<float, uint32_t>>> res_prob;
-    res.resize(queries.size());
-    res_prob.resize(queries.size());
+    res.resize( queries.size() );
+    res_prob.resize( queries.size() );
 
     std::cout << "compute ground truth" << std::endl;
     size_t q_idx = 0;
@@ -73,12 +73,15 @@ int main( int argc, char* argv[] ) {
         index.search( q, k, delta, res_prob[q_idx++] );
     }
     auto end = std::chrono::steady_clock::now();
-    double elapsed_s = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / (1000.0 * 1000.0);
+    double elapsed_s =
+        std::chrono::duration_cast<std::chrono::microseconds>( end - start ).count() /
+        ( 1000.0 * 1000.0 );
     double qps = res.size() / elapsed_s;
     float avg_recall = 0.0;
     for ( size_t q_idx = 0; q_idx < res.size(); q_idx++ ) {
-        avg_recall += compute_recall(res[q_idx], res_prob[q_idx]);
+        avg_recall += compute_recall( res[q_idx], res_prob[q_idx] );
     }
     avg_recall /= res.size();
-    std::cout << res.size() << " queries "  << "qps: " << qps << " average rcall " << avg_recall << std::endl;
+    std::cout << res.size() << " queries " << "qps: " << qps << " average rcall " << avg_recall
+              << std::endl;
 }
