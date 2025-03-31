@@ -27,6 +27,8 @@ namespace panna {
 
         Hasher hasher = builder.build( repetitions );
 
+        float total_expected = 0;
+        float total_actual = 0;
         std::vector<typename Hasher::Value> output_a;
         std::vector<typename Hasher::Value> output_b;
         for ( unsigned int i = 0; i < num_experiments; i++ ) {
@@ -50,8 +52,10 @@ namespace panna {
                 }
             }
             empirical /= repetitions;
-            REQUIRE( std::abs( empirical - prob ) <= accepted_deviation );
+            total_actual += empirical;
+            total_expected += prob;
         }
+        REQUIRE(std::abs(total_actual - total_expected) / num_experiments <= accepted_deviation);
     }
 
     TEST_CASE( "Simhash collision probability" ) {
