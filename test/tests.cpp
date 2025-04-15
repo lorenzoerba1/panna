@@ -4,4 +4,5 @@
 #include "data_test.hpp"
 #include "linalg_test.hpp"
 #include "serialize_test.hpp"
+#include "trieindex_test.hpp"
 

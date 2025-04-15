@@ -38,7 +38,7 @@ int main( int argc, char* argv[] ) {
 
     std::vector<std::vector<float>> queries =
         H5Easy::load<std::vector<std::vector<float>>>( file, "/test" );
-    queries.resize( 1000 ); // keep only 10000 queries
+    queries.resize( 1000 ); // keep only some queries
     std::cout << "data loaded" << std::endl;
 
     size_t dimensions = data[0].size();
@@ -52,8 +52,8 @@ int main( int argc, char* argv[] ) {
     // }
     std::cerr << "index ready" << std::endl;
 
-    size_t k = 10;
-    float delta = 0.2;
+    size_t k = 100;
+    float delta = 0.1;
     std::vector<std::vector<std::pair<float, uint32_t>>> res;
     std::vector<std::vector<std::pair<float, uint32_t>>> res_prob;
     res.resize( queries.size() );
@@ -82,5 +82,6 @@ int main( int argc, char* argv[] ) {
     }
     avg_recall /= res.size();
     std::cout << res.size() << " queries " << "qps: " << qps << " average rcall " << avg_recall
+              << " expected recall " << 1 - delta
               << std::endl;
 }

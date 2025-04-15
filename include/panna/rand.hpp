@@ -18,4 +18,13 @@ namespace panna {
         static std::normal_distribution<float> normal(0, 1);
         return normal(get_global_rng());
     }
+
+    static std::vector<float> sample_random_normal_vector(size_t dimensions) {
+        static std::normal_distribution<float> normal(0, 1);
+        std::vector<float> out;
+        for (size_t i=0; i<dimensions; i++) {
+            out.push_back(sample_random_normal());
+        }
+        return out;
+    }
 } // namespace panna

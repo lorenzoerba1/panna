@@ -8,7 +8,7 @@ build-example:
     cmake --build build -j --target fashion
 
 test: build-tests
-    build/tests "serialization"
+    build/tests "angular distance trie index"
 
 build-tests:
     cmake --build build -j --target tests
@@ -22,7 +22,7 @@ setup-cmake:
 
 generate-compile-commands:
     just clean
-    bear -- just build-tests
+    bear -- cmake --build build -j
 
 scan-build:
     just clean
