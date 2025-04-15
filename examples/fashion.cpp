@@ -24,7 +24,7 @@ float compute_recall( const std::vector<std::pair<float, uint32_t>>& ground,
     return cnt / k;
 }
 
-int main( int argc, char* argv[] ) {
+int main( int , char** ) {
     using Distance = panna::EuclideanDistance;
     using Dataset = panna::NormedPoints;
     using HasherBuilder = panna::E2LSHBuilder<8, Dataset>;
@@ -65,14 +65,14 @@ int main( int argc, char* argv[] ) {
     std::cout << "compute ground truth" << std::endl;
     size_t q_idx = 0;
     for ( auto q : queries ) {
-        index.search_brute_force( q, k, res[q_idx++] );
+        index.search_brute_force( q.begin(), q.end(), k, res[q_idx++] );
     }
 
     std::cout << "run queries" << std::endl;
     q_idx = 0;
     auto start = std::chrono::steady_clock::now();
     for ( auto q : queries ) {
-        index.search( q, k, delta, res_prob[q_idx++] );
+        index.search( q.begin(), q.end(), k, delta, res_prob[q_idx++] );
     }
     auto end = std::chrono::steady_clock::now();
     double elapsed_s =

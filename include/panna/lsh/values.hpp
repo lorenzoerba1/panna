@@ -9,8 +9,6 @@
 #include <ostream>
 #include <type_traits>
 
-#include "dbg.h"
-
 namespace panna {
     //! Places zeros between the bits of the given value.
     //! Only the 16 less significant bits will appear in the output.

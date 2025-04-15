@@ -41,7 +41,7 @@ namespace panna {
             std::uniform_real_distribution<float> uniform( 0.0, quantization_width );
             for ( size_t vec_idx = 0; vec_idx < repetitions * K; vec_idx++ ) {
                 std::vector<float> dir = sample_random_normal_vector( dimensions );
-                random_vectors.push_back( dir );
+                random_vectors.push_back( dir.begin(), dir.end() );
                 offsets.push_back( uniform( rng ) );
             }
         }
@@ -100,13 +100,13 @@ namespace panna {
         void fit( InputPoints& input_points ) {
             NormedPoints points( dimensions );
             for ( auto& point : input_points ) {
-                points.push_back( point );
+                points.push_back( point.begin(), point.end() );
             }
 
             NormedPoints random( dimensions );
             for ( size_t i = 0; i < 1000; i++ ) {
                 std::vector<float> dir = sample_random_normal_vector( dimensions );
-                random.push_back( dir );
+                random.push_back( dir.begin(), dir.end() );
             }
 
             float min = std::numeric_limits<float>::infinity();

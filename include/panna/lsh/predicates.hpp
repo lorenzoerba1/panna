@@ -3,7 +3,6 @@
 #include <cmath>
 #include <cstddef>
 
-#include "dbg.h"
 #include "panna/lsh/tensoring.hpp"
 
 namespace panna {
@@ -55,11 +54,11 @@ namespace panna {
             std::pow( hasher.collision_probability( distance ), last_right_concatenations );
 
         auto cur_upper_left_prob = 1.0 - std::pow( 1.0 - left_prob, cur_repetitions );
-        auto last_upper_left_prob = 1.0 - std::pow( 1.0 - left_last_prob, cur_repetitions );
+        // auto last_upper_left_prob = 1.0 - std::pow( 1.0 - left_last_prob, cur_repetitions );
         auto last_lower_left_prob = 1.0 - std::pow( 1.0 - left_last_prob, last_repetitions );
         auto cur_upper_right_prob = 1.0 - std::pow( 1.0 - right_prob, cur_repetitions );
         auto last_upper_right_prob = 1.0 - std::pow( 1.0 - right_last_prob, cur_repetitions );
-        auto last_lower_right_prob = 1.0 - std::pow( 1.0 - right_last_prob, last_repetitions );
+        // auto last_lower_right_prob = 1.0 - std::pow( 1.0 - right_last_prob, last_repetitions );
         // TODO: there are two components commented out down below: including those two makes the
         // failure probability too optimistic
         return ( 1 - cur_upper_left_prob * cur_upper_right_prob ) *

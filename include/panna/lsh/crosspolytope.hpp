@@ -1,6 +1,5 @@
 #pragma once
 #include <algorithm>
-#include <atomic>
 #include <omp.h>
 #include <random>
 #include <vector>
@@ -126,7 +125,7 @@ namespace panna {
         int16_t encode_closest_axis( const std::vector<float>& vec ) const {
             int res = 0;
             float max_sim = 0;
-            for ( int i = 0; i < dimensions; i++ ) {
+            for ( size_t i = 0; i < dimensions; i++ ) {
                 if ( vec[i] > max_sim ) {
                     res = i;
                     max_sim = vec[i];

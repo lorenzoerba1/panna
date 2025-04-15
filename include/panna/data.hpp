@@ -117,11 +117,11 @@ namespace panna {
             return handle;
         }
 
-        template <typename FloatVec>
-        void push_back( FloatVec& vec ) {
+        template <typename FloatIter>
+        void push_back( FloatIter begin, FloatIter end ) {
             float sq_norm = 0.0;
-            for ( size_t i = 0; i < dimensions; i++ ) {
-                float v = vec[i];
+            for ( FloatIter it = begin; it != end; it++ ) {
+                float v = *it;
                 sq_norm += v * v;
             }
 
@@ -132,10 +132,12 @@ namespace panna {
             }
 
             auto norm = std::sqrt( sq_norm );
-            for ( size_t i = 0; i < dimensions; i++ ) {
-                float normalized = ( norm == 0.0 ) ? vec[i] : vec[i] / norm;
+            size_t i = 0;
+            for ( FloatIter it = begin; it != end; it++ ) {
+                float normalized = ( norm == 0.0 ) ? *it : *it / norm;
                 chunks[base_chunk_idx + i / Int16Chunk::CHUNK_SIZE]
                     .chunk[i % Int16Chunk::CHUNK_SIZE] = to_16bit_fixed_point( normalized );
+                i++;
             }
             for ( size_t i = dimensions; i < dimensions + padding; i++ ) {
                 chunks[base_chunk_idx + i / Int16Chunk::CHUNK_SIZE]
@@ -149,7 +151,7 @@ namespace panna {
                 values.push_back( sample_random_normal() );
             }
 
-            push_back( values );
+            push_back( values.begin(), values.end() );
             return operator[]( size() - 1 );
         }
 
@@ -175,7 +177,8 @@ namespace panna {
     public:
         using PointHandle = NormedPointHandle;
 
-        NormedPoints() {}
+        NormedPoints() {
+        }
 
         NormedPoints( size_t dimensions ):
             dimensions( dimensions ), normalized_points( dimensions ) {
@@ -203,14 +206,14 @@ namespace panna {
             return handle;
         }
 
-        template <typename FloatVec>
-        void push_back( FloatVec& vec ) {
+        template <typename FloatIter>
+        void push_back( FloatIter begin, FloatIter end ) {
             float sq_norm = 0.0;
-            for ( size_t i = 0; i < dimensions; i++ ) {
-                float v = vec[i];
+            for ( FloatIter it = begin; it != end; it++ ) {
+                float v = *it;
                 sq_norm += v * v;
             }
-            normalized_points.push_back( vec );
+            normalized_points.push_back( begin, end );
             squared_norms.push_back( sq_norm );
         }
 
@@ -220,7 +223,7 @@ namespace panna {
                 values.push_back( sample_random_normal() );
             }
 
-            push_back( values );
+            push_back( values.begin(), values.end() );
             return operator[]( size() - 1 );
         }
 

@@ -11,8 +11,8 @@
 
 namespace panna {
 
-    template<typename T>
-    void check_round_trip(T val) {
+    template <typename T>
+    void check_round_trip( T val ) {
         std::ostringstream os;
         {
             cereal::BinaryOutputArchive oar( os );
@@ -28,33 +28,30 @@ namespace panna {
 
         REQUIRE( val == i_val );
     }
-    
+
     TEST_CASE( "serialization" ) {
         UnitNormPoints pts( 10 );
         pts.push_back_random();
         pts.push_back_random();
         pts.push_back_random();
-        check_round_trip(pts);
+        check_round_trip( pts );
 
-        CrossPolytope<3, UnitNormPoints, CosineDistance> cp(10, 128);
-        check_round_trip(cp);
+        CrossPolytope<3, UnitNormPoints, CosineDistance> cp( 10, 128 );
+        check_round_trip( cp );
 
         using Distance = CosineDistance;
         using Dataset = UnitNormPoints;
         using HasherBuilder = CrossPolytopeBuilder<3, Dataset, Distance>;
         using Hasher = HasherBuilder::Output;
-        
+
         size_t dimensions = 100;
         HasherBuilder hbuilder( dimensions );
-    
-        Index<Dataset, Hasher, Distance> index( dimensions, hbuilder, 256);
-        for (size_t i=0; i<100; i++) {
-            std::vector<float> point;
-            for (size_t d=0; d< dimensions; d++) {
-                point.push_back(sample_random_normal());
-            }
-            index.insert(point);
+
+        Index<Dataset, Hasher, Distance> index( dimensions, hbuilder, 256 );
+        for ( size_t i = 0; i < 100; i++ ) {
+            std::vector<float> point = sample_random_normal_vector(dimensions);
+            index.insert( point.begin(), point.end() );
         }
-        check_round_trip(index);
+        check_round_trip( index );
     }
 } // namespace panna

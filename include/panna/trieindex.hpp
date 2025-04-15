@@ -14,7 +14,7 @@
 #include "panna/prefixmap.hpp"
 
 namespace panna {
-    static std::atomic<size_t> g_collisions(0);
+    static std::atomic<size_t> g_collisions( 0 );
 
     template <typename Dataset, typename Hasher, typename Distance>
     class Index {
@@ -91,16 +91,16 @@ namespace panna {
             } else {
                 Index<Dataset, Hasher, Distance> index( dimensions, builder, repetitions );
                 for ( auto p : points ) {
-                    index.insert( p );
+                    index.insert( p.begin(), p.end() );
                 }
                 index.rebuild();
                 return index;
             }
         }
 
-        template <typename InputPoint>
-        void insert( InputPoint& point ) {
-            dataset.push_back( point );
+        template <typename Iter>
+        void insert( Iter begin, Iter end ) {
+            dataset.push_back( begin, end );
         }
 
         void rebuild() {
@@ -129,12 +129,12 @@ namespace panna {
             hashed_points = dataset.size();
         }
 
-        template <typename InputPoint>
-        void search_brute_force( InputPoint& query,
+        template <typename Iter>
+        void search_brute_force( Iter begin, Iter end,
                                  size_t k,
                                  std::vector<std::pair<float, uint32_t>>& output ) {
             current_query.clear();
-            current_query.push_back( query );
+            current_query.push_back( begin, end );
 
             std::priority_queue<std::pair<float, uint32_t>> top;
 
@@ -158,17 +158,17 @@ namespace panna {
 
         // TODO: collect statistics of the execution, including the average distance of the
         // collisions
-        template <typename InputPoint>
-        void search( InputPoint& query,
+        template <typename Iter>
+        void search( Iter begin,
+                     Iter end,
                      size_t k,
                      float delta,
                      std::vector<std::pair<float, uint32_t>>& output ) {
-            auto timer = std::chrono::steady_clock::now();
             size_t collisions = 0;
             // Setup
             output.clear();
             current_query.clear();
-            current_query.push_back( query );
+            current_query.push_back( begin, end );
             PointHandle q = current_query[0];
 
             // FIXME: remove this allocation

@@ -9,7 +9,6 @@
 #include <utility>
 #include <vector>
 
-#include "dbg.h"
 #include "omp.h"
 #include "panna/expect.hpp"
 

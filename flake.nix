@@ -22,7 +22,7 @@
           clang-tools
           clang-analyzer
           lldb
-          python310
+          python312
           sqlite-interactive
           cmake
           just
@@ -34,13 +34,11 @@
           valgrind
           highfive
           samply
-        ] ++ ( with python310Packages; [
-          setuptools
-          wheel
+        ] ++ ( with python312Packages; [
           venvShellHook
           numpy
           h5py
-          pybind11
+          nanobind
         ]);
 
         NIX_ENFORCE_NO_NATIVE = false;

@@ -42,3 +42,23 @@ if (HighFive_FOUND)
   target_link_libraries(fashion HighFive dbg_macro)
 endif()
 
+###############################################################################
+# Python Bindings
+# 
+# This cmake code is adapted from
+# https://nanobind.readthedocs.io/en/latest/building.html
+
+set(DEV_MODULE Development.Module)
+
+find_package(Python 3.12 COMPONENTS Interpreter ${DEV_MODULE} REQUIRED)
+
+# Detect the installed nanobind package and import it into CMake
+execute_process(
+  COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
+  OUTPUT_STRIP_TRAILING_WHITESPACE OUTPUT_VARIABLE nanobind_ROOT)
+find_package(nanobind CONFIG REQUIRED)
+
+nanobind_add_module(panna NOMINSIZE python_wrapper/wrapper.cpp)
+target_link_libraries(panna PRIVATE dbg_macro)
+
+
