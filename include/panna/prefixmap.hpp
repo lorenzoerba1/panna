@@ -9,7 +9,9 @@
 #include <utility>
 #include <vector>
 
+#include "dbg.h"
 #include "omp.h"
+#include "panna/expect.hpp"
 
 namespace panna {
 
@@ -157,6 +159,10 @@ namespace panna {
             update_range_start();
             update_range_end();
 
+            if ( range_start < range_end && range_start > 0 ) {
+                expect( hashes[range_start - 1].prefix_less( hash, prefix_length ) );
+            }
+
             assert( range_start <= range_end );
         }
 
@@ -206,7 +212,6 @@ namespace panna {
             return a.indices == b.indices && a.hashes == b.hashes &&
                    a.parallel_rebuilding_data == b.parallel_rebuilding_data;
         }
-
 
         // Add a hash value, and associated index, to be included next time rebuild is called.
         void insert( int tid, uint32_t idx, THashValue hash_value ) {
@@ -262,6 +267,13 @@ namespace panna {
 
         PrefixMapCursor<THashValue> create_cursor( THashValue hash ) const {
             return PrefixMapCursor<THashValue>( hash, hashes, indices );
+        }
+
+        THashValue hash_for( size_t idx ) const {
+            auto pos =
+                std::distance( indices.begin(), std::find( indices.begin(), indices.end(), idx ) );
+            expect(pos < hashes.size());
+            return hashes[pos];
         }
     };
 } // namespace panna

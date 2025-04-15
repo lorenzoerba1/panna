@@ -6,6 +6,7 @@
 #include "panna/data.hpp"
 #include "panna/distance.hpp"
 #include "panna/lsh/euclidean.hpp"
+#include "panna/rand.hpp"
 #include "panna/trieindex.hpp"
 
 float compute_recall( const std::vector<std::pair<float, uint32_t>>& ground,
@@ -36,24 +37,25 @@ int main( int argc, char* argv[] ) {
     std::vector<std::vector<float>> data =
         H5Easy::load<std::vector<std::vector<float>>>( file, "/train" );
 
-    std::vector<std::vector<float>> queries =
-        H5Easy::load<std::vector<std::vector<float>>>( file, "/test" );
+    std::vector<std::vector<float>> queries = H5Easy::load<std::vector<std::vector<float>>>( file, "/test" );
     queries.resize( 1000 ); // keep only some queries
+    // std::vector<std::vector<float>> queries;
+    // queries.push_back(H5Easy::load<std::vector<std::vector<float>>>( file, "/test" )[896]);
     std::cout << "data loaded" << std::endl;
 
     size_t dimensions = data[0].size();
     HasherBuilder hbuilder( 1000, dimensions );
 
     auto index = panna::Index<Dataset, Hasher, Distance>::build_or_load_from(
-        dimensions, hbuilder, 1024, data, index_path );
+        dimensions, hbuilder, 32, data, index_path );
     // if ( !std::filesystem::exists( index_path ) ) {
     //     std::cerr << "saving index" << std::endl;
     //     index.save_to( index_path );
     // }
     std::cerr << "index ready" << std::endl;
 
-    size_t k = 100;
-    float delta = 0.1;
+    size_t k = 10;
+    float delta = 0.2;
     std::vector<std::vector<std::pair<float, uint32_t>>> res;
     std::vector<std::vector<std::pair<float, uint32_t>>> res_prob;
     res.resize( queries.size() );
@@ -78,10 +80,23 @@ int main( int argc, char* argv[] ) {
     double qps = res.size() / elapsed_s;
     float avg_recall = 0.0;
     for ( size_t q_idx = 0; q_idx < res.size(); q_idx++ ) {
-        avg_recall += compute_recall( res[q_idx], res_prob[q_idx] );
+        float rec = compute_recall( res.at( q_idx ), res_prob.at( q_idx ) );
+        avg_recall += rec;
+        // if ( rec < 0.4 ) {
+        //     dbg(q_idx);
+        //     std::vector<float> q = queries[q_idx];
+        //     std::vector<std::pair<float, uint32_t>> check_exact;
+        //     std::vector<std::pair<float, uint32_t>> check_prob;
+        //     index.search_brute_force( q, k, check_exact );
+        //     index.search( q, k, delta, check_prob );
+        //     std::sort(check_exact.begin(), check_exact.end());
+        //     std::sort(check_prob.begin(), check_prob.end());
+        //     dbg(compute_recall(check_exact, check_prob));
+        //     dbg(check_exact);
+        //     dbg(check_prob);
+        // }
     }
     avg_recall /= res.size();
     std::cout << res.size() << " queries " << "qps: " << qps << " average rcall " << avg_recall
-              << " expected recall " << 1 - delta
-              << std::endl;
+              << " expected recall " << 1 - delta << std::endl;
 }

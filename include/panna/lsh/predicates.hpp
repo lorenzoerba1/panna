@@ -3,8 +3,8 @@
 #include <cmath>
 #include <cstddef>
 
-#include "panna/lsh/tensoring.hpp"
 #include "dbg.h"
+#include "panna/lsh/tensoring.hpp"
 
 namespace panna {
 
@@ -20,11 +20,12 @@ namespace panna {
                                       size_t max_repetitions ) {
         float collision_probability = hasher.collision_probability( distance );
         float p_cur =
-            std::pow( 1 - std::pow( collision_probability, concatenations ),
-                      repetitions );
-        float p_prev =
-            std::pow( 1 - std::pow( collision_probability, concatenations + 1 ),
-                      max_repetitions - repetitions );
+            std::pow( 1 - std::pow( collision_probability, concatenations ), repetitions );
+        float p_prev = 1.0;
+        if ( concatenations + 1 <= hasher.get_concatenations() ) {
+            p_prev = std::pow( 1 - std::pow( collision_probability, concatenations + 1 ),
+                               max_repetitions - repetitions );
+        }
         return p_cur * p_prev;
     }
 
@@ -43,28 +44,27 @@ namespace panna {
         auto cur_repetitions = std::floor( std::sqrt( repetitions ) );
         auto last_repetitions = std::floor( std::sqrt( max_repetitions ) ) - cur_repetitions;
 
-        auto left_prob = std::pow(hasher.collision_probability(distance), cur_left_concatenations);
-        auto left_last_prob = std::pow(hasher.collision_probability(distance), last_left_concatenations);
+        auto left_prob =
+            std::pow( hasher.collision_probability( distance ), cur_left_concatenations );
+        auto left_last_prob =
+            std::pow( hasher.collision_probability( distance ), last_left_concatenations );
 
-        auto right_prob = std::pow(hasher.collision_probability(distance), cur_right_concatenations);
-        auto right_last_prob = std::pow(hasher.collision_probability(distance), last_right_concatenations);
+        auto right_prob =
+            std::pow( hasher.collision_probability( distance ), cur_right_concatenations );
+        auto right_last_prob =
+            std::pow( hasher.collision_probability( distance ), last_right_concatenations );
 
-        auto cur_upper_left_prob =
-            1.0 - std::pow( 1.0 - left_prob, cur_repetitions );
-        auto last_upper_left_prob =
-            1.0 - std::pow( 1.0 - left_last_prob, cur_repetitions );
-        auto last_lower_left_prob =
-            1.0 - std::pow( 1.0 - left_last_prob, last_repetitions );
-        auto cur_upper_right_prob =
-            1.0 - std::pow( 1.0 - right_prob, cur_repetitions );
-        auto last_upper_right_prob =
-            1.0 - std::pow( 1.0 - right_last_prob, cur_repetitions );
-        auto last_lower_right_prob =
-            1.0 - std::pow( 1.0 - right_last_prob, last_repetitions );
-        // TODO: there are two components commented out down below: including those two makes the failure probability too optimistic
+        auto cur_upper_left_prob = 1.0 - std::pow( 1.0 - left_prob, cur_repetitions );
+        auto last_upper_left_prob = 1.0 - std::pow( 1.0 - left_last_prob, cur_repetitions );
+        auto last_lower_left_prob = 1.0 - std::pow( 1.0 - left_last_prob, last_repetitions );
+        auto cur_upper_right_prob = 1.0 - std::pow( 1.0 - right_prob, cur_repetitions );
+        auto last_upper_right_prob = 1.0 - std::pow( 1.0 - right_last_prob, cur_repetitions );
+        auto last_lower_right_prob = 1.0 - std::pow( 1.0 - right_last_prob, last_repetitions );
+        // TODO: there are two components commented out down below: including those two makes the
+        // failure probability too optimistic
         return ( 1 - cur_upper_left_prob * cur_upper_right_prob ) *
                // ( 1 - last_upper_left_prob * last_upper_right_prob );
                ( 1 - last_lower_left_prob * last_upper_right_prob );
-               // ( 1 - last_lower_left_prob * last_lower_right_prob );
+        // ( 1 - last_lower_left_prob * last_lower_right_prob );
     }
 } // namespace panna
