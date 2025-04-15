@@ -91,6 +91,10 @@ namespace panna {
 
         MinhashBuilder() {}
 
+        template <typename Ignored>
+        void fit( Ignored& ) {
+        }
+
         Output build( size_t repetitions ) const {
             return Minhash<K, Dataset>( repetitions );
         }
@@ -135,6 +139,10 @@ namespace panna {
         using Output = Minhash1Bit<K, Dataset>;
 
         Minhash1BitBuilder() {}
+
+        template <typename Ignored>
+        void fit( Ignored& ) {
+        }
 
         Output build( size_t repetitions ) const {
             return Minhash1Bit<K, Dataset>( repetitions );

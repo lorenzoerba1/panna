@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <filesystem>
@@ -13,6 +14,8 @@
 #include "panna/prefixmap.hpp"
 
 namespace panna {
+    static std::atomic<size_t> g_collisions(0);
+
     template <typename Dataset, typename Hasher, typename Distance>
     class Index {
         using PointHandle = typename Dataset::PointHandle;
@@ -217,6 +220,7 @@ namespace panna {
                     }
                 }
             }
+            g_collisions += collisions;
         }
     };
 } // namespace panna

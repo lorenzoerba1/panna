@@ -1,7 +1,11 @@
 #pragma once
+#include <limits>
 #include <random>
 #include <vector>
 
+#include "dbg.h"
+#include "panna/data.hpp"
+#include "panna/expect.hpp"
 #include "panna/linalg.hpp"
 #include "panna/lsh/values.hpp"
 #include "panna/rand.hpp"
@@ -36,7 +40,8 @@ namespace panna {
             auto& rng = get_global_rng();
             std::uniform_real_distribution<float> uniform( 0.0, quantization_width );
             for ( size_t vec_idx = 0; vec_idx < repetitions * K; vec_idx++ ) {
-                random_vectors.push_back_random();
+                std::vector<float> dir = sample_random_normal_vector( dimensions );
+                random_vectors.push_back( dir );
                 offsets.push_back( uniform( rng ) );
             }
         }
@@ -61,8 +66,9 @@ namespace panna {
                 for ( size_t concat = 0; concat < K; concat++ ) {
                     typename Dataset::PointHandle rand_vec = random_vectors[K * rep + concat];
                     float dotp = dot_product( point, rand_vec );
-                    int8_t code =
+                    float quantized =
                         std::floor( ( dotp + offsets[K * rep + concat] ) / quantization_width );
+                    int8_t code = static_cast<int8_t>( quantized );
                     cur.set( concat, code );
                 }
                 output.push_back( cur );
@@ -90,7 +96,40 @@ namespace panna {
             quantization_width( quantization_width ), dimensions( dimensions ) {
         }
 
+        template <typename InputPoints>
+        void fit( InputPoints& input_points ) {
+            NormedPoints points( dimensions );
+            for ( auto& point : input_points ) {
+                points.push_back( point );
+            }
+
+            NormedPoints random( dimensions );
+            for ( size_t i = 0; i < 1000; i++ ) {
+                std::vector<float> dir = sample_random_normal_vector( dimensions );
+                random.push_back( dir );
+            }
+
+            float min = std::numeric_limits<float>::infinity();
+            float max = -std::numeric_limits<float>::infinity();
+            for ( size_t i = 0; i < random.size(); i++ ) {
+                for ( size_t j = 0; j < points.size(); j++ ) {
+                    float dotp = dot_product( random[i], points[j] );
+                    if ( dotp < min ) {
+                        min = dotp;
+                    }
+                    if ( dotp > max ) {
+                        max = dotp;
+                    }
+                }
+            }
+
+            // This uses fewer than 8 bits per hash, but it makes the hashes go faster
+            // TODO: we migh consider using only 4 bits per hash.
+            quantization_width = (max-min) / 16;
+        }
+
         Output build( size_t repetitions ) const {
+            expect( quantization_width > 0 );
             return E2LSH<K, Dataset>( quantization_width, dimensions, repetitions );
         }
     };

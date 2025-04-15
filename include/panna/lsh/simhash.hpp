@@ -18,7 +18,8 @@ namespace panna {
         Dataset random_vectors;
 
     public:
-        Simhash() {}
+        Simhash() {
+        }
 
         Simhash( size_t dimensions, size_t repetitions ):
             repetitions( repetitions ), random_vectors( dimensions ) {
@@ -27,27 +28,30 @@ namespace panna {
             }
         }
 
-        template<typename Archive>
-        void serialize(Archive & ar) {
-            ar(repetitions, random_vectors);
+        template <typename Archive>
+        void serialize( Archive& ar ) {
+            ar( repetitions, random_vectors );
         }
 
-        friend bool operator==(const Simhash<K, Dataset, Distance> & a, const Simhash<K, Dataset, Distance> & b) {
+        friend bool operator==( const Simhash<K, Dataset, Distance>& a,
+                                const Simhash<K, Dataset, Distance>& b ) {
             return a.repetitions == b.repetitions && a.random_vectors == b.random_vectors;
         }
 
-        static constexpr size_t get_concatenations() { return K; }
+        static constexpr size_t get_concatenations() {
+            return K;
+        }
 
-        size_t get_repetitions() const { return repetitions; }
+        size_t get_repetitions() const {
+            return repetitions;
+        }
 
-        void hash( typename Dataset::PointHandle point,
-                   std::vector<Value>& output ) const {
+        void hash( typename Dataset::PointHandle point, std::vector<Value>& output ) const {
             output.clear();
             uint32_t cur = 0;
             for ( size_t rep = 0; rep < repetitions; rep++ ) {
                 for ( size_t concat = 0; concat < K; concat++ ) {
-                    typename Dataset::PointHandle rand_vec =
-                        random_vectors[K * rep + concat];
+                    typename Dataset::PointHandle rand_vec = random_vectors[K * rep + concat];
                     float dotp = dot_product( point, rand_vec );
                     cur = ( cur << 1 ) | ( dotp > 0 );
                 }
@@ -57,7 +61,7 @@ namespace panna {
         }
 
         float collision_probability( float distance ) const {
-            float angle = Distance::to_angle(distance);
+            float angle = Distance::to_angle( distance );
             return 1.0 - angle / M_PI;
         }
     };
@@ -69,7 +73,12 @@ namespace panna {
     public:
         using Output = Simhash<K, Dataset, Distance>;
 
-        SimhashBuilder( size_t dimensions ): dimensions( dimensions ) {}
+        SimhashBuilder( size_t dimensions ): dimensions( dimensions ) {
+        }
+
+        template <typename Ignored>
+        void fit( Ignored& ) {
+        }
 
         Output build( size_t repetitions ) const {
             return Simhash<K, Dataset, Distance>( dimensions, repetitions );

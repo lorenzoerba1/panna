@@ -224,6 +224,10 @@ namespace panna {
             estimation_eps( estimation_eps ) {
         }
 
+        template <typename Ignored>
+        void fit( Ignored& ) {
+        }
+
         Output build( size_t repetitions ) const {
             return CrossPolytope<K, Dataset, Distance>(
                 dimensions, repetitions, estimation_repetitions, estimation_eps );

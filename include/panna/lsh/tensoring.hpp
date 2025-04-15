@@ -79,6 +79,11 @@ namespace panna {
         TensoringBuilder( InnerBuilder inner ): inner( inner ) {
         }
 
+        template <typename InputPoints>
+        void fit( InputPoints& input_points ) {
+            inner.fit(input_points);
+        }
+
         Output build( size_t repetitions ) const {
             return Tensoring<typename InnerBuilder::Output, Dataset>( inner, repetitions );
         }

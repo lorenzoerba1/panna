@@ -44,12 +44,13 @@ int main( int argc, char* argv[] ) {
     std::cout << "data loaded" << std::endl;
 
     size_t dimensions = data[0].size();
-    HasherBuilder hbuilder( 1000, dimensions );
+    HasherBuilder hbuilder( 1000.0, dimensions );
+    hbuilder.fit(data);
 
     auto index = panna::Index<Dataset, Hasher, Distance>::build_or_load_from(
         dimensions, hbuilder, 32, data, index_path );
     // if ( !std::filesystem::exists( index_path ) ) {
-    //     std::cerr << "saving index" << std::endl;
+    //     std::cerr << "9666saving index" << std::endl;
     //     index.save_to( index_path );
     // }
     std::cerr << "index ready" << std::endl;
@@ -98,5 +99,7 @@ int main( int argc, char* argv[] ) {
     }
     avg_recall /= res.size();
     std::cout << res.size() << " queries " << "qps: " << qps << " average rcall " << avg_recall
-              << " expected recall " << 1 - delta << std::endl;
+              << " expected recall " << 1 - delta
+              << " total number of collisions: " << panna::g_collisions
+              << std::endl;
 }
