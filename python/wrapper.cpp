@@ -138,7 +138,7 @@ struct TrieIndex {
     }
 };
 
-NB_MODULE( panna, m ) {
+NB_MODULE( _panna_impl, m ) {
     nb::class_<TrieIndex>( m, "TrieIndex" )
         .def( nb::init<size_t, std::string, nb::kwargs>() )
         .def( "insert", &TrieIndex::insert )

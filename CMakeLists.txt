@@ -31,14 +31,11 @@ if (NOT SKBUILD)
     GIT_REPOSITORY https://github.com/catchorg/Catch2.git
     GIT_TAG        v3.8.0 # or a later release
   )
-
   FetchContent_MakeAvailable(Catch2)
-
 
   include_directories("test/include")
   add_executable(tests test/tests.cpp)
   target_link_libraries(tests PRIVATE Catch2::Catch2WithMain dbg_macro)
-
 
   find_package(HighFive)
   if (HighFive_FOUND)
@@ -67,7 +64,7 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE OUTPUT_VARIABLE nanobind_ROOT)
 find_package(nanobind CONFIG REQUIRED)
 
-nanobind_add_module(panna NOMINSIZE STABLE_ABI python_wrapper/wrapper.cpp)
-target_link_libraries(panna PRIVATE dbg_macro)
+nanobind_add_module(_panna_impl NOMINSIZE STABLE_ABI python/wrapper.cpp)
+target_link_libraries(_panna_impl PRIVATE dbg_macro)
 
-install(TARGETS panna LIBRARY DESTINATION panna)
+install(TARGETS _panna_impl LIBRARY DESTINATION panna)
