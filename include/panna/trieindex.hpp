@@ -61,6 +61,18 @@ namespace panna {
             ar( repetitions, dataset, current_query, lsh_maps, builder, hasher, hashed_points );
         }
 
+        size_t num_repetitions() const {
+            return repetitions;
+        }
+
+        size_t num_points() const {
+            return dataset.size();
+        }
+
+        std::string describe_family() const {
+            return builder.describe();
+        }
+
         friend bool operator==( const Index<Dataset, Hasher, Distance>& a,
                                 const Index<Dataset, Hasher, Distance>& b ) {
             return a.dataset == b.dataset && a.current_query == b.current_query &&

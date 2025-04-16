@@ -4,6 +4,7 @@
 #include <eigen3/Eigen/Core>
 #include <omp.h>
 #include <random>
+#include <sstream>
 #include <vector>
 
 #include "panna/linalg.hpp"
@@ -241,6 +242,12 @@ namespace panna {
         Output build( size_t repetitions ) const {
             return CrossPolytope<K, Dataset, Distance>(
                 dimensions, repetitions, estimation_repetitions, estimation_eps );
+        }
+
+        std::string describe() const {
+            std::stringstream sstream;
+            sstream << "CrossPolytope(rotations=" << ROTATIONS << ")";
+            return sstream.str();
         }
     };
 

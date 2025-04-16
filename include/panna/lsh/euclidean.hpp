@@ -140,6 +140,12 @@ namespace panna {
             expect( quantization_width > 0 );
             return E2LSH<K, Dataset>( quantization_width, dimensions, repetitions );
         }
+
+        std::string describe() const {
+            std::stringstream sstream;
+            sstream << "E2LSH(quantization=" << quantization_width << ")";
+            return sstream.str();
+        }
     };
 
 } // namespace panna

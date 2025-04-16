@@ -16,9 +16,13 @@ with h5py.File("fashion-mnist-784-euclidean.hdf5") as hfp:
     ground = hfp["/distances"][:]
 
 
-index = panna.TrieIndex(data.shape[1], "euclidean")
+panna.set_seed(1234)
+index = panna.TrieIndex(data.shape[1], "euclidean", repetitions=32)
 index.insert(data) 
 index.rebuild()
+
+print(index)
+ic(index.num_repetitions, index.num_points)
 
 k = 10
 recalls = []

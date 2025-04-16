@@ -2,6 +2,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/string.h>
+#include <sstream>
 
 #include "dbg.h"
 #include "panna/data.hpp"
@@ -18,6 +19,9 @@ struct AbstractIndex {
     virtual void insert( const nb::ndarray<float, nb::c_contig>& vec ) = 0;
     virtual nb::ndarray<uint32_t, nb::numpy, nb::ndim<1>>
     search( const nb::ndarray<float, nb::shape<-1>>& vec, unsigned int k, float recall ) = 0;
+    virtual size_t num_points() const = 0;
+    virtual size_t num_repetitions() const = 0;
+    virtual std::string describe_family() const = 0;
 };
 
 template <typename Dataset, typename Hasher, typename Distance>
@@ -25,6 +29,18 @@ struct ConcreteIndex final : AbstractIndex {
     panna::Index<Dataset, Hasher, Distance> inner;
 
     ConcreteIndex( panna::Index<Dataset, Hasher, Distance> inner ): inner( inner ) {
+    }
+
+    size_t num_points() const {
+        return inner.num_points();
+    }
+
+    size_t num_repetitions() const {
+        return inner.num_repetitions();
+    }
+
+    std::string describe_family() const {
+        return inner.describe_family();
     }
 
     void rebuild() {
@@ -139,9 +155,23 @@ struct TrieIndex {
 };
 
 NB_MODULE( _panna_impl, m ) {
+    m.def( "set_seed",
+           &panna::seed_global_rng,
+           "Set the seed of the global random number generato used by the panna module." );
     nb::class_<TrieIndex>( m, "TrieIndex" )
         .def( nb::init<size_t, std::string, nb::kwargs>() )
         .def( "insert", &TrieIndex::insert )
         .def( "rebuild", &TrieIndex::rebuild )
-        .def( "search", &TrieIndex::search );
+        .def( "search", &TrieIndex::search )
+        .def_prop_ro( "num_repetitions",
+                      []( TrieIndex* self ) { return self->inner->num_repetitions(); } )
+        .def_prop_ro( "num_points", []( TrieIndex* self ) { return self->inner->num_points(); } )
+        .def( "__str__", []( TrieIndex* self ) {
+            std::stringstream sstream;
+            sstream << "TrieIndex("
+                    << "repetitions=" << self->inner->num_repetitions()
+                    << " num_points=" << self->inner->num_points()
+                    << " family=" << self->inner->describe_family() << ")";
+            return sstream.str();
+        } );
 }

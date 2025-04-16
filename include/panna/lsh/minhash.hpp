@@ -106,6 +106,10 @@ namespace panna {
         Output build( size_t repetitions ) const {
             return Minhash<K, Dataset>( repetitions );
         }
+
+        std::string describe() const {
+            return "MinHash1Bit";
+        }
     };
 
     template <uint8_t K, typename Dataset>
@@ -162,6 +166,10 @@ namespace panna {
 
         Output build( size_t repetitions ) const {
             return Minhash1Bit<K, Dataset>( repetitions );
+        }
+
+        std::string describe() const {
+            return "MinHash1Bit";
         }
     };
 } // namespace panna

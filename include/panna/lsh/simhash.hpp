@@ -1,5 +1,6 @@
 #pragma once
 
+#include <sstream>
 #include <vector>
 
 #include "panna/linalg.hpp"
@@ -92,6 +93,10 @@ namespace panna {
 
         Output build( size_t repetitions ) const {
             return Simhash<K, Dataset, Distance>( dimensions, repetitions );
+        }
+
+        std::string describe() const {
+            return "Simhash";
         }
     };
 } // namespace panna
