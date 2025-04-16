@@ -1,3 +1,7 @@
+minibench:
+    pip install .
+    python scripts/minibench.py
+
 install-python-extension:
     pip install --no-build-isolation -ve .
 

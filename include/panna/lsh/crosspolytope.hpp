@@ -246,7 +246,7 @@ namespace panna {
 
         std::string describe() const {
             std::stringstream sstream;
-            sstream << "CrossPolytope(rotations=" << ROTATIONS << ")";
+            sstream << "CrossPolytope(rotations=" << static_cast<size_t>(ROTATIONS) << ")";
             return sstream.str();
         }
     };

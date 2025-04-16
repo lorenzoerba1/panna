@@ -47,10 +47,10 @@ int main( int , char** ) {
 
     auto index = panna::Index<Dataset, Hasher, Distance>::build_or_load_from(
         dimensions, hbuilder, 256, data, index_path );
-    if ( !std::filesystem::exists( index_path ) ) {
-        std::cerr << "saving index" << std::endl;
-        index.save_to( index_path );
-    }
+    // if ( !std::filesystem::exists( index_path ) ) {
+    //     std::cerr << "saving index" << std::endl;
+    //     index.save_to( index_path );
+    // }
     std::cerr << "index ready" << std::endl;
 
     size_t k = 1;
