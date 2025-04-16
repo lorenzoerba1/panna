@@ -2,12 +2,13 @@
 
 #include <algorithm>
 #include <atomic>
-#include <chrono>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <queue>
 #include <stdexcept>
+
+#include "dbg.h"
 
 #include "cereal/archives/binary.hpp"
 #include "panna/lsh/predicates.hpp"
@@ -105,11 +106,6 @@ namespace panna {
 
         void rebuild() {
             std::vector<THashValue> hashes;
-            // std::vector<std::vector<THashValue>> tl_hash_values;
-            // tl_hash_values.resize(omp_get_max_threads());
-            // for (size_t i=0; i < tl_hash_values.size(); i++) {
-            //     tl_hash_values[i].resize(lsh_maps.size());
-            // }
 
 #pragma omp parallel for private( hashes )
             for ( size_t i = hashed_points; i < dataset.size(); i++ ) {
@@ -139,6 +135,7 @@ namespace panna {
             std::priority_queue<std::pair<float, uint32_t>> top;
 
             PointHandle q = current_query[0];
+            dbg(q);
 
             for ( size_t i = 0; i < dataset.size(); i++ ) {
                 float dist = Distance::compute( q, dataset[i] );

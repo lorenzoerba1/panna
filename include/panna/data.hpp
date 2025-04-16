@@ -12,6 +12,8 @@
 
 #include "cereal/types/array.hpp"
 #include "cereal/types/vector.hpp"
+#include "dbg.h"
+#include "panna/expect.hpp"
 #include "panna/rand.hpp"
 
 namespace panna {
@@ -52,14 +54,29 @@ namespace panna {
         size_t dimensions;
 
         void into_vec( std::vector<float>& vec ) const {
+            expect( vec.size() == dimensions );
             size_t i = 0;
             for ( size_t chunk_idx = 0; chunk_idx < num_chunks; chunk_idx++ ) {
                 Int16Chunk chunk = chunks[chunk_idx];
                 for ( size_t j = 0; j < Int16Chunk::CHUNK_SIZE; j++ ) {
+                    if ( i > dimensions ) {
+                        break;
+                    }
                     vec[i] = from_16bit_fixed_point( chunk.chunk[j] );
                     i++;
                 }
             }
+        }
+
+        friend std::ostream& operator<<( std::ostream& os, const UnitNormPointHandle& handle ) {
+            std::vector<float> vec( handle.dimensions );
+            handle.into_vec( vec );
+            os << "[";
+            for ( auto x : vec ) {
+                os << x << ", ";
+            }
+            os << "]";
+            return os;
         }
     };
 
@@ -167,6 +184,18 @@ namespace panna {
         float squared_norm() const {
             return sq_norm;
         }
+
+        friend std::ostream& operator<<( std::ostream& os, const NormedPointHandle& handle ) {
+            std::vector<float> vec( handle.inner.dimensions );
+            handle.inner.into_vec( vec );
+            float norm = std::sqrt( handle.sq_norm );
+            os << "[";
+            for ( auto x : vec ) {
+                os << norm * x << ", ";
+            }
+            os << "]";
+            return os;
+        }
     };
 
     class NormedPoints {
@@ -271,6 +300,15 @@ namespace panna {
             }
 
             return res;
+        }
+
+        friend std::ostream& operator<<( std::ostream& os, const SparseSetHandle& handle ) {
+            os << "{";
+            for ( size_t i = 0; i < handle.set_size; i++ ) {
+                os << handle.tokens[i] << ", ";
+            }
+            os << "}";
+            return os;
         }
     };
 

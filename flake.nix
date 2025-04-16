@@ -39,6 +39,7 @@
           numpy
           h5py
           nanobind
+          icecream
         ]);
 
         NIX_ENFORCE_NO_NATIVE = false;

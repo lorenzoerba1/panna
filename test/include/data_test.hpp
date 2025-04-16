@@ -2,7 +2,13 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <cmath>
+#include <random>
+
+#include "dbg.h"
 #include "panna/data.hpp"
+#include "panna/linalg.hpp"
+#include "panna/rand.hpp"
 
 namespace panna {
 
@@ -14,7 +20,8 @@ namespace panna {
         std::vector<std::vector<float>> points;
 
     public:
-        DummyPoints( size_t dimensions ): dimensions( dimensions ) {}
+        DummyPoints( size_t dimensions ): dimensions( dimensions ) {
+        }
 
         void push_back_random() {
             std::vector<float> values;
@@ -25,9 +32,13 @@ namespace panna {
             points.push_back( values );
         }
 
-        void push_back( std::vector<float> v ) { points.push_back( v ); }
+        void push_back( std::vector<float> v ) {
+            points.push_back( v );
+        }
 
-        size_t size() const { return points.size(); }
+        size_t size() const {
+            return points.size();
+        }
 
         PointHandle operator[]( size_t i ) {
             assert( i < points.size() );
@@ -35,7 +46,31 @@ namespace panna {
         }
     };
 
-    TEST_CASE( "UnitVectorFormat::to_16bit_fixed_point" ) {
+    TEST_CASE( "UnitNormPoints round trip" ) {
+        const float TOLERANCE = 0.0001;
+        float v = -1.0;
+        while ( v <= 1.0 ) {
+            REQUIRE( std::abs( from_16bit_fixed_point( to_16bit_fixed_point( v ) ) - v ) <
+                     TOLERANCE );
+            v += TOLERANCE;
+        }
+
+        size_t dims = 20;
+        UnitNormPoints data( dims );
+        for ( size_t i = 0; i < 100; i++ ) {
+            std::vector<float> x = sample_random_normal_vector( dims );
+            normalize( x );
+            data.push_back( x.begin(), x.end() );
+            UnitNormPointHandle handle = data[i];
+            std::vector<float> check( dims );
+            handle.into_vec( check );
+            for ( size_t dim = 0; dim < dims; dim++ ) {
+                REQUIRE( std::abs( x.at( dim ) - check.at( dim ) ) < TOLERANCE );
+            }
+        }
+    }
+
+    TEST_CASE( "UnitNormPoints::to_16bit_fixed_point" ) {
         REQUIRE( to_16bit_fixed_point( 0.99999 ) == INT16_MAX );
         REQUIRE( to_16bit_fixed_point( 1.0 ) == INT16_MAX );
         REQUIRE( to_16bit_fixed_point( -1.0 ) == INT16_MIN );
@@ -44,7 +79,7 @@ namespace panna {
         REQUIRE( to_16bit_fixed_point( -0.5 ) == (int16_t)0xc000 );
     }
 
-    TEST_CASE( "UnitVectorFormat::from_16bit_fixed_point" ) {
+    TEST_CASE( "UnitNormPoints::from_16bit_fixed_point" ) {
         REQUIRE( from_16bit_fixed_point( 0x0000 ) == 0.0 );
         REQUIRE( from_16bit_fixed_point( 0x4000 ) == 0.5 );
         REQUIRE( from_16bit_fixed_point( 0xa000 ) == -0.75 );

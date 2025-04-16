@@ -13,14 +13,14 @@ namespace nb = nanobind;
 
 struct AbstractIndex {
     virtual void rebuild() = 0;
-    virtual void insert( const nb::ndarray<float, nb::shape<-1>>& vec ) = 0;
-    virtual std::vector<uint32_t>
+    virtual void insert( const nb::ndarray<float, nb::c_contig>& vec ) = 0;
+    virtual
+    nb::ndarray<uint32_t, nb::numpy, nb::ndim<1>>
     search( const nb::ndarray<float, nb::shape<-1>>& vec, unsigned int k, float recall ) = 0;
-    virtual ~AbstractIndex() = 0;
 };
 
 template <typename Dataset, typename Hasher, typename Distance>
-struct ConcreteIndex : AbstractIndex {
+struct ConcreteIndex final : AbstractIndex {
     panna::Index<Dataset, Hasher, Distance> inner;
 
     ConcreteIndex( panna::Index<Dataset, Hasher, Distance> inner ): inner( inner ) {
@@ -30,19 +30,48 @@ struct ConcreteIndex : AbstractIndex {
         inner.rebuild();
     }
 
-    void insert( const nb::ndarray<float, nb::shape<-1>>& vec ) {
+    void insert( const nb::ndarray<float, nb::c_contig>& vec ) {
         // TODO: handle both one and two dimensional vectors
-        inner.insert( vec.data(), vec.data() + vec.shape( 0 ) );
+        if ( vec.ndim() == 1 ) {
+            inner.insert( vec.data(), vec.data() + vec.shape( 0 ) );
+        } else if ( vec.ndim() == 2 ) {
+            size_t nrows = vec.shape( 0 );
+            size_t dimensionality = vec.shape( 1 );
+            float* data = vec.data();
+            for ( size_t row = 0; row < nrows; row++ ) {
+                float* begin = data + row * dimensionality;
+                float* end = data + ( row + 1 ) * dimensionality;
+                expect( end - begin == static_cast<ptrdiff_t>( dimensionality ) );
+                inner.insert( begin, end );
+            }
+        }
     }
 
-    std::vector<uint32_t>
+    nb::ndarray<uint32_t, nb::numpy, nb::ndim<1>>
     search( const nb::ndarray<float, nb::shape<-1>>& vec, unsigned int k, float recall ) {
         std::vector<std::pair<float, uint32_t>> res;
+        res.reserve( k + 1 );
         float delta = 1 - recall;
-        inner.search( vec.data(), vec.data() + vec.shape( 0 ), k, delta, res );
+        size_t dimensions = vec.shape(0);
+        float* data = vec.data();
 
-        std::vector<uint32_t> out;
-        return out;
+        inner.search( data, data + dimensions, k, delta, res );
+        expect( res.size() == k );
+
+        std::sort( res.begin(), res.end() );
+        uint32_t* out_data = new uint32_t[k];
+
+        for ( size_t i = 0; i < k; i++ ) {
+            out_data[i] = res[i].second;
+        }
+
+        // Delete 'data' when the 'owner' capsule expires
+        nb::capsule owner( out_data, []( void* p ) noexcept { delete[] (float*)p; } );
+
+        return nb::ndarray<uint32_t, nb::numpy, nb::ndim<1>>(
+            /* data = */ out_data,
+            /* shape = */ {k},
+            /* owner = */ owner );
     }
 };
 
@@ -78,8 +107,25 @@ struct TrieIndex {
             throw nb::value_error( "Unsupported distance metric" );
         }
     }
+
+    void rebuild() {
+        inner->rebuild();
+    }
+
+    void insert( const nb::ndarray<float, nb::c_contig>& vec ) {
+        inner->insert( vec );
+    }
+
+    nb::ndarray<uint32_t, nb::numpy, nb::ndim<1>>
+    search( const nb::ndarray<float, nb::shape<-1>>& vec, unsigned int k, float recall ) {
+        return inner->search( vec, k, recall );
+    }
 };
 
 NB_MODULE( panna, m ) {
-    nb::class_<TrieIndex>( m, "TrieIndex" ).def( nb::init<size_t, std::string, nb::kwargs>() );
+    nb::class_<TrieIndex>( m, "TrieIndex" )
+        .def( nb::init<size_t, std::string, nb::kwargs>() )
+        .def( "insert", &TrieIndex::insert )
+        .def( "rebuild", &TrieIndex::rebuild )
+        .def( "search", &TrieIndex::search );
 }

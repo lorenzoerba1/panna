@@ -18,7 +18,8 @@ namespace panna {
     template <typename T>
     static float dot_product( T a, T b );
 
-    static float dummy_dot( std::vector<float> a, std::vector<float> b ) {
+    template<>
+    float dot_product( std::vector<float> a, std::vector<float> b ) {
         assert( a.size() == b.size() );
         float sum = 0.0;
         for ( size_t i = 0; i < a.size(); i++ ) {
@@ -90,6 +91,13 @@ namespace panna {
     float dot_product( NormedPointHandle a, NormedPointHandle b ) {
         float inner_dot = from_16bit_fixed_point( dot_product_chunks16( a.inner, b.inner ) );
         return std::sqrt( a.squared_norm() ) * std::sqrt( b.squared_norm() ) * inner_dot;
+    }
+
+    static void normalize(std::vector<float> & point) {
+        float norm = std::sqrt(dot_product(point, point));
+        for (size_t i=0; i<point.size(); i++) {
+            point[i] /= norm;
+        }
     }
 
     constexpr static unsigned int ceil_log( unsigned int value ) {
