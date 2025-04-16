@@ -3,6 +3,11 @@ Include(FetchContent)
 
 project(PANNA CXX)
 
+if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
+  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
+endif()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED On)
 set(CMAKE_CXX_EXTENSIONS Off)
@@ -17,40 +22,44 @@ endif()
 include_directories("include")
 include_directories("external")
 
-FetchContent_Declare(
-  Catch2
-  GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-  GIT_TAG        v3.8.0 # or a later release
-)
-
-FetchContent_MakeAvailable(Catch2)
-
 FetchContent_Declare(dbg_macro GIT_REPOSITORY https://github.com/sharkdp/dbg-macro)
 FetchContent_MakeAvailable(dbg_macro)
 
-include_directories("test/include")
-add_executable(tests test/tests.cpp)
-target_link_libraries(tests PRIVATE Catch2::Catch2WithMain dbg_macro)
+if (NOT SKBUILD)
+  FetchContent_Declare(
+    Catch2
+    GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+    GIT_TAG        v3.8.0 # or a later release
+  )
+
+  FetchContent_MakeAvailable(Catch2)
 
 
-find_package(HighFive)
-if (HighFive_FOUND)
-  add_executable(glove examples/glove.cpp)
-  target_link_libraries(glove HighFive dbg_macro)
+  include_directories("test/include")
+  add_executable(tests test/tests.cpp)
+  target_link_libraries(tests PRIVATE Catch2::Catch2WithMain dbg_macro)
 
-  add_executable(fashion examples/fashion.cpp)
-  target_link_libraries(fashion HighFive dbg_macro)
+
+  find_package(HighFive)
+  if (HighFive_FOUND)
+    add_executable(glove examples/glove.cpp)
+    target_link_libraries(glove HighFive dbg_macro)
+
+    add_executable(fashion examples/fashion.cpp)
+    target_link_libraries(fashion HighFive dbg_macro)
+  endif()
 endif()
 
 ###############################################################################
 # Python Bindings
 # 
 # This cmake code is adapted from
-# https://nanobind.readthedocs.io/en/latest/building.html
+# - https://nanobind.readthedocs.io/en/latest/building.html
+# - https://nanobind.readthedocs.io/en/latest/packaging.html
 
-set(DEV_MODULE Development.Module)
-
-find_package(Python 3.12 COMPONENTS Interpreter ${DEV_MODULE} REQUIRED)
+find_package(Python 3.8
+  REQUIRED COMPONENTS Interpreter Development.Module
+  OPTIONAL_COMPONENTS Development.SABIModule)
 
 # Detect the installed nanobind package and import it into CMake
 execute_process(
@@ -58,7 +67,7 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE OUTPUT_VARIABLE nanobind_ROOT)
 find_package(nanobind CONFIG REQUIRED)
 
-nanobind_add_module(panna NOMINSIZE python_wrapper/wrapper.cpp)
+nanobind_add_module(panna NOMINSIZE STABLE_ABI python_wrapper/wrapper.cpp)
 target_link_libraries(panna PRIVATE dbg_macro)
 
-
+install(TARGETS panna LIBRARY DESTINATION panna)

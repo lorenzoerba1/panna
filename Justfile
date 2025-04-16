@@ -1,3 +1,6 @@
+install-python-extension:
+    pip install --no-build-isolation -ve .
+
 example: build-example
     build/fashion
 

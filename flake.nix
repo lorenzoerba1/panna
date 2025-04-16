@@ -40,6 +40,7 @@
           h5py
           nanobind
           icecream
+          scikit-build-core
         ]);
 
         NIX_ENFORCE_NO_NATIVE = false;
