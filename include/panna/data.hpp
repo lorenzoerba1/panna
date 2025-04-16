@@ -54,7 +54,9 @@ namespace panna {
         size_t dimensions;
 
         void into_vec( std::vector<float>& vec ) const {
-            expect( vec.size() == dimensions );
+            // in some cases (like cross polytope) the output vector holds more
+            // elements than the dimensions
+            expect( vec.size() >= dimensions );
             size_t i = 0;
             for ( size_t chunk_idx = 0; chunk_idx < num_chunks; chunk_idx++ ) {
                 Int16Chunk chunk = chunks[chunk_idx];
