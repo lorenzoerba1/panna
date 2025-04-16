@@ -8,10 +8,14 @@
 namespace panna {
 
     template <uint8_t K, typename Dataset, typename Distance>
+    class SimhashBuilder;
+
+    template <uint8_t K, typename Dataset, typename Distance>
     class Simhash {
     public:
         //! The datatype of the output
         using Value = BitwiseLshValue<K>;
+        using Builder = SimhashBuilder<K, Dataset, Distance>;
 
     private:
         size_t repetitions;
@@ -73,11 +77,17 @@ namespace panna {
     public:
         using Output = Simhash<K, Dataset, Distance>;
 
+        SimhashBuilder() {}
+
         SimhashBuilder( size_t dimensions ): dimensions( dimensions ) {
         }
 
-        template <typename Ignored>
-        void fit( Ignored& ) {
+        void fit( Dataset& ) {
+        }
+
+        template <typename Archive>
+        void serialize( Archive& ar ) {
+            ar(dimensions);
         }
 
         Output build( size_t repetitions ) const {

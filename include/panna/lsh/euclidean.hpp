@@ -3,8 +3,6 @@
 #include <random>
 #include <vector>
 
-#include "dbg.h"
-#include "panna/data.hpp"
 #include "panna/expect.hpp"
 #include "panna/linalg.hpp"
 #include "panna/lsh/values.hpp"
@@ -18,10 +16,14 @@ namespace panna {
     }
 
     template <uint8_t K, typename Dataset>
+    class E2LSHBuilder;
+
+    template <uint8_t K, typename Dataset>
     class E2LSH {
     public:
         //! The datatype of the output
         using Value = BytewiseLshValue<K>;
+        using Builder = E2LSHBuilder<K, Dataset>;
 
     private:
         float quantization_width;
@@ -86,24 +88,30 @@ namespace panna {
 
     template <uint8_t K, typename Dataset>
     class E2LSHBuilder {
-        float quantization_width = 1.0;
+        float quantization_width = 0.0;
         size_t dimensions = 0;
 
     public:
         using Output = E2LSH<K, Dataset>;
 
+        E2LSHBuilder() {
+        }
+
+        E2LSHBuilder( size_t dimensions ): quantization_width( 0 ), dimensions( dimensions ) {
+        }
+
         E2LSHBuilder( float quantization_width, size_t dimensions ):
             quantization_width( quantization_width ), dimensions( dimensions ) {
         }
 
-        template <typename InputPoints>
-        void fit( InputPoints& input_points ) {
-            NormedPoints points( dimensions );
-            for ( auto& point : input_points ) {
-                points.push_back( point.begin(), point.end() );
-            }
+        template <typename Archive>
+        void serialize( Archive& ar ) {
+            ar( quantization_width, dimensions );
+        }
 
-            NormedPoints random( dimensions );
+        void fit( Dataset& points ) {
+            expect( quantization_width == 0.0 );
+            Dataset random( dimensions );
             for ( size_t i = 0; i < 1000; i++ ) {
                 std::vector<float> dir = sample_random_normal_vector( dimensions );
                 random.push_back( dir.begin(), dir.end() );
@@ -125,7 +133,7 @@ namespace panna {
 
             // This uses fewer than 8 bits per hash, but it makes the hashes go faster
             // TODO: we migh consider using only 4 bits per hash.
-            quantization_width = (max-min) / 16;
+            quantization_width = ( max - min ) / 16;
         }
 
         Output build( size_t repetitions ) const {

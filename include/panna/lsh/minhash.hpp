@@ -32,12 +32,16 @@ namespace panna {
     };
 
     template <uint8_t K, typename Dataset>
+    class MinhashBuilder;
+
+    template <uint8_t K, typename Dataset>
     class Minhash {
         size_t repetitions;
         std::vector<TabulationHash> hashes;
 
     public:
         using Value = IntLshValue<K>;
+        using Builder = MinhashBuilder<K, Dataset>;
 
         Minhash( size_t repetitions ): repetitions( repetitions ) {
             for ( size_t i=0; i < repetitions * K; i++ ) {
@@ -91,8 +95,12 @@ namespace panna {
 
         MinhashBuilder() {}
 
-        template <typename Ignored>
-        void fit( Ignored& ) {
+        template <typename Archive>
+        void serialize( Archive& ar ) {
+            ar();
+        }
+
+        void fit( Dataset& ) {
         }
 
         Output build( size_t repetitions ) const {
@@ -101,14 +109,23 @@ namespace panna {
     };
 
     template <uint8_t K, typename Dataset>
+    class Minhash1BitBuilder;
+
+    template <uint8_t K, typename Dataset>
     class Minhash1Bit {
         size_t repetitions;
         Minhash<K, Dataset> minhash;
 
     public:
         using Value = BitwiseLshValue<K>;
+        using Builder = Minhash1BitBuilder<K, Dataset>;
 
         Minhash1Bit( size_t repetitions ): repetitions(repetitions), minhash( repetitions ) {
+        }
+
+        template <typename Archive>
+        void serialize( Archive& ar ) {
+            ar();
         }
 
         void hash( typename Dataset::PointHandle point,
@@ -140,8 +157,7 @@ namespace panna {
 
         Minhash1BitBuilder() {}
 
-        template <typename Ignored>
-        void fit( Ignored& ) {
+        void fit( Dataset& ) {
         }
 
         Output build( size_t repetitions ) const {

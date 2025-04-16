@@ -7,6 +7,8 @@
 #include "panna/data.hpp"
 #include "panna/distance.hpp"
 #include "panna/lsh/crosspolytope.hpp"
+#include "panna/lsh/euclidean.hpp"
+#include "panna/lsh/simhash.hpp"
 #include "panna/trieindex.hpp"
 
 namespace nb = nanobind;
@@ -14,8 +16,7 @@ namespace nb = nanobind;
 struct AbstractIndex {
     virtual void rebuild() = 0;
     virtual void insert( const nb::ndarray<float, nb::c_contig>& vec ) = 0;
-    virtual
-    nb::ndarray<uint32_t, nb::numpy, nb::ndim<1>>
+    virtual nb::ndarray<uint32_t, nb::numpy, nb::ndim<1>>
     search( const nb::ndarray<float, nb::shape<-1>>& vec, unsigned int k, float recall ) = 0;
 };
 
@@ -52,7 +53,7 @@ struct ConcreteIndex final : AbstractIndex {
         std::vector<std::pair<float, uint32_t>> res;
         res.reserve( k + 1 );
         float delta = 1 - recall;
-        size_t dimensions = vec.shape(0);
+        size_t dimensions = vec.shape( 0 );
         float* data = vec.data();
 
         inner.search( data, data + dimensions, k, delta, res );
@@ -70,7 +71,7 @@ struct ConcreteIndex final : AbstractIndex {
 
         return nb::ndarray<uint32_t, nb::numpy, nb::ndim<1>>(
             /* data = */ out_data,
-            /* shape = */ {k},
+            /* shape = */ { k },
             /* owner = */ owner );
     }
 };
@@ -79,8 +80,6 @@ struct TrieIndex {
     std::unique_ptr<AbstractIndex> inner;
 
     TrieIndex( size_t dimensions, std::string distance, nb::kwargs kwargs ) {
-        dbg( dimensions );
-        dbg( distance );
         size_t repetitions = 64;
         if ( kwargs.contains( "repetitions" ) ) {
             repetitions = nb::cast<size_t>( kwargs["repetitions"] );
@@ -90,7 +89,6 @@ struct TrieIndex {
             if ( kwargs.contains( "hasher" ) ) {
                 hasher = nb::cast<std::string>( kwargs["hasher"] );
             }
-            dbg( hasher );
             if ( hasher == "crosspolytope" ) {
                 using Builder =
                     panna::CrossPolytopeBuilder<3, panna::UnitNormPoints, panna::CosineDistance>;
@@ -100,9 +98,27 @@ struct TrieIndex {
                 inner = std::make_unique<
                     ConcreteIndex<panna::UnitNormPoints, Builder::Output, panna::CosineDistance>>(
                     index );
+            } else if ( hasher == "simhash" ) {
+                using Builder =
+                    panna::SimhashBuilder<24, panna::UnitNormPoints, panna::CosineDistance>;
+                Builder builder( dimensions );
+                panna::Index<panna::UnitNormPoints, Builder::Output, panna::CosineDistance> index(
+                    dimensions, builder, repetitions );
+                inner = std::make_unique<
+                    ConcreteIndex<panna::UnitNormPoints, Builder::Output, panna::CosineDistance>>(
+                    index );
+            } else {
+                throw nb::value_error( "Unsupported hasher for cosine distance. Use either "
+                                       "`crosspolytope` or `simhash`" );
             }
         } else if ( distance == "euclidean" ) {
-
+            using Builder = panna::E2LSHBuilder<8, panna::NormedPoints>;
+            Builder builder( 0.0, dimensions );
+            panna::Index<panna::NormedPoints, Builder::Output, panna::EuclideanDistance> index(
+                dimensions, builder, repetitions );
+            inner = std::make_unique<
+                ConcreteIndex<panna::NormedPoints, Builder::Output, panna::EuclideanDistance>>(
+                index );
         } else {
             throw nb::value_error( "Unsupported distance metric" );
         }

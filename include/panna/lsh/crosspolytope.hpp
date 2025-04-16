@@ -1,5 +1,7 @@
 #pragma once
 #include <algorithm>
+#include <cstdint>
+#include <eigen3/Eigen/Core>
 #include <omp.h>
 #include <random>
 #include <vector>
@@ -109,10 +111,14 @@ namespace panna {
     };
 
     template <uint8_t K, typename Dataset, typename Distance, uint8_t ROTATIONS = 3>
+    class CrossPolytopeBuilder;
+
+    template <uint8_t K, typename Dataset, typename Distance, uint8_t ROTATIONS = 3>
     class CrossPolytope {
     public:
         //! The datatype of the output
         using Value = ShortLshValue<K>;
+        using Builder = CrossPolytopeBuilder<K, Dataset, Distance, ROTATIONS>;
 
     private:
         size_t repetitions;
@@ -206,14 +212,17 @@ namespace panna {
         }
     };
 
-    template <uint8_t K, typename Dataset, typename Distance>
+    template <uint8_t K, typename Dataset, typename Distance, uint8_t ROTATIONS>
     class CrossPolytopeBuilder {
         size_t dimensions = 0;
         size_t estimation_repetitions = 1024;
         float estimation_eps = 5e-3;
 
     public:
-        using Output = CrossPolytope<K, Dataset, Distance>;
+        using Output = CrossPolytope<K, Dataset, Distance, ROTATIONS>;
+
+        CrossPolytopeBuilder() {
+        }
 
         CrossPolytopeBuilder( size_t dimensions,
                               size_t estimation_repetitions = 1024,
@@ -223,8 +232,12 @@ namespace panna {
             estimation_eps( estimation_eps ) {
         }
 
-        template <typename Ignored>
-        void fit( Ignored& ) {
+        template <typename Archive>
+        void serialize( Archive& ar ) {
+            ar(dimensions, estimation_repetitions, estimation_eps);
+        }
+
+        void fit( Dataset& ) {
         }
 
         Output build( size_t repetitions ) const {

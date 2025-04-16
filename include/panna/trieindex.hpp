@@ -7,10 +7,11 @@
 #include <fstream>
 #include <queue>
 #include <stdexcept>
-
-#include "dbg.h"
+#include <type_traits>
 
 #include "cereal/archives/binary.hpp"
+#include "cereal/types/optional.hpp"
+#include "dbg.h"
 #include "panna/lsh/predicates.hpp"
 #include "panna/prefixmap.hpp"
 
@@ -22,6 +23,7 @@ namespace panna {
         using PointHandle = typename Dataset::PointHandle;
         using THashValue = typename Hasher::Value;
 
+        size_t repetitions;
         // The actual data points
         Dataset dataset;
         // Contains either one or zero points to be used
@@ -31,8 +33,10 @@ namespace panna {
         Dataset current_query;
         // Hash tables used by LSH.
         std::vector<PrefixMap<THashValue>> lsh_maps;
-        // How to hash the points
-        Hasher hasher;
+        // How to build hash functions
+        typename Hasher::Builder builder;
+        // How to hash the points. Initialized upon the first call to "rebuild"
+        std::optional<Hasher> hasher;
 
         size_t hashed_points = 0;
 
@@ -40,18 +44,21 @@ namespace panna {
         Index() {
         }
 
-        template <typename HasherBuilder>
-        Index( size_t dimensions, HasherBuilder builder, size_t repetitions ):
+        Index( size_t dimensions, typename Hasher::Builder builder, size_t repetitions ):
+            repetitions( repetitions ),
             dataset( dimensions ),
             current_query( dimensions ),
-            hasher( builder.build( repetitions ) ),
+            builder( builder ),
+            hasher(),
             hashed_points( 0 ) {
+
+            static_assert( std::is_same<Hasher, typename Hasher::Builder::Output>::value );
             lsh_maps.resize( repetitions );
         }
 
         template <typename Archive>
         void serialize( Archive& ar ) {
-            ar( dataset, current_query, lsh_maps, hasher, hashed_points );
+            ar( repetitions, dataset, current_query, lsh_maps, builder, hasher, hashed_points );
         }
 
         friend bool operator==( const Index<Dataset, Hasher, Distance>& a,
@@ -105,13 +112,18 @@ namespace panna {
         }
 
         void rebuild() {
+            if ( !hasher.has_value() ) {
+                builder.fit( dataset );
+                hasher = builder.build( repetitions );
+            }
+
             std::vector<THashValue> hashes;
 
 #pragma omp parallel for private( hashes )
             for ( size_t i = hashed_points; i < dataset.size(); i++ ) {
                 auto tid = omp_get_thread_num();
                 // auto & hashes = tl_hash_values[tid];
-                hasher.hash( dataset[i], hashes );
+                hasher->hash( dataset[i], hashes );
                 for ( size_t rep = 0; rep < lsh_maps.size(); rep++ ) {
                     lsh_maps[rep].insert( tid, i, hashes[rep] );
                 }
@@ -126,7 +138,8 @@ namespace panna {
         }
 
         template <typename Iter>
-        void search_brute_force( Iter begin, Iter end,
+        void search_brute_force( Iter begin,
+                                 Iter end,
                                  size_t k,
                                  std::vector<std::pair<float, uint32_t>>& output ) {
             current_query.clear();
@@ -135,7 +148,6 @@ namespace panna {
             std::priority_queue<std::pair<float, uint32_t>> top;
 
             PointHandle q = current_query[0];
-            dbg(q);
 
             for ( size_t i = 0; i < dataset.size(); i++ ) {
                 float dist = Distance::compute( q, dataset[i] );
@@ -161,6 +173,8 @@ namespace panna {
                      size_t k,
                      float delta,
                      std::vector<std::pair<float, uint32_t>>& output ) {
+            expect( hasher );
+
             size_t collisions = 0;
             // Setup
             output.clear();
@@ -170,7 +184,7 @@ namespace panna {
 
             // FIXME: remove this allocation
             std::vector<typename Hasher::Value> q_hashes;
-            hasher.hash( q, q_hashes );
+            hasher->hash( q, q_hashes );
 
             // FIXME: remove this allocation
             std::vector<PrefixMapCursor<typename Hasher::Value>> cursors;
@@ -180,7 +194,7 @@ namespace panna {
 
             // Search
             bool stop = false;
-            size_t max_concat = hasher.get_concatenations();
+            size_t max_concat = hasher->get_concatenations();
             for ( size_t concat = max_concat; concat > 0; concat-- ) {
                 if ( stop ) {
                     break;
@@ -209,7 +223,7 @@ namespace panna {
                     if ( output.size() == k ) {
                         float topdist = output.back().first;
                         float fp = failure_probability(
-                            hasher, topdist, concat, rep + 1, lsh_maps.size() );
+                            *hasher, topdist, concat, rep + 1, lsh_maps.size() );
                         if ( fp <= delta ) {
                             stop = true;
                             break;

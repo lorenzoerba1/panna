@@ -44,8 +44,7 @@ int main( int , char** ) {
     std::cout << "data loaded" << std::endl;
 
     size_t dimensions = data[0].size();
-    HasherBuilder hbuilder( 1000.0, dimensions );
-    hbuilder.fit(data);
+    HasherBuilder hbuilder( dimensions );
 
     auto index = panna::Index<Dataset, Hasher, Distance>::build_or_load_from(
         dimensions, hbuilder, 32, data, index_path );
