@@ -12,7 +12,10 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED On)
 set(CMAKE_CXX_EXTENSIONS Off)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wno-noexcept-type -Wno-implicit-fallthrough -Wno-unused-function -march=native -g -O3")
+# Add warnings
+add_compile_options(-Wall -Wextra -Wno-noexcept-type -Wno-implicit-fallthrough -Wno-unused-function)
+# Always optimize as much as we can
+add_compile_options(-march=native -O3)
 
 find_package(OpenMP)
 if (OpenMP_FOUND)
@@ -64,7 +67,7 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE OUTPUT_VARIABLE nanobind_ROOT)
 find_package(nanobind CONFIG REQUIRED)
 
-nanobind_add_module(_panna_impl NOMINSIZE STABLE_ABI python/wrapper.cpp)
+nanobind_add_module(_panna_impl NOMINSIZE python/wrapper.cpp)
 target_link_libraries(_panna_impl PRIVATE dbg_macro)
 
 install(TARGETS _panna_impl LIBRARY DESTINATION panna)

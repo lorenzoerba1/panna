@@ -28,7 +28,7 @@ def run(data_path):
 
     print("  building index")
     t_start = time.time()
-    index = panna.TrieIndex(dimensions, "cosine", repetitions=256)
+    index = panna.TrieIndex(dimensions, "euclidean", repetitions=32)
     index.insert(train)
     index.rebuild()
     t_index_secs = time.time() - t_start
@@ -39,11 +39,13 @@ def run(data_path):
     for q in test:
         index.search(q, k, 0.8)
     t_query_secs = time.time() - t_start
+    qps = n_queries / t_query_secs
+    print("   qps", qps)
     return {
         "time_index_s": t_index_secs,
         "time_query_s": t_query_secs,
         "index_pps": n / t_index_secs,
-        "qps": n_queries / t_query_secs,
+        "qps": qps,
     }
 
 
@@ -98,8 +100,8 @@ def already_run(db, git_info, data_path):
 
 
 if __name__ == "__main__":
-    path = "glove-100-angular.hdf5"
-    download("http://ann-benchmarks.com/glove-100-angular.hdf5", path)
+    path = "fashion-mnist-784-euclidean.hdf5"
+    download(f"http://ann-benchmarks.com/{path}", path)
     git_info = get_git_info()
     with get_db() as db:
         if already_run(db, git_info, path):
