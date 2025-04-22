@@ -1,7 +1,6 @@
 #pragma once
 #include <algorithm>
 #include <cstdint>
-#include <eigen3/Eigen/Core>
 #include <omp.h>
 #include <random>
 #include <sstream>

@@ -15,7 +15,7 @@ set(CMAKE_CXX_EXTENSIONS Off)
 # Add warnings
 add_compile_options(-Wall -Wextra -Wno-noexcept-type -Wno-implicit-fallthrough -Wno-unused-function)
 # Always optimize as much as we can
-add_compile_options(-march=native -O3)
+add_compile_options(-march=native -O3 -g)
 
 find_package(OpenMP)
 if (OpenMP_FOUND)

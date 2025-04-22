@@ -53,7 +53,7 @@ int main( int , char** ) {
     // }
     std::cerr << "index ready" << std::endl;
 
-    size_t k = 1;
+    size_t k = 10;
     float delta = 0.2;
     std::vector<std::vector<std::pair<float, uint32_t>>> res;
     std::vector<std::vector<std::pair<float, uint32_t>>> res_prob;
