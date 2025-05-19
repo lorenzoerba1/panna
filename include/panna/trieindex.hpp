@@ -249,3 +249,5 @@ namespace panna {
             }
             g_collisions += collisions;
         }
+    };
+} // namespace panna
