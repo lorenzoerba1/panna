@@ -69,6 +69,10 @@ namespace panna {
             return dataset.size();
         }
 
+        size_t num_concatenations() const {
+            return hasher->get_concatenations();
+        }
+
         std::string describe_family() const {
             return builder.describe();
         }
@@ -233,7 +237,7 @@ namespace panna {
 
                     // check stopping condition
                     if ( output.size() == k ) {
-                        float topdist = output.back().first;
+                        float topdist = output.front().first; // ! We should check on the biggest element but the vector is a heap so it should be the first
                         float fp = failure_probability(
                             *hasher, topdist, concat, rep + 1, lsh_maps.size() );
                         if ( fp <= delta ) {
@@ -245,5 +249,3 @@ namespace panna {
             }
             g_collisions += collisions;
         }
-    };
-} // namespace panna
