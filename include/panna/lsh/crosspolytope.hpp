@@ -206,7 +206,6 @@ namespace panna {
 
         float collision_probability( float distance ) const {
             float dotp = Distance::to_dot_product( distance );
-            std::cout << "Angular distance to dot product "<< dotp << std::endl;
             return estimates.get_collision_probability( dotp );
         }
     };
