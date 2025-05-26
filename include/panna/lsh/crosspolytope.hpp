@@ -179,8 +179,8 @@ namespace panna {
             ar( repetitions, dimensions, random_dots, tl_rotated_vectors, estimates );
         }
 
-        friend bool operator==( const CrossPolytope<K, Dataset, Distance>& a,
-                                const CrossPolytope<K, Dataset, Distance>& b ) {
+        friend bool operator==( const CrossPolytope<K, Dataset, Distance, ROTATIONS>& a,
+                                const CrossPolytope<K, Dataset, Distance, ROTATIONS>& b ) {
             return a.repetitions == b.repetitions && a.dimensions == b.dimensions &&
                    a.random_dots == b.random_dots && a.estimates == b.estimates;
         }
@@ -239,7 +239,7 @@ namespace panna {
         }
 
         Output build( size_t repetitions ) const {
-            return CrossPolytope<K, Dataset, Distance>(
+            return CrossPolytope<K, Dataset, Distance, ROTATIONS>(
                 dimensions, repetitions, estimation_repetitions, estimation_eps );
         }
 
