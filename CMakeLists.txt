@@ -42,9 +42,14 @@ if (NOT SKBUILD)
   add_executable(tests test/tests.cpp)
   target_link_libraries(tests PRIVATE Catch2::Catch2WithMain dbg_macro)
 
+
   find_package(HighFive)
   add_executable(emst test/emst_test.cpp)
   target_link_libraries(emst PRIVATE Catch2::Catch2WithMain dbg_macro HighFive)
+
+    add_executable(recall test/recall_test.cpp)
+  target_link_libraries(recall PRIVATE Catch2::Catch2WithMain dbg_macro HighFive)
+
 
   # if (HighFive_FOUND)
   #   add_executable(glove examples/glove.cpp)
