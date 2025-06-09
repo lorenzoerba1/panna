@@ -12,7 +12,8 @@
 
 #include "omp.h"
 #include "panna/expect.hpp"
-
+// Tree import
+#include "panna/dsu.hpp"
 namespace panna {
 
     //! Returns the index of the first element strictly larger than the `needle`, starting from
@@ -307,6 +308,32 @@ namespace panna {
             //     current_hash = hashes[range_end];
             // }
             // return std::make_pair( collisions, continue_cycle);
+        }
+
+            std::pair<size_t, bool> next_filter( std::vector<std::pair<Iter, Iter>>& scratch_space, DSU& filter ) {
+            // Setup
+            size_t collisions = 0;
+            size_t len_buff = scratch_space.size();
+            bool continue_cycle = false;
+
+            while ( range_end < hashes.size() ) {
+                // Update the range
+                update_range_start();
+                update_range_end();
+                for ( size_t current = range_start; current < range_end; current++ ) {
+                    for ( size_t next = current + 1; next < range_end; next++ ) {
+                        if ( filter.is_connected( indices[current], indices[next] ) )
+                            continue;
+                        scratch_space.emplace_back(
+                            &indices[current], &indices[next] );
+                        collisions++;
+                    }
+                }
+                // Switch to the next hash
+                current_hash = hashes[range_end];
+            }
+
+            return std::make_pair( collisions, continue_cycle );
         }
     };
 

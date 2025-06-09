@@ -272,15 +272,12 @@ namespace panna {
             }
             while ( keep_going ) {
                 size_t cursor_collisions = 0;
-                std::tie( cursor_collisions, keep_going ) = cursor.next(scratch);
+                std::tie( cursor_collisions, keep_going ) = cursor.next_filter(scratch, filter);
                 collisions += cursor_collisions;
                 size_t current_size = output.size();
                 
                 // Fill the output vector and then parallel compute the distances              
                 for ( size_t num = 0; num < cursor_collisions; num++ ) {
-                    if ( filter.is_connected( *scratch[num].first, *scratch[num].second ) ) {
-                        continue; // We skip the pairs that are already connected
-                    }
                     output.emplace_back( std::numeric_limits<float>::infinity(), std::make_pair(*scratch[num].first, *scratch[num].second) ); // We put a mock value? 
                 }
 
