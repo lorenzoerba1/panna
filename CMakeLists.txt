@@ -11,6 +11,8 @@ endif()
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED On)
 set(CMAKE_CXX_EXTENSIONS Off)
+set(CMAKE_BUILD_PARALLEL_LEVEL 8)
+# set(CMAKE_CXX_CLANG_TIDY clang-tidy)
 
 # Add warnings
 add_compile_options(-Wall -Wextra -Wno-noexcept-type -Wno-implicit-fallthrough -Wno-unused-function)
@@ -41,13 +43,16 @@ if (NOT SKBUILD)
   target_link_libraries(tests PRIVATE Catch2::Catch2WithMain dbg_macro)
 
   find_package(HighFive)
-  if (HighFive_FOUND)
-    add_executable(glove examples/glove.cpp)
-    target_link_libraries(glove HighFive dbg_macro)
+  add_executable(emst test/emst_test.cpp)
+  target_link_libraries(emst PRIVATE Catch2::Catch2WithMain dbg_macro HighFive)
 
-    add_executable(fashion examples/fashion.cpp)
-    target_link_libraries(fashion HighFive dbg_macro)
-  endif()
+  # if (HighFive_FOUND)
+  #   add_executable(glove examples/glove.cpp)
+  #   target_link_libraries(glove HighFive dbg_macro)
+
+  #   add_executable(fashion examples/fashion.cpp)
+  #   target_link_libraries(fashion HighFive dbg_macro)
+  # endif()
 endif()
 
 ###############################################################################

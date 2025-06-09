@@ -95,6 +95,10 @@ namespace panna {
 
     static void normalize(std::vector<float> & point) {
         float norm = std::sqrt(dot_product(point, point));
+        if (norm == 0) {
+            //throw std::runtime_error("Cannot normalize a zero vector");
+            return;
+        }
         for (size_t i=0; i<point.size(); i++) {
             point[i] /= norm;
         }

@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <utility>
 #include <vector>
+#include <iostream>
 
 #include "omp.h"
 #include "panna/expect.hpp"
@@ -179,6 +180,136 @@ namespace panna {
         }
     };
 
+    template <typename THashValue>
+    class PairPrefixMapCursor {
+        private:
+        const std::vector<THashValue>& hashes;
+        const std::vector<uint32_t>& indices;
+        THashValue current_hash;
+        size_t current_index;
+        size_t current_comparison;
+        size_t range_start;
+        size_t range_end;
+        uint8_t prefix_length;
+
+    public:
+        using Iter = const uint32_t*;
+
+        PairPrefixMapCursor(
+                         const std::vector<THashValue>& hashes,
+                         const std::vector<uint32_t>& indices ):
+            hashes( hashes ),
+            indices( indices ),
+            prefix_length( THashValue::get_concatenations() ) {
+            assert( hashes.size() > 0 );
+            assert( std::is_sorted( hashes.begin(), hashes.end() ) );
+
+            current_index = current_comparison = range_start = range_end = 0;
+            current_hash = hashes[0];
+        }
+
+        // Shortens the prefix by one
+        void shorten_prefix( size_t new_prefix ) {
+            if ( new_prefix > prefix_length ) {
+                throw std::invalid_argument( "the new prefix must be shorter than the old one" );
+            }
+            if ( prefix_length == 0 ) {
+                throw std::invalid_argument( "the new prefix must be positive" );
+            };
+            if ( new_prefix == prefix_length ) {
+                // nothing to do
+                return;
+            }
+            prefix_length = new_prefix;
+            current_index = current_comparison = 0;
+            current_hash = hashes[0];
+        }
+  
+        // Find the first index such that the prefix is >= the given hash.
+        // In other words, in the first part the hashes are all < the given hash.
+        void update_range_start() {
+            range_start = std::distance(
+                hashes.begin(),
+                std::partition_point( hashes.begin(), hashes.end(), [&]( const auto& h ) {
+                    return h.prefix_less( current_hash, prefix_length );
+                } ) );
+        }
+
+        // Find the first index such that the prefix is > the given hash (**strictly** larger).
+        // In other words, in the first part the hashes are all <= the given hash.
+        void update_range_end() {
+            range_end = std::distance(
+                hashes.begin(),
+                std::partition_point( hashes.begin(), hashes.end(), [&]( const auto& h ) {
+                    return !current_hash.prefix_less( h, prefix_length );
+                } ) );
+        }
+
+        std::pair<size_t, bool> next( std::vector<std::pair<Iter, Iter>>& scratch_space ) {
+            // Setup
+            size_t collisions = 0;
+            size_t len_buff = scratch_space.size();
+            bool continue_cycle = false;
+
+            while ( range_end < hashes.size() ) {
+                // Update the range
+                update_range_start();
+                update_range_end();
+                for ( size_t current = range_start; current < range_end; current++ ) {
+                    for ( size_t next = current + 1; next < range_end; next++ ) {
+                        
+                        scratch_space.emplace_back(
+                            &indices[current], &indices[next] );
+                        collisions++;
+                    }
+                }
+                // Switch to the next hash
+                current_hash = hashes[range_end];
+            }
+
+            return std::make_pair( collisions, continue_cycle );
+
+            // // We have an unfinished run
+            // if ( current_index != current_comparison ) { 
+            //     for ( current_index; current_index < range_end; current_index++ ) {
+            //         for ( current_comparison; current_comparison < range_end; current_comparison++ ) {                                               
+            //             // Full buffer
+            //             if ( collisions >= len_buff ) {
+            //                 continue_cycle = true;
+            //                 return std::make_pair( collisions, continue_cycle );
+            //             }
+            //             scratch_space[collisions] = std::make_pair( &indices[current_index], &indices[current_comparison] );
+            //             collisions++;
+            //         }
+            //     }
+            //     // Reset the run indices
+            //     current_hash = hashes[range_end];
+            //     current_index = current_comparison = 0;
+            // }
+            // while ( range_end < hashes.size() ) { // do it until we scan all the vector
+            //     update_range_start();
+            //     update_range_end();
+            //     for ( size_t current = range_start; current < range_end; current++ ) {
+            //         for ( size_t next = current + 1; next < range_end; next++ ) {
+                        
+            //             // Full buffer
+            //             if ( collisions >= len_buff ) {
+            //                 current_index = current;
+            //                 current_comparison = next;
+            //                 continue_cycle = true;
+            //                 return std::make_pair( collisions, continue_cycle );
+            //             }
+            //             scratch_space[collisions] = std::make_pair( &indices[current], &indices[next] );
+            //             collisions++;
+            //         }
+            //     }
+            //     // Switch to the next hash
+            //     current_hash = hashes[range_end];
+            // }
+            // return std::make_pair( collisions, continue_cycle);
+        }
+    };
+
     // A PrefixMap stores all inserted values in sorted order by their hash codes.
     //
     // This allows querying all values that share a common prefix. The length of the prefix
@@ -266,6 +397,10 @@ namespace panna {
 
         PrefixMapCursor<THashValue> create_cursor( THashValue hash ) const {
             return PrefixMapCursor<THashValue>( hash, hashes, indices );
+        }
+
+        PairPrefixMapCursor<THashValue> create_pair_cursor () const {
+            return PairPrefixMapCursor<THashValue> ( hashes, indices );
         }
 
         THashValue hash_for( size_t idx ) const {
