@@ -7,3 +7,15 @@ glove-100-angular.hdf5
 profile.json.gz
 *.bin
 fashion-mnist-784-euclidean.hdf5
+CMakeFiles
+_deps
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.out
+*.a
+*.hdf5
+*.txt
+*.so
+*.db
+*.

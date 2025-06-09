@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <type_traits>
+#include <iostream>
 
 #include "panna/linalg.hpp"
 
