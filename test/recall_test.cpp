@@ -22,6 +22,10 @@ int main()  {
     };
     int index = 0;
     for (const auto& name: datasets) {
+        if (index == 0 || index == 1) {
+            index++;
+            continue; // Skip the first dataset
+        }
         std::cout << "Processing dataset: " << name << std::endl;
 
         seed_global_rng(std::chrono::high_resolution_clock::now().time_since_epoch().count());
@@ -29,7 +33,7 @@ int main()  {
         const size_t conc = 8;
         const uint8_t rotations = 3;
         const size_t dimensions[4] = { 784, 100, 256, 960 };
-        size_t reps[2] = { 200, 500 };
+        size_t reps[2] = { 500, 1000 };
         std::vector<float> weigths; 
         using Point = NormedPoints; // UnitNormPoints or NormedPoints
         using Distance = EuclideanDistance; // EuclideanDistance or AngularDistance or CosineDistance

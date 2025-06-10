@@ -156,19 +156,6 @@ namespace panna{
                         DSU local_dsu(num_data);
                         std::vector<EdgeTuple> local_Tc, local_top, local_Tu;
                         enumerate_edges(i, j, local_Tu, local_Tc);   
-                        // local_confirmed[j].insert( local_confirmed[j].end(),
-                        //                             std::make_move_iterator( local_Tc.begin() ),
-                        //                             std::make_move_iterator( local_Tc.end() ) );
-                        // local_edges[j].insert( local_edges[j].end(),
-                        //                             std::make_move_iterator( local_Tu.begin() ),
-                        //                             std::make_move_iterator( local_Tu.end() ) );
-                        
-                        // for ( auto& edge: local_Tc ) {
-                        //     if (local_top.size() == num_data - 1) {
-                        //         break;
-                        //     }
-                        //     add_edge(edge, local_dsu, local_top);
-                        // }
 
                         for ( auto& edge: local_Tu ) {
                             if (local_top.size() == num_data - 1) {
@@ -194,22 +181,6 @@ namespace panna{
                                 // std::make_move_iterator(local.begin()), std::make_move_iterator(local.end()) );
                                 local.clear();
                             }
-                            // for ( auto& local : local_edges ) {
-                            //     auto it = std::partition_point( local.begin(), local.end(), [&] (const auto& e) { 
-                            //         return table.fail_probability( std::get<float> (e), i, j ) < delta;                               
-                            //         } );
-                            //     edges.insert ( edges.end(), local.begin(), it );
-                            //     // std::make_move_iterator(local.begin()), std::make_move_iterator(it) );
-                            //     local.erase(local.begin(), it);   
-                            // } 
-                            // std::sort( unconfirmed.begin(), unconfirmed.end() );
-                            // unconfirmed.erase( std::unique( unconfirmed.begin(), unconfirmed.end() ), unconfirmed.end() );
-
-                            // // Find the slitting point
-                            // auto it = std::partition_point( unconfirmed.begin(), unconfirmed.end(), [&] (const auto& e) { 
-                            //     return table.fail_probability( std::get<float> (e), i, j ) < delta;                               
-                            //     } );
-                            // confirmed.insert ( confirmed.end(), unconfirmed.begin(), it );
                             std::sort ( edges.begin(), edges.end() );
                             edges.erase( std::unique( edges.begin(), edges.end() ), edges.end() );
                             if (edges.size() > num_data -1) {
@@ -241,12 +212,11 @@ namespace panna{
                                     std::cout << "Tree weight: " << tree_weight << std::endl;
                                     std::cout << "Probability: " << table.fail_probability(std::get<float>(top.back()), i, j) << std::endl;
                                     if (table.fail_probability( std::get<float>(top.back()), i, j) < delta ) {
-                                        found = true;
-                                    
+                                        found = true;                                  
                                         // Fill the tree
-                                    for (const auto& edge : top) {
-                                            tree.push_back( std::get<1>(edge) );
-                                    }
+                                        for (const auto& edge : top) {
+                                                tree.push_back( std::get<1>(edge) );
+                                        }
                                     }
                                 }
                                 // Lose the unused edges, MST is composable wrt to edge partitioning
@@ -258,12 +228,6 @@ namespace panna{
                     std::cout << "Finished prefix " << i << std::endl;
                 }
                 is_connected(tree);
-                // // Save to file the edges
-                // std::ofstream outfile("edges_ny_eucl.txt");
-                // for (const auto& edge : tree) {
-                //     outfile << (edge).first << " " << (edge).second << std::endl;
-                // }
-                // outfile.close();
                 return tree_weight;
             }
 

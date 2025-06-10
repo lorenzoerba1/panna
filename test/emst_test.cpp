@@ -17,16 +17,16 @@ int main()  {
     // Parameters
     const size_t conc = 8;
     const uint8_t rotations = 3;
-    const size_t dimensions = 2;
+    const size_t dimensions = 12;
     const size_t rep = 500;
-    const size_t n = 1000;
-    using Point = UnitNormPoints; // UnitNormPoints or NormedPoints
-    using Distance = CosineDistance; // EuclideanDistance or AngularDistance or CosineDistance
-    //using Hasher = E2LSH<conc, Point>;
-    using Hasher = CrossPolytope<conc, Point, Distance, rotations>;
+    const size_t n = 10000;
+    using Point = NormedPoints; // UnitNormPoints or NormedPoints
+    using Distance = EuclideanDistance; // EuclideanDistance or AngularDistance or CosineDistance
+    using Hasher = E2LSH<conc, Point>;
+    //using Hasher = CrossPolytope<conc, Point, Distance, rotations>;
 
-    //E2LSHBuilder<conc, NormedPoints> builder ( dimensions );
-     CrossPolytopeBuilder<conc, Point, Distance, rotations> builder( dimensions );
+    E2LSHBuilder<conc, NormedPoints> builder ( dimensions );
+     //CrossPolytopeBuilder<conc, Point, Distance, rotations> builder( dimensions );
 
     std::vector<std::vector<float>> points;
     for ( size_t i = 0; i < n; i++ ) {

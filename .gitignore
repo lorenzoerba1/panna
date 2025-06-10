@@ -1,3 +1,5 @@
+*
+!*.*
 .cache/clangd/index
 .direnv
 .venv
@@ -18,4 +20,3 @@ Makefile
 *.txt
 *.so
 *.db
-*.
