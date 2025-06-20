@@ -34,6 +34,9 @@
           valgrind
           highfive
           samply
+          armadillo
+          boost
+          cereal
         ] ++ ( with python312Packages; [
           venvShellHook
           numpy

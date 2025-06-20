@@ -111,6 +111,7 @@ namespace panna {
 
         void fit( Dataset& points ) {
             expect( quantization_width == 0.0 );
+            using Vec      = std::vector<float>;
             Dataset random( dimensions );
             for ( size_t i = 0; i < 1000; i++ ) {
                 std::vector<float> dir = sample_random_normal_vector( dimensions );
@@ -134,6 +135,79 @@ namespace panna {
             // This uses fewer than 8 bits per hash, but it makes the hashes go faster
             // TODO: we migh consider using only 4 bits per hash.
             quantization_width = ( max - min ) / 16;
+
+            // Build 4 repetitions of K hashes and count the mean number of collisions in the dataset
+            size_t collisions = 0;
+            size_t rep = 4;
+            size_t high_thresh = sqrt(points.size()) * 1.4;
+            size_t low_thresh = sqrt(points.size()) * 0.8;
+            size_t max_iters = 10;
+            float incr_mul= 1.5f, decr_mul = 1.5f, r_low = 0, r_high = 0;
+
+            for ( std::size_t iter = 0; iter < max_iters; ++iter ) {
+            // Generate random vectors for the projections
+            Dataset proj ( dimensions );
+            for (std::size_t i = 0; i < rep * K; ++i) {
+                Vec a = sample_random_normal_vector(dimensions);
+                proj.push_back(a.begin(), a.end());
+            }
+            //Hash the points
+            double total_collisions = 0.0;
+            for (size_t rep_c = 0; rep_c < rep; ++rep_c)
+            {
+                std::unordered_map<std::string, size_t> buckets;
+                buckets.reserve(points.size());
+
+                for (size_t idx_point = 0; idx_point < points.size(); ++idx_point)        
+                {
+                    std::ostringstream key;
+                    key.precision(0);
+                    key.setf(std::ios::fixed);
+
+                    for (std::size_t k = 0; k < K; ++k)
+                    {
+                        const auto& a = proj[rep_c * K + k];
+                        float h = std::floor( (dot_product(a, points[idx_point]) /
+                                                   quantization_width) );
+                        key << h << '|';  // cheap concatenation
+                    }
+                    ++buckets[key.str()];
+                }
+
+                // Count the collisions
+                for (const auto& [_, cnt] : buckets)
+                    total_collisions += (cnt > 1) ? (cnt * (cnt - 1) / 2.0) : 0.0;
+            }
+
+            double mean_collisions = total_collisions / rep;
+            std::cout << "E2LSH: mean collisions = " << mean_collisions << std::endl;
+
+            if ( r_low != 0 && r_high != 0 && (mean_collisions > high_thresh || mean_collisions < low_thresh) ) {
+                if ( mean_collisions > high_thresh ) {
+                    r_high = quantization_width;
+                }
+                else {
+                    r_low = quantization_width;
+                }
+                // Do binary search between the two values to find the optimal one
+                quantization_width = (r_low + r_high) / 2.0;
+            }
+            // Adjust the quantization width based on the mean number of collisions
+            else if (mean_collisions > high_thresh) {
+                r_low = quantization_width; // save the last good value
+                quantization_width /= decr_mul;      // too many collisions
+                decr_mul = sqrt(decr_mul);               // decrease the step size
+            }
+            else if (mean_collisions < low_thresh) {
+                r_high = quantization_width; // save the last good value
+                quantization_width *= incr_mul;      // too few – buckets too small
+                incr_mul = sqrt(incr_mul);               // increase the step size
+            }
+            else
+                break;                           
+        }                
+
+            std::cout << "E2LSH: quantization width = " << quantization_width << std::endl;
         }
 
         Output build( size_t repetitions ) const {

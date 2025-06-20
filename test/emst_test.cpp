@@ -17,7 +17,7 @@ int main()  {
     // Parameters
     const size_t conc = 8;
     const uint8_t rotations = 3;
-    const size_t dimensions = 12;
+    const size_t dimensions = 20;
     const size_t rep = 500;
     const size_t n = 10000;
     using Point = NormedPoints; // UnitNormPoints or NormedPoints

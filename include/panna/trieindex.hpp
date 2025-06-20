@@ -259,11 +259,12 @@ namespace panna {
             size_t repetition,
             size_t concatenations,
             std::vector<std::tuple<float, std::pair<uint32_t, uint32_t>>>& output,
-            DSU& filter ) {
+            DSU& filter,
+            float weight_filter ) {
             expect( hasher );
             size_t collisions = 0;
             // Setup
-            std::vector<std::pair<const uint32_t*, const uint32_t*>> scratch;// (262144);//65536);
+            std::vector<std::pair<const uint32_t*, const uint32_t*>> scratch;
             // TO DO: Find a way to create the cursors once and for all, maybe you also have to store them
             PairPrefixMapCursor<typename Hasher::Value> cursor = lsh_maps[repetition].create_pair_cursor();
             bool keep_going = true;
@@ -271,31 +272,43 @@ namespace panna {
                 cursor.shorten_prefix( concatenations );
             }
             while ( keep_going ) {
+                scratch.clear();
                 size_t cursor_collisions = 0;
                 std::tie( cursor_collisions, keep_going ) = cursor.next_filter(scratch, filter);
                 collisions += cursor_collisions;
                 size_t current_size = output.size();
-                
-                // Fill the output vector and then parallel compute the distances              
-                for ( size_t num = 0; num < cursor_collisions; num++ ) {
-                    output.emplace_back( std::numeric_limits<float>::infinity(), std::make_pair(*scratch[num].first, *scratch[num].second) ); // We put a mock value? 
-                }
 
-#pragma omp parallel for
                 for ( size_t num = 0; num < cursor_collisions; num++ ) {
                     uint32_t x_p, y_p;
-                    std::tie(x_p, y_p) = std::get<1>( output[current_size + num] );
+                    x_p = *scratch[num].first;
+                    y_p = *scratch[num].second;
                     PointHandle x = dataset[x_p];
                     PointHandle y = dataset[y_p];
                     float dist = Distance::compute( y, x );
-                    // If the pairs are already in the list we just have to access them so no race conditions
-                    std::get<float>( output[current_size + num] ) = dist;
+                    if ( dist <= weight_filter ) {
+                        // If the pairs are already in the list we just have to access
+                    output.emplace_back( dist, std::make_pair(*scratch[num].first, *scratch[num].second) );
+                    }
                 }
+                
+                // Fill the output vector and then parallel compute the distances              
+//                 for ( size_t num = 0; num < cursor_collisions; num++ ) {
+//                     output.emplace_back( std::numeric_limits<float>::infinity(), std::make_pair(*scratch[num].first, *scratch[num].second) ); // We put a mock value? 
+//                 }
+
+// #pragma omp parallel for num_threads(4)
+//                 for ( size_t num = 0; num < cursor_collisions; num++ ) {
+//                     uint32_t x_p, y_p;
+//                     std::tie(x_p, y_p) = std::get<1>( output[current_size + num] );
+//                     PointHandle x = dataset[x_p];
+//                     PointHandle y = dataset[y_p];
+//                     float dist = Distance::compute( y, x );
+//                     // If the pairs are already in the list we just have to access them so no race conditions
+//                     std::get<float>( output[current_size + num] ) = dist;
+//                 }
             }
 
             std::sort( output.begin(), output.end() );
-            // std::cout << std::get<float>(*output.begin()) << " " << std::get<float>(*(output.end()-1)) << " ";
-            // std::cout << std::get<1>(*output.begin()).first <<" "<< std::get<1>(*output.begin()).second << " " << std::get<1>(*(output.end() - 1)).first << " " << std::get<1>(*(output.end() - 1)).second << std::endl;
         } // End search couples
 
         // Function to return all colliding couples in a given repetition and concatenation
@@ -306,7 +319,7 @@ namespace panna {
             expect( hasher );
             size_t collisions = 0;
             // Setup
-            std::vector<std::pair<const uint32_t*, const uint32_t*>> scratch;// (262144);//65536);
+            std::vector<std::pair<const uint32_t*, const uint32_t*>> scratch (262144);//65536);
             // TO DO: Find a way to create the cursors once and for all, maybe you also have to store them
             PairPrefixMapCursor<typename Hasher::Value> cursor = lsh_maps[repetition].create_pair_cursor();
             bool keep_going = true;

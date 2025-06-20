@@ -7,7 +7,7 @@
 #include <vector>
 #include <algorithm>
 #include <unistd.h>
-#include <stack>
+#include <random>
 #include <set>
 using EdgeTuple = std::tuple<float, std::pair<uint32_t, uint32_t>>;
 
@@ -48,6 +48,7 @@ namespace panna{
         std::vector<std::vector<EdgeTuple>> local_edges;
         std::vector<EdgeTuple> confirmed;
         std::vector<EdgeTuple> unconfirmed;
+        float max_weight;
 
 
         public:
@@ -90,6 +91,7 @@ namespace panna{
                 MAX_HASHBITS = table.num_concatenations();
                 MAX_REPETITIONS = table.num_repetitions();
                 delta = delta_in/num_data;//BinomialCoefficient(num_data, 2);
+                max_weight = std::numeric_limits<float>::infinity();
 
                 local_edges.resize(MAX_REPETITIONS);
                 local_confirmed.resize(MAX_REPETITIONS);
@@ -141,6 +143,7 @@ namespace panna{
             /// @brief Find the Minimum Spanning Tree using only confirmed edges
             float find_tree() {    
                 clear();
+                dirty_start(local_confirmed[0]);
                 float tree_weight = 0;
                 std::vector<std::pair<unsigned int, unsigned int>> tree;
 
@@ -149,7 +152,7 @@ namespace panna{
                 for (size_t i = MAX_HASHBITS; i >= 0; i--) {
                     if (found)
                         break;
-#pragma omp parallel for
+#pragma omp parallel for num_threads(8)
                     for (size_t j = 0; j < MAX_REPETITIONS; j++) {
                         if (found) 
                             continue;
@@ -201,16 +204,18 @@ namespace panna{
                                 auto it = std::partition_point( top.begin(), top.end(), [&] (const auto& e) { 
                                     return table.fail_probability( std::get<float> (e), i, j ) < delta;                               
                                     } );
-                                for (auto edge = top.begin(); edge != it; ++edge) {
+                                for (auto edge = top.begin(); edge != it; edge++) {
                                     filter.union_sets( std::get<1>(*edge).first, std::get<1>(*edge).second );
                                 }
                                 if (top.size() == num_data - 1) {
                                     tree_weight = 0;
+                                    max_weight = std::get<float>(top.back());
                                     for (const auto& edge : top) {
                                             tree_weight += std::get<0>(edge);
                                         }                           
                                     std::cout << "Tree weight: " << tree_weight << std::endl;
                                     std::cout << "Probability: " << table.fail_probability(std::get<float>(top.back()), i, j) << std::endl;
+                                    std::cout << "Max edge weight: " << std::get<float>(top.back()) << " Mean edge weight: " << tree_weight/(num_data-1) << std::endl;
                                     if (table.fail_probability( std::get<float>(top.back()), i, j) < delta ) {
                                         found = true;                                  
                                         // Fill the tree
@@ -327,6 +332,26 @@ namespace panna{
                 is_connected(tree);
                 return tree;
             }
+            
+            float mean_weight() {
+                size_t edges_to_pick = std::min<size_t>(BinomialCoefficient(num_data, 2), 10000);
+                // Pick edges_to_pick random couples of nodes and compute the mean weight
+                float mean = 0;
+                for (size_t i = 0; i < edges_to_pick; i++) {
+                    // Get a random edge
+                    std::random_device rd;
+                    std::mt19937 gen(rd());
+                    std::uniform_int_distribution<size_t> dist_1(0, num_data - 1);
+                    size_t random_index_1 = dist_1(gen);
+                    size_t random_index_2 = dist_1(gen);                  
+                    // Get the distance of the edge
+                    float dist = table.get_distance(random_index_1, random_index_2);
+                    // Add it to the mean
+                    mean += dist;
+                }
+                mean /= edges_to_pick;
+                return mean;
+            }
 
         //*** Private methods */
         private:
@@ -340,7 +365,8 @@ namespace panna{
             void enumerate_edges(size_t i, size_t j, std::vector<EdgeTuple>& Tu_local, std::vector<EdgeTuple>& Tc_local) {
                 // Discover edges that share the same prefix at iteration i, j
                 std::vector<EdgeTuple> couples;
-                table.search_pairs_filter(j, i, couples, filter);
+                table.search_pairs_filter(j, i, couples, filter, max_weight);
+                //table.search_pairs(j, i, couples);
                 // Find the edges that are confirmed and the ones that are not, the edges are ordered in ascending order so we can binary search the splitting point
                 // We compute the probability using collision_probability(distance) of each edge, and find all the edges that are above the threshold delta
                 // auto it = std::partition_point( couples.begin(), couples.end(), [&] (const auto& e) { 
@@ -439,9 +465,8 @@ namespace panna{
                 std::iota( vertices.begin(), vertices.end(), 0 );
                 std::random_shuffle( vertices.begin(), vertices.end() );
                 for (size_t i = 1; i < vertices.size(); i++) {
-                    clean.emplace_back( Distance::compute(vertices[i-1], vertices[i]), std::make_pair(vertices[i-1], vertices[i]) );
+                    clean.emplace_back( table.get_distance(vertices[i-1], vertices[i]), std::make_pair(vertices[i-1], vertices[i]) );
                 }
-                std::sort( clean.begin(), clean.end() );
             }
 
             /// @brief Clear the data structures from previous runs

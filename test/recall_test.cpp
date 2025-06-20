@@ -22,7 +22,7 @@ int main()  {
     };
     int index = 0;
     for (const auto& name: datasets) {
-        if (index == 0 || index == 1) {
+        if (index < 1) {
             index++;
             continue; // Skip the first dataset
         }
@@ -30,15 +30,15 @@ int main()  {
 
         seed_global_rng(std::chrono::high_resolution_clock::now().time_since_epoch().count());
         // Parameters
-        const size_t conc = 8;
+        const size_t conc = 12;
         const uint8_t rotations = 3;
         const size_t dimensions[4] = { 784, 100, 256, 960 };
-        size_t reps[2] = { 500, 1000 };
+        size_t reps[3] = { 100 , 200, 500 };
         std::vector<float> weigths; 
         using Point = NormedPoints; // UnitNormPoints or NormedPoints
         using Distance = EuclideanDistance; // EuclideanDistance or AngularDistance or CosineDistance
         using Hasher = E2LSH<conc, Point>;
-        //using Hasher = CrossPolytope<conc, Point, Distance, rotations>;
+        // using Hasher = CrossPolytope<conc, Point, Distance, rotations>;
 
         for (const auto& rep: reps) {
             for (size_t i = 0; i < 3; i++) {
@@ -48,6 +48,7 @@ int main()  {
                 H5Easy::File file(name, H5Easy::File::ReadOnly);
                 std::vector<std::vector<float>> points =
                     H5Easy::load<std::vector<std::vector<float>>>(file, "/train");
+                //points.resize(100000); // Limit to 1000 points for testing
 
                 EMST<Point, Hasher, Distance> tree(dimensions[index], rep, builder, points);
 

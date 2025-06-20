@@ -38,10 +38,16 @@ if (NOT SKBUILD)
   )
   FetchContent_MakeAvailable(Catch2)
 
+  # FetchContent_Declare(
+  #   mlpack
+  #   GIT_REPOSITORY https://github.com/mlpack/mlpack.git
+  #   -DCereal_INCLUDE_DIRS=${cereal_SOURCE_DIR}/include
+  # )
+  # FetchContent_MakeAvailable(mlpack)
+
   include_directories("test/include")
   add_executable(tests test/tests.cpp)
   target_link_libraries(tests PRIVATE Catch2::Catch2WithMain dbg_macro)
-
 
   find_package(HighFive)
   add_executable(emst test/emst_test.cpp)
@@ -50,6 +56,8 @@ if (NOT SKBUILD)
     add_executable(recall test/recall_test.cpp)
   target_link_libraries(recall PRIVATE Catch2::Catch2WithMain dbg_macro HighFive)
 
+  # add_executable(dtb test/DTB_test.cpp)
+  # target_link_libraries(dtb PRIVATE Catch2::Catch2WithMain dbg_macro HighFive mlpack)
 
   # if (HighFive_FOUND)
   #   add_executable(glove examples/glove.cpp)
