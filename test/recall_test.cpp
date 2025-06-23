@@ -22,7 +22,7 @@ int main()  {
     };
     int index = 0;
     for (const auto& name: datasets) {
-        if (index < 1) {
+        if (index < 0) {
             index++;
             continue; // Skip the first dataset
         }
@@ -48,7 +48,8 @@ int main()  {
                 H5Easy::File file(name, H5Easy::File::ReadOnly);
                 std::vector<std::vector<float>> points =
                     H5Easy::load<std::vector<std::vector<float>>>(file, "/train");
-                //points.resize(100000); // Limit to 1000 points for testing
+                if (points.size() > 100000)
+                    points.resize(100000); // Limit to 1000 points for testing
 
                 EMST<Point, Hasher, Distance> tree(dimensions[index], rep, builder, points);
 
