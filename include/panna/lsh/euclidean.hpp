@@ -152,6 +152,17 @@ namespace panna {
                     Vec a = sample_random_normal_vector(dimensions);
                     proj.push_back(a.begin(), a.end());
                 }
+                // Save the dot of the points with the random vectors so that we just have to try the r values without recomputing the dot products
+                std::vector<float> dot_products(points.size() * rep * K);
+                for ( size_t idx_point = 0; idx_point < points.size(); idx_point++ ) {
+                    for ( size_t rep_c = 0; rep_c < rep; rep_c++ ) {
+                        for ( size_t k = 0; k < K; k++ ) {
+                            const auto& a = proj[rep_c * K + k];
+                            float dot_value = dot_product( points[idx_point], a );
+                            dot_products[idx_point * rep * K + rep_c * K + k] = dot_value;
+                        }
+                    }
+                }
                 //Hash the points
                 float total_collisions = 0.0;
                 for (size_t rep_c = 0; rep_c < rep; ++rep_c)
@@ -168,8 +179,10 @@ namespace panna {
                         for (std::size_t k = 0; k < K; ++k)
                         {
                             const auto& a = proj[rep_c * K + k];
-                            int h = std::floor( (dot_product(a, points[idx_point]) /
-                                                    quantization_width) );
+
+                            float dot_value = dot_products[idx_point * rep * K + rep_c * K + k];
+                            int h = std::floor( dot_value /
+                                                    quantization_width );
                             key << h << '|';  // cheap concatenation
                         }
                         ++buckets[key.str()];

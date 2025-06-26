@@ -15,6 +15,7 @@ Makefile
 *.out
 *.a
 *.hdf5
+*.csv
 *.txt
 *.so
 *.db

@@ -19,8 +19,7 @@ namespace panna{
     // @param k number of elements to choose
     // @return the binomial coefficient C(n, k)
     double BinomialCoefficient(const double n, const double k) {
-        double aSolutions, oldSolutions;
-        oldSolutions = n - k + 1;
+        double aSolutions = 0, oldSolutions = n - k + 1;
 
         for (double i = 1; i < k; ++i) {
             aSolutions = oldSolutions * (n - k + 1 + i) / (i + 1);
@@ -463,7 +462,7 @@ namespace panna{
             void dirty_start(std::vector<EdgeTuple>& clean) {
                 std::vector<unsigned int> vertices(num_data);
                 std::iota( vertices.begin(), vertices.end(), 0 );
-                std::random_shuffle( vertices.begin(), vertices.end() );
+                std::shuffle( vertices.begin(), vertices.end(), std::mt19937{std::random_device{}()});
                 for (size_t i = 1; i < vertices.size(); i++) {
                     clean.emplace_back( table.get_distance(vertices[i-1], vertices[i]), std::make_pair(vertices[i-1], vertices[i]) );
                 }

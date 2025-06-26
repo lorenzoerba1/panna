@@ -15,14 +15,15 @@
         });
   in {
     devShells = forEachSupportedSystem ({pkgs}: {
-      default =(pkgs.mkShell.override { stdenv = pkgs.clangStdenv; }) {
+      default =(pkgs.mkShell.override { }) {
+
         venvDir = ".venv";
         
         packages = with pkgs; [
-          clang-tools
-          clang-analyzer
+          gcc
           lldb
           python312
+          hdf5
           sqlite-interactive
           cmake
           just
@@ -34,7 +35,6 @@
           valgrind
           highfive
           samply
-          armadillo
           boost
           cereal
         ] ++ ( with python312Packages; [

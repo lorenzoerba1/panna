@@ -311,68 +311,21 @@ namespace panna {
             // return std::make_pair( collisions, continue_cycle);
         }
 
-        std::pair<size_t, bool> next_filter(
-            std::vector<std::pair<Iter, Iter>>& scratch_space,
-            DSU& filter
-        ) {
-            size_t collisions = 0;
-            const size_t capacity = 1048576; // 1 MiB buffer size, adjust as needed
-
-            while ( range_end < hashes.size() ) {
-                // Check if we've finished the current range 
-                if ( current_comparison + 1 >= range_end ) {
+        std::tuple<Iter, Iter, bool>
+        next_filter() {
                     update_range_start();
                     update_range_end();
 
-                    current_index = range_start;
-                    current_comparison = range_start + 1;
-                }
-                // Process pairs, resuming from the saved state ('current_index' and 'current_comparison')
-                while ( current_index < range_end ) {
-                    while ( current_comparison < range_end ) {
-                        if ( filter.is_connected(indices[current_index], indices[current_comparison]) ) {
-                            current_comparison++;
-                            continue;
-                        }
-
-                        scratch_space.emplace_back(
-                            &indices[current_index], &indices[current_comparison] );
-                        collisions++;
-                        current_comparison++;
-
-                        // Check if the scratch buffer is full.
-                        if ( collisions == capacity ) {
-                            // Buffer is full
-                            return {collisions, true};
-                        }
+                    current_hash = hashes[range_end];
+                    bool continue_cycle = true;
+                    if ( range_end >= hashes.size() ) {
+                        continue_cycle = false;
                     }
-                    current_index++;
-                    current_comparison = current_index + 1; // Reset comparison index for the next current
-                }
-                current_hash = hashes[range_end];
-            }
-            return {collisions, false};
-        
 
-            // while ( range_end < hashes.size() ) {
-            //     // Update the range
-            //     update_range_start();
-            //     update_range_end();
-            //     for ( size_t current = range_start; current < range_end; current++ ) {
-            //         for ( size_t next = current + 1; next < range_end; next++ ) {
-            //             // if ( filter.is_connected( indices[current], indices[next] ) )
-            //             //     continue;
-            //             scratch_space.emplace_back(
-            //                 &indices[current], &indices[next] );
-            //             collisions++;
-            //         }
-            //     }
-            //     // Switch to the next hash
-            //     current_hash = hashes[range_end];
-            // }
+                    return std::make_tuple( &indices[range_start],
+                                            &indices[range_end],
+                                            continue_cycle );
 
-        //     return std::make_pair( collisions, false );
-        // }
         }
     };
 

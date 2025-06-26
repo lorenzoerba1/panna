@@ -271,25 +271,57 @@ namespace panna {
             if ( concatenations != hasher->get_concatenations() ) {
                 cursor.shorten_prefix( concatenations );
             }
-            while ( keep_going ) {
-                scratch.clear();
-                size_t cursor_collisions = 0;
-                std::tie( cursor_collisions, keep_going ) = cursor.next_filter(scratch, filter);
-                collisions += cursor_collisions;
-                size_t current_size = output.size();
 
-                for ( size_t num = 0; num < cursor_collisions; num++ ) {
-                    uint32_t x_p, y_p;
-                    x_p = *scratch[num].first;
-                    y_p = *scratch[num].second;
-                    PointHandle x = dataset[x_p];
-                    PointHandle y = dataset[y_p];
-                    float dist = Distance::compute( y, x );
-                    if ( dist <= weight_filter ) {
-                        // If the pairs are already in the list we just have to access
-                    output.emplace_back( dist, std::make_pair(*scratch[num].first, *scratch[num].second) );
+            std::tuple< const uint32_t*, const uint32_t*, bool> cursor_info;
+            cursor_info = cursor.next_filter();
+            while ( std::get<bool>( cursor_info ) ) {
+                const uint32_t * range_start = std::get<0>( cursor_info );
+                const uint32_t * range_end = std::get<1>( cursor_info );
+
+                for ( auto current = range_start; current < range_end; current++ ) {
+                    for ( auto next = current + 1; next < range_end; next++ ) {
+                        uint32_t x_p = *current;
+                        uint32_t y_p =  *next;
+                        if ( filter.is_connected( x_p, y_p ) ) {
+                            continue; // Already connected
+                        }
+                        PointHandle x = dataset[x_p];
+                        PointHandle y = dataset[y_p];
+                        float dist = Distance::compute( y, x );
+                        if ( dist <= weight_filter ) {
+                            // If the pairs are already in the list we just have to access
+{
+                            output.emplace_back( dist, std::make_pair(x_p, y_p) );
+                            collisions++;
+}
+                        }
                     }
+
                 }
+                cursor_info = cursor.next_filter();
+
+
+            }
+
+            // while ( keep_going ) {
+            //     scratch.clear();
+            //     size_t cursor_collisions = 0;
+            //     std::tie( cursor_collisions, keep_going ) = cursor.next_filter(scratch, filter);
+            //     collisions += cursor_collisions;
+            //     size_t current_size = output.size();
+
+            //     for ( size_t num = 0; num < cursor_collisions; num++ ) {
+            //         uint32_t x_p, y_p;
+            //         x_p = *scratch[num].first;
+            //         y_p = *scratch[num].second;
+            //         PointHandle x = dataset[x_p];
+            //         PointHandle y = dataset[y_p];
+            //         float dist = Distance::compute( y, x );
+            //         if ( dist <= weight_filter ) {
+            //             // If the pairs are already in the list we just have to access
+            //         output.emplace_back( dist, std::make_pair(*scratch[num].first, *scratch[num].second) );
+            //         }
+            //     }
                 
                 // Fill the output vector and then parallel compute the distances              
 //                 for ( size_t num = 0; num < cursor_collisions; num++ ) {
@@ -306,7 +338,7 @@ namespace panna {
 //                     // If the pairs are already in the list we just have to access them so no race conditions
 //                     std::get<float>( output[current_size + num] ) = dist;
 //                 }
-            }
+
 
             std::sort( output.begin(), output.end() );
         } // End search couples

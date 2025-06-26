@@ -22,7 +22,7 @@ int main()  {
     };
     int index = 0;
     for (const auto& name: datasets) {
-        if (index < 0) {
+        if (index < 1) {
             index++;
             continue; // Skip the first dataset
         }
@@ -33,7 +33,7 @@ int main()  {
         const size_t conc = 12;
         const uint8_t rotations = 3;
         const size_t dimensions[4] = { 784, 100, 256, 960 };
-        size_t reps[3] = { 100 , 200, 500 };
+        size_t reps[2] = { 200, 500 };
         std::vector<float> weigths; 
         using Point = NormedPoints; // UnitNormPoints or NormedPoints
         using Distance = EuclideanDistance; // EuclideanDistance or AngularDistance or CosineDistance
@@ -48,8 +48,8 @@ int main()  {
                 H5Easy::File file(name, H5Easy::File::ReadOnly);
                 std::vector<std::vector<float>> points =
                     H5Easy::load<std::vector<std::vector<float>>>(file, "/train");
-                if (points.size() > 100000)
-                    points.resize(100000); // Limit to 1000 points for testing
+                // if (points.size() > 100000)
+                //     points.resize(100000); // Limit to 1000 points for testing
 
                 EMST<Point, Hasher, Distance> tree(dimensions[index], rep, builder, points);
 
