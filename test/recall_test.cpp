@@ -33,7 +33,7 @@ int main()  {
         const size_t conc = 12;
         const uint8_t rotations = 3;
         const size_t dimensions[4] = { 784, 100, 256, 960 };
-        size_t reps[2] = { 200, 500 };
+        size_t reps[2] = { 300, 500 };
         std::vector<float> weigths; 
         using Point = NormedPoints; // UnitNormPoints or NormedPoints
         using Distance = EuclideanDistance; // EuclideanDistance or AngularDistance or CosineDistance

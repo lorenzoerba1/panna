@@ -19,3 +19,5 @@ Makefile
 *.txt
 *.so
 *.db
+*.png
+*.pdf

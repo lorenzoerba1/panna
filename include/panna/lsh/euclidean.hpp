@@ -139,8 +139,8 @@ namespace panna {
             // Build 4 repetitions of K hashes and count the mean number of collisions in the dataset
             size_t collisions = 0;
             size_t rep = 4;
-            size_t high_thresh = sqrt(points.size()) * 1.7;
-            size_t low_thresh = sqrt(points.size()) * 0.9;
+            size_t high_thresh = sqrt(points.size());
+            size_t low_thresh = sqrt(points.size()) * 0.5;
             std::cout << high_thresh << " " << low_thresh << std::endl; 
             size_t max_iters = 10;
             float incr_mul= 2, decr_mul = 2, r_low = 0, r_high = 0;

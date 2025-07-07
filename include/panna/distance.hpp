@@ -70,6 +70,12 @@ namespace panna {
             float dot = panna::dot_product( a, b );
             return std::sqrt( a.squared_norm() + b.squared_norm() - 2 * dot );
         }
+
+                template <typename Point>
+        static float compute_nosq( Point a, Point b ) {
+            float dot = panna::dot_product( a, b );
+            return a.squared_norm() + b.squared_norm() - 2 * dot;
+        }
     };
 
     //! Defined as 1 - (jaccard similarity)

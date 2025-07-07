@@ -69,7 +69,7 @@ namespace panna{
              * 4. Construct a Union Find data structure
              * The constructor takes ownership of the input data through a move operation.
              */
-            EMST(const size_t dimensions, const size_t repetitions, const typename Hasher::Builder builder, std::vector<std::vector<float>>& data_in, const double delta_in = 0.1, const float epsilon = 0.2)
+            EMST(const size_t dimensions, const size_t repetitions, const typename Hasher::Builder builder, std::vector<std::vector<float>>& data_in, const double delta_in = 0.2, const float epsilon = 0.2)
                 : dimensionality(dimensions),
                   table( Index<Dataset, Hasher, Distance>(dimensions, builder, repetitions) ),
                   data( data_in ),
@@ -142,7 +142,7 @@ namespace panna{
             /// @brief Find the Minimum Spanning Tree using only confirmed edges
             float find_tree() {    
                 clear();
-                dirty_start(local_confirmed[0]);
+                //dirty_start(local_confirmed[0]);
                 float tree_weight = 0;
                 std::vector<std::pair<unsigned int, unsigned int>> tree;
 
@@ -151,7 +151,8 @@ namespace panna{
                 for (size_t i = MAX_HASHBITS; i >= 0; i--) {
                     if (found)
                         break;
-#pragma omp parallel for num_threads(8)
+#pragma omp parallel
+#pragma omp for nowait
                     for (size_t j = 0; j < MAX_REPETITIONS; j++) {
                         if (found) 
                             continue;
@@ -169,10 +170,11 @@ namespace panna{
                         local_confirmed[j].insert( local_confirmed[j].end(),
                                                     std::make_move_iterator( local_top.begin() ),
                                                     std::make_move_iterator( local_top.end() ) );
-#pragma omp critical
-                        {
+
                         // Every x iterations we have a batch, construct the MST from these edges
                         if ( ((j+1) == MAX_REPETITIONS || (j+1) == (size_t)MAX_REPETITIONS/2) ) {
+#pragma omp critical
+                        {
                             edges.insert( edges.end(),
                                 std::make_move_iterator(top.begin()),
                                 std::make_move_iterator(top.end()) );
@@ -199,13 +201,13 @@ namespace panna{
                                     tree_weight += std::get<0>(edge);
                                 }
                                 // Find the confirmed points and update the filter DSU with them
-                                filter = DSU(num_data);
-                                auto it = std::partition_point( top.begin(), top.end(), [&] (const auto& e) { 
-                                    return table.fail_probability( std::get<float> (e), i, j ) < delta;                               
-                                    } );
-                                for (auto edge = top.begin(); edge != it; edge++) {
-                                    filter.union_sets( std::get<1>(*edge).first, std::get<1>(*edge).second );
-                                }
+                                // filter = DSU(num_data);
+                                // auto it = std::partition_point( top.begin(), top.end(), [&] (const auto& e) { 
+                                //     return table.fail_probability( std::get<float> (e), i, j ) < delta;                               
+                                //     } );
+                                // for (auto edge = top.begin(); edge != it; edge++) {
+                                //     filter.union_sets( std::get<1>(*edge).first, std::get<1>(*edge).second );
+                                // }
                                 if (top.size() == num_data - 1) {
                                     tree_weight = 0;
                                     max_weight = std::get<float>(top.back());
@@ -364,7 +366,7 @@ namespace panna{
             void enumerate_edges(size_t i, size_t j, std::vector<EdgeTuple>& Tu_local, std::vector<EdgeTuple>& Tc_local) {
                 // Discover edges that share the same prefix at iteration i, j
                 std::vector<EdgeTuple> couples;
-                table.search_pairs_filter(j, i, couples, filter, max_weight);
+                table.search_pairs_filter(j, i, couples, max_weight);
                 //table.search_pairs(j, i, couples);
                 // Find the edges that are confirmed and the ones that are not, the edges are ordered in ascending order so we can binary search the splitting point
                 // We compute the probability using collision_probability(distance) of each edge, and find all the edges that are above the threshold delta
