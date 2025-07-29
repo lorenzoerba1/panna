@@ -21,3 +21,5 @@ Makefile
 *.db
 *.png
 *.pdf
+txts/
+*.sh

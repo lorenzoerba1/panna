@@ -77,7 +77,19 @@ namespace panna{
                   epsilon(epsilon),
                   dsu_true( DSU(num_data) ),
                   filter( DSU(num_data) ) {
-                
+                // Find the mean for each dimension and center the data
+#pragma omp parallel for
+                for (size_t dim = 0; dim < dimensions; dim++) {
+                    float mean = 0;
+                    for (size_t i = 0; i < num_data; i++) {
+                        mean += data_in[i][dim];
+                    }
+                    mean /= num_data;
+                    for (size_t i = 0; i < num_data; i++) {
+                        data_in[i][dim] -= mean;
+                    }
+                }
+
                 // Insert the data
                 for ( auto& point: data_in ) {
                     normalize( point );
@@ -89,12 +101,11 @@ namespace panna{
                 // Get info on the index
                 MAX_HASHBITS = table.num_concatenations();
                 MAX_REPETITIONS = table.num_repetitions();
-                delta = delta_in/num_data;//BinomialCoefficient(num_data, 2);
+                delta = delta_in/num_data/*BinomialCoefficient(num_data, 2)*/;
                 max_weight = std::numeric_limits<float>::infinity();
 
                 local_edges.resize(MAX_REPETITIONS);
                 local_confirmed.resize(MAX_REPETITIONS);
-                //dirty_start(local_Tus[0]);
                 std::cout << "Index constructed, L: " << MAX_REPETITIONS <<  " K: " << MAX_HASHBITS << " num data: " << num_data << std::endl;
                 std::cout << "Delta: " << delta << std::endl;
             };
@@ -109,20 +120,26 @@ namespace panna{
                 clear();
                 //Compute all the distances
                 std::vector<EdgeTuple> all_edges;
-                local_edges.resize(num_data);
-                #pragma omp parallel for
-                for (uint32_t i = 0; i < num_data; i++) {
-                    for (uint32_t j = i+1; j < num_data; j++) {
-                        float dist = table.get_distance( i, j );
-                        local_edges[i].emplace_back(dist, std::make_pair(i, j));
+                #pragma omp parallel
+                {
+                    std::vector<EdgeTuple> local_edges;
+                    #pragma omp for collapse(2)
+                    for (size_t i = 0; i < num_data; i++) {
+                        for (size_t j = i + 1; j < num_data; j++)
+                        {
+                            float d2 = table.get_distance(i, j);
+                            if (d2 <= max_weight) {
+                                local_edges.emplace_back(d2, std::make_pair(i, j));
+                            }
+                        }
                     }
+
+                    #pragma omp critical
+                    all_edges.insert(all_edges.end(),
+                                      local_edges.begin(),
+                                      local_edges.end());
+
                 }
-                std::cout << "Computed all pairs" << std::endl;
-                // Merge the local edges
-                for (const auto& local : local_edges) {
-                    all_edges.insert(all_edges.end(), local.begin(), local.end());
-                }
-                std::cout << "Number of edges: " << all_edges.size() << std::endl;
                 //Sort the edges
                 std::sort(all_edges.begin(), all_edges.end());
                 //Create the DSU
@@ -132,6 +149,9 @@ namespace panna{
                 std::vector<EdgeTuple> tree;
                 for (const auto& edge : all_edges) {
                     add_edge(edge, dsu, tree);
+                    if (tree.size() == num_data - 1) {
+                        break;
+                    }
                 }
                 for (const auto& edge : tree) {
                     tree_weight += std::get<0>(edge);
@@ -172,7 +192,8 @@ namespace panna{
                                                     std::make_move_iterator( local_top.end() ) );
 
                         // Every x iterations we have a batch, construct the MST from these edges
-                        if ( ((j+1) == MAX_REPETITIONS || (j+1) == (size_t)MAX_REPETITIONS/2) ) {
+                        if ( (i>3 && ((j+1) == MAX_REPETITIONS || (j+1) == (size_t)MAX_REPETITIONS/2)) ||
+                             (i<=3 && j%5 == 0))   {
 #pragma omp critical
                         {
                             edges.insert( edges.end(),
@@ -180,13 +201,14 @@ namespace panna{
                                 std::make_move_iterator(top.end()) );
                             top.clear();
                             dsu_true = DSU(num_data);
-                            for (auto& local : local_confirmed) {
-                                    edges.insert( edges.end(), local.begin(), local.end() );
+                            for (size_t local_index = 0; local_index < j+1; local_index++) {
+                                auto& local = local_confirmed[local_index];
+                                edges.insert( edges.end(), local.begin(), local.end() );
                                 // std::make_move_iterator(local.begin()), std::make_move_iterator(local.end()) );
                                 local.clear();
                             }
                             std::sort ( edges.begin(), edges.end() );
-                            edges.erase( std::unique( edges.begin(), edges.end() ), edges.end() );
+                            //edges.erase( std::unique( edges.begin(), edges.end() ), edges.end() );
                             if (edges.size() > num_data -1) {
                                 for (const auto& edge : edges) {
                                     add_edge( edge, dsu_true, top );
@@ -195,25 +217,14 @@ namespace panna{
                                     }
                                 }
                                 std::cout << "Tree size: " << top.size() << std::endl;
-                                // Print also the current weight
-                                tree_weight = 0;
-                                for (const auto& edge : top) {
-                                    tree_weight += std::get<0>(edge);
-                                }
-                                // Find the confirmed points and update the filter DSU with them
-                                // filter = DSU(num_data);
-                                // auto it = std::partition_point( top.begin(), top.end(), [&] (const auto& e) { 
-                                //     return table.fail_probability( std::get<float> (e), i, j ) < delta;                               
-                                //     } );
-                                // for (auto edge = top.begin(); edge != it; edge++) {
-                                //     filter.union_sets( std::get<1>(*edge).first, std::get<1>(*edge).second );
-                                // }
+
                                 if (top.size() == num_data - 1) {
-                                    tree_weight = 0;
+                                    float new_tree_weight = 0;
                                     max_weight = std::get<float>(top.back());
                                     for (const auto& edge : top) {
-                                            tree_weight += std::get<0>(edge);
-                                        }                           
+                                            new_tree_weight += std::get<0>(edge);
+                                        }     
+                                    tree_weight = new_tree_weight;          
                                     std::cout << "Tree weight: " << tree_weight << std::endl;
                                     std::cout << "Probability: " << table.fail_probability(std::get<float>(top.back()), i, j) << std::endl;
                                     std::cout << "Max edge weight: " << std::get<float>(top.back()) << " Mean edge weight: " << tree_weight/(num_data-1) << std::endl;
@@ -238,100 +249,97 @@ namespace panna{
             }
 
             /// @brief Find the ɛ-EMST using both confirmed and unconfirmed edges
-             std::vector<std::pair<unsigned int, unsigned int>> find_epsilon_tree() {
+             float find_epsilon_tree() {             
                 clear();
+                //dirty_start(local_confirmed[0]);
+                float tree_weight = 0;
                 std::vector<std::pair<unsigned int, unsigned int>> tree;
 
                 bool found = false;
                 std::vector<EdgeTuple> edges;
-                for (size_t i = MAX_HASHBITS; i > 0; i--) {
+                for (size_t i = MAX_HASHBITS; i >= 0; i--) {
                     if (found)
                         break;
-                    //#pragma omp parallel for
+#pragma omp parallel
+#pragma omp for nowait
                     for (size_t j = 0; j < MAX_REPETITIONS; j++) {
-                        if (found) {
+                        if (found) 
                             continue;
-                        }
                         DSU local_dsu(num_data);
                         std::vector<EdgeTuple> local_Tc, local_top, local_Tu;
                         enumerate_edges(i, j, local_Tu, local_Tc);   
+
+                        for ( auto& edge: local_Tu ) {
+                            if (local_top.size() == num_data - 1) {
+                                break;
+                            }
+                            add_edge(edge, local_dsu, local_top);
+                        }
+
                         local_confirmed[j].insert( local_confirmed[j].end(),
-                                                    std::make_move_iterator( local_Tc.begin() ),
-                                                    std::make_move_iterator( local_Tc.end() ) );
-                        local_edges[j].insert( local_edges[j].end(),
-                                                    std::make_move_iterator( local_Tu.begin() ),
-                                                    std::make_move_iterator( local_Tu.end() ) );
-                        std::sort( local_confirmed[j].begin(), local_confirmed[j].end() );
-                        std::sort( local_edges[j].begin(), local_edges[j].end() );
-                        //#pragma omp critical
+                                                    std::make_move_iterator( local_top.begin() ),
+                                                    std::make_move_iterator( local_top.end() ) );
+
+                        // Every x iterations we have a batch, construct the MST from these edges
+                        if ( (i>3 && ((j+1) == MAX_REPETITIONS || (j+1) == (size_t)MAX_REPETITIONS/2)) ||
+                             (i<=4 && j%5 == 0))   {
+#pragma omp critical
                         {
-                        //! Every x iterations we have a batch, construct the MST from these edges
-                        if (!found && ((j+1) == MAX_REPETITIONS || (j+1) == (size_t)MAX_REPETITIONS/2)) {
-                            // edges.insert( edges.end(),
-                            //     std::make_move_iterator(top.begin()),
-                            //     std::make_move_iterator(top.end()) );
-                            std::vector<EdgeTuple> unconfirmed_ordered_edges;
+                            edges.insert( edges.end(),
+                                std::make_move_iterator(top.begin()),
+                                std::make_move_iterator(top.end()) );
                             top.clear();
                             dsu_true = DSU(num_data);
-                            for (auto& local : local_confirmed) {
+                            for (size_t local_index = 0; local_index < j+1; local_index++) {
+                                auto& local = local_confirmed[local_index];
                                 edges.insert( edges.end(), local.begin(), local.end() );
                                 // std::make_move_iterator(local.begin()), std::make_move_iterator(local.end()) );
-                                //local.clear();
+                                local.clear();
                             }
-                            for ( auto& local : local_edges ) {
-                                auto it = std::partition_point( local.begin(), local.end(), [&] (const auto& e) { 
-                                    return table.fail_probability( std::get<float> (e), i, j ) < delta;                               
-                                    } );
-                                edges.insert( edges.end(), local.begin(), it );
-                                unconfirmed_ordered_edges.insert( unconfirmed_ordered_edges.end(), it, local.end() );
-                                // std::make_move_iterator(local.begin()), std::make_move_iterator(it) );
-                                //local.erase(local.begin(), it);   
-                            } 
-                            std::sort( edges.begin(), edges.end() );
-                            for (const auto& edge : edges) {
-                                add_edge( edge, dsu_true, top );
-                                if (top.size() == num_data - 1) {
-                                    break;
-                                }
-                            }
-                            // If the tree is not full, complete it with the unconfirmed edges
-                            if (top.size() < num_data - 1) {
-                                std::sort(unconfirmed_ordered_edges.begin(), unconfirmed_ordered_edges.end());
-                                std::cout << "Unconfirmed edges: " << unconfirmed_ordered_edges.size() << " Size " << top.size() << std::endl;
-                                for (const auto& edge : unconfirmed_ordered_edges) {
+                            std::sort ( edges.begin(), edges.end() );
+                            //edges.erase( std::unique( edges.begin(), edges.end() ), edges.end() );
+                            if (edges.size() > num_data -1) {
+                                for (const auto& edge : edges) {
+                                    add_edge( edge, dsu_true, top );
                                     if (top.size() == num_data - 1) {
                                         break;
                                     }
-                                    add_edge(edge, dsu_true, top);
                                 }
-                            }
-                            std::cout << "Tree size: " << top.size() << std::endl;
-                            // Print also the current weight
-                            float tree_weight = 0;
-                            for (const auto& edge : top) {
-                                tree_weight += std::get<0>(edge);
-                            }
+                                std::cout << "Tree size: " << top.size() << std::endl;
 
-                            std::cout << "Tree weight: " << tree_weight << " Bound: " << (1+epsilon)*bound_weight(top, i, j) << std::endl;
-                            if ( tree_weight < (1+epsilon)*bound_weight(top, i, j) ) {                        
-                                    found = true;
-                                        // Fill the tree
+                                if (top.size() == num_data - 1) {
+                                    float new_tree_weight = 0;
+                                    max_weight = std::get<float>(top.back());
                                     for (const auto& edge : top) {
-                                            tree.push_back(std::get<1>(edge));
+                                            new_tree_weight += std::get<0>(edge);
+                                        }     
+                                    auto partition_point = std::partition_point(top.begin(), top.end(), [&] (const auto& e) { 
+                                        return table.fail_probability( std::get<float>(e), i, j ) < delta;                
+                                    } );
+                                    tree_weight = new_tree_weight;          
+                                    std::cout << "Tree weight: " << tree_weight << std::endl;
+                                    float bound_weight = (1+epsilon) * std::accumulate(top.begin(), partition_point, 0.0f, [](float acc, const EdgeTuple& e) {
+                                        return acc + std::get<float>(e);
+                                    }) + (std::get<float>(*(partition_point-1)) * std::distance(partition_point, top.end()));
+                                    std::cout << "Bound weight: " << bound_weight << std::endl;
+                                    if (tree_weight <= bound_weight) {
+                                        found = true;                                  
+                                        // Fill the tree
+                                        for (const auto& edge : top) {
+                                                tree.push_back( std::get<1>(edge) );
+                                        }
                                     }
+                                }
+                                // Lose the unused edges, MST is composable wrt to edge partitioning
+                                 edges.clear();
                             }
-                            else {
-                                found = false;
-                            }
-                            // Lose the unused edges
-                            edges.clear();                         
                         }
                         }
                     }
                     std::cout << "Finished prefix " << i << std::endl;
                 }
                 is_connected(tree);
-                return tree;
+                return tree_weight;
             }
             
             float mean_weight() {
@@ -387,21 +395,15 @@ namespace panna{
                 float weight = 0;
                 float max_confirmed = 0;
                 int unconfirmed = 0;
-                // Add the weight of the confirmed edges, keep track of the max confirmed and count the unconfirmed ones
-                for (const auto& edge : top_copy) {
-                    auto edge_weight = std::get<float>(edge);  
-                    auto probability = table.fail_probability( edge_weight, i, j );
-                    if (probability < delta) {
-                        weight += edge_weight;
-                        if (edge_weight > max_confirmed) {
-                            max_confirmed = edge_weight;
-                        }
-                    }
-                    else{
-                        unconfirmed++;
-                    }
-                }
-                std::cout << "Max confirmed: " << max_confirmed << " Unconfirmed: " << unconfirmed << std::endl;
+                auto split_point = std::partition_point(top_copy.begin(), top_copy.end(), [&] (const auto& e) { 
+                    return table.fail_probability( std::get<float>(e), i, j ) < delta;                
+                } );
+                max_confirmed = std::get<float>(*(split_point-1));
+                unconfirmed = std::distance(split_point, top_copy.end());
+                weight += std::accumulate(top_copy.begin(), split_point, 0.0f, [](float acc, const EdgeTuple& e) {
+                    return acc + std::get<float>(e);
+                });
+
                 weight += max_confirmed * unconfirmed;
                 return weight;
             }

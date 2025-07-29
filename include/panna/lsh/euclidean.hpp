@@ -139,8 +139,8 @@ namespace panna {
             // Build 4 repetitions of K hashes and count the mean number of collisions in the dataset
             size_t collisions = 0;
             size_t rep = 4;
-            size_t high_thresh = sqrt(points.size());
-            size_t low_thresh = sqrt(points.size()) * 0.5;
+            size_t high_thresh = sqrt(points.size())* 1.3;
+            size_t low_thresh = sqrt(points.size())*0.7;
             std::cout << high_thresh << " " << low_thresh << std::endl; 
             size_t max_iters = 10;
             float incr_mul= 2, decr_mul = 2, r_low = 0, r_high = 0;
@@ -154,6 +154,7 @@ namespace panna {
                 }
                 // Save the dot of the points with the random vectors so that we just have to try the r values without recomputing the dot products
                 std::vector<float> dot_products(points.size() * rep * K);
+#pragma omp parallel for collapse(2)
                 for ( size_t idx_point = 0; idx_point < points.size(); idx_point++ ) {
                     for ( size_t rep_c = 0; rep_c < rep; rep_c++ ) {
                         for ( size_t k = 0; k < K; k++ ) {
@@ -219,7 +220,8 @@ namespace panna {
                 else
                     break;                           
             }                
-
+           // quantization_width = 0.7;
+            // TODO If target is not met return to the original value
             std::cout << "E2LSH: quantization width = " << quantization_width << std::endl;
         }
 

@@ -51,6 +51,9 @@ if (NOT SKBUILD)
   add_executable(recall test/recall_test.cpp)
   target_link_libraries(recall PRIVATE Catch2::Catch2WithMain dbg_macro HighFive)
 
+  add_executable(scalability test/scalability_test.cpp)
+  target_link_libraries(scalability PRIVATE Catch2::Catch2WithMain dbg_macro HighFive)
+
   add_executable(dtb test/DTB_test.cpp)
   target_link_libraries(dtb PRIVATE Catch2::Catch2WithMain dbg_macro HighFive)
 

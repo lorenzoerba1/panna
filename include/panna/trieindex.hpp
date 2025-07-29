@@ -261,66 +261,64 @@ namespace panna {
             std::vector<std::tuple<float, std::pair<uint32_t, uint32_t>>>& output,
             float weight_filter ) {
             expect( hasher );
-            weight_filter *= weight_filter; // We want to use the squared distance
+            float weight_filter_squared = weight_filter * weight_filter; // We want to use the squared distance
             size_t collisions = 0;
-            const size_t SMALL_BUCKET = 512;
+            const size_t SMALL_BUCKET = 4096;
     // Parallel region starts here
     //#pragma omp parallel
-    {
+    //{
         // Each thread gets its own cursor and output buffer
         PairPrefixMapCursor<typename Hasher::Value> cursor = lsh_maps[repetition].create_pair_cursor();
         if (concatenations != hasher->get_concatenations())
             cursor.shorten_prefix(concatenations);
-
-        std::vector<std::tuple<float, std::pair<uint32_t, uint32_t>>> local_output;
-        local_output.reserve(256); // reserve small space to reduce reallocs
-
-        for (auto info = cursor.next_filter(); std::get<2>(info);
-             info = cursor.next_filter())
-        {
+        
+        // Collect all ranges then we will process them
+        std::vector<std::pair<uint32_t*, uint32_t*>> pairs; // 256k pairs
+        for (auto info = cursor.next_filter(); std::get<2>(info); info = cursor.next_filter()) {
             const uint32_t* range_start = std::get<0>(info);
             const uint32_t* range_end   = std::get<1>(info);
-            size_t count = range_end - range_start;
-            if ( count > SMALL_BUCKET) {
-                KDTree<Dataset, Distance> tree(
-                    range_start, range_end, dataset, weight_filter );
+            pairs.emplace_back(const_cast<uint32_t*>(range_start), const_cast<uint32_t*>(range_end));
+        }
+// #pragma omp parallel
+{
+            //std::vector<std::tuple<float, std::pair<uint32_t, uint32_t>>> local_output;
+            output.reserve(256); // reserve small space to reduce reallocs
+            // #pragma omp for nowait
+            for (size_t i = 0; i < pairs.size(); ++i) {
+                if ((pairs[i].second - pairs[i].first) * (pairs[i].second - pairs[i].first)> SMALL_BUCKET) {
+                    KDTree<Dataset, Distance> tree(
+                        pairs[i].first, pairs[i].second, dataset, weight_filter);
                     // We can do a range search query to find the pairs
-                std::vector<std::tuple<float,
-                                            std::pair<uint32_t, uint32_t>>> pairs;
-                tree.range_pairs(pairs);
-                for (const auto& pair : pairs) {
-                    uint32_t i, j;
-                    std::tie(i, j) = std::get<1>(pair);
-                    float d2 = std::get<0>(pair);
-                        local_output.emplace_back(d2, std::make_pair(i, j));
+                    std::vector<std::tuple<float, std::pair<uint32_t, uint32_t>>> pairs;
+                    tree.range_pairs(pairs);
+                    for (const auto& pair : pairs) {
+                        output.push_back(pair);
                     }
+                    continue; // skip the brute force part
                 }
-        
-            else {
-
-                for (auto cur = range_start; cur < range_end; ++cur) {
-                    uint32_t i = *cur;
-                    PointHandle pi = dataset[i];
-                    for (auto nxt = cur + 1; nxt < range_end; ++nxt) {
-                        uint32_t j = *nxt;
-                        //if (filter.is_connected(i, j)) continue;
-                        float d2 = Distance::compute_nosq(pi, dataset[j]);
-                        if (d2 <= weight_filter)
-                            local_output.emplace_back(std::sqrt(d2),
-                                                   std::make_pair(i, j));
+                else {
+                    for (auto cur = pairs[i].first; cur < pairs[i].second; ++cur) {
+                        uint32_t cur_ind = *cur;
+                        PointHandle pi = dataset[cur_ind];
+                        for (auto nxt = cur + 1; nxt < pairs[i].second; ++nxt) {
+                            uint32_t j = *nxt;
+                            //if (filter.is_connected(i, j)) continue;
+                            float d2 = Distance::compute_nosq(pi, dataset[j]);
+                            if (d2 <= weight_filter_squared)
+                                output.emplace_back(std::sqrt(d2), std::make_pair(i, j));
+                        }
                     }
+            
                 }
             }
-            
+
+            // #pragma omp critical
+            // Merge into output under lock
+            // output.insert(output.end(),
+            //                   std::make_move_iterator(local_output.begin()),
+            //                   std::make_move_iterator(local_output.end()));
         }
-        // Merge into output under lock
-        #pragma omp critical
-        {
-            output.insert(output.end(),
-                          std::make_move_iterator(local_output.begin()),
-                          std::make_move_iterator(local_output.end()));
-        }
-    }
+
     std::sort(output.begin(), output.end());
 }
         // Function to return all colliding couples in a given repetition and concatenation
