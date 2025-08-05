@@ -33,19 +33,20 @@ public:
     void range_pairs(std::vector<std::tuple<float,
                                            std::pair<uint32_t, uint32_t>>>& out) const
     {
-        if (root_ != -1) { // Check if the tree is not empty
+        if (root_ != NO_NODE) { // Check if the tree is not empty
             enumerate_(root_, root_, /*same=*/true, out);
         }
     }
 
 private:
+    static constexpr size_t NO_NODE = std::numeric_limits<size_t>::max();
     // Node struct
     struct Node {
         size_t l, r;                  // half-open range inside indices_
         int    axis;                  // split axis (-1 for leaf)
         float  split;                 // split coordinate
-        size_t left  = -1;            // index of left child in nodes_ vector (-1 for null)
-        size_t right = -1;            // index of right child in nodes_ vector 
+        size_t left  = NO_NODE;            // index of left child in nodes_ vector (NO_NODE for null)
+        size_t right = NO_NODE;            // index of right child in nodes_ vector (NO_NODE for null)
         std::vector<float> min, max;  // bounding box
 
         explicit Node(size_t l_, size_t r_, int dims)
@@ -128,7 +129,7 @@ private:
                     std::vector<std::tuple<float,
                                            std::pair<uint32_t, uint32_t>>>& out) const
     {
-        if (a_idx == -1 || b_idx == -1) return;
+        if (a_idx == NO_NODE || b_idx == NO_NODE) return;
         if (min_dist_sq_(a_idx, b_idx) > radius2_) return;
 
         const auto& a_node = nodes_[a_idx];
@@ -180,7 +181,7 @@ private:
     float                 radius_;
     int                   dim_;
     std::vector<Node>     nodes_; // Node storage
-    size_t                root_ = -1; // Index of the root node
+    size_t                root_ = NO_NODE; // Index of the root node
 };
 
 } // namespace panna

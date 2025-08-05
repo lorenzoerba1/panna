@@ -177,8 +177,8 @@ namespace panna{
                         if (found) 
                             continue;
                         DSU local_dsu(num_data);
-                        std::vector<EdgeTuple> local_Tc, local_top, local_Tu;
-                        enumerate_edges(i, j, local_Tu, local_Tc);   
+                        std::vector<EdgeTuple> local_top, local_Tu;
+                        enumerate_edges(i, j, local_Tu);   
 
                         for ( auto& edge: local_Tu ) {
                             if (local_top.size() == num_data - 1) {
@@ -266,8 +266,8 @@ namespace panna{
                         if (found) 
                             continue;
                         DSU local_dsu(num_data);
-                        std::vector<EdgeTuple> local_Tc, local_top, local_Tu;
-                        enumerate_edges(i, j, local_Tu, local_Tc);   
+                        std::vector<EdgeTuple> local_top, local_Tu;
+                        enumerate_edges(i, j, local_Tu);   
 
                         for ( auto& edge: local_Tu ) {
                             if (local_top.size() == num_data - 1) {
@@ -371,7 +371,7 @@ namespace panna{
             /// @param j current repetition in the hash index
             /// @param Tu_local vector that stores the unconfirmed edges
             /// @param Tc_local vector that stores the confirmed edges
-            void enumerate_edges(size_t i, size_t j, std::vector<EdgeTuple>& Tu_local, std::vector<EdgeTuple>& Tc_local) {
+            void enumerate_edges(size_t i, size_t j, std::vector<EdgeTuple>& Tu_local) {
                 // Discover edges that share the same prefix at iteration i, j
                 std::vector<EdgeTuple> couples;
                 table.search_pairs_filter(j, i, couples, max_weight);
