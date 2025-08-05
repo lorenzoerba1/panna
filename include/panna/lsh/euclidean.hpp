@@ -220,7 +220,7 @@ namespace panna {
                 else
                     break;                           
             }                
-           // quantization_width = 0.7;
+            //quantization_width = 0.55;
             // TODO If target is not met return to the original value
             std::cout << "E2LSH: quantization width = " << quantization_width << std::endl;
         }
