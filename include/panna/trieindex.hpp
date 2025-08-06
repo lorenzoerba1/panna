@@ -340,6 +340,8 @@ namespace panna {
             }
             while ( keep_going ) {
                 size_t cursor_collisions = 0;
+                // FIXME: we should probably reset the scratch space,
+                // otherwise we end up with an ever-growing scratch size
                 std::tie( cursor_collisions, keep_going ) = cursor.next( scratch );
                 size_t current_size = output.size();
 

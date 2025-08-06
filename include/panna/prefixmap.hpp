@@ -204,6 +204,10 @@ namespace panna {
                 std::make_pair( &indices[ranges[1].first], &indices[ranges[1].second] ),
             };
         }
+
+        size_t fill_pairs_buffer(std::vector<std::pair<uint32_t, uint32_t>> & buffer) {
+            
+        }
     };
 
     template <typename THashValue>
