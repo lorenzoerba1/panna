@@ -1,6 +1,7 @@
 #pragma once
 #include <limits>
 #include <random>
+#include <unordered_map>
 #include <vector>
 
 #include "panna/expect.hpp"
@@ -111,7 +112,7 @@ namespace panna {
 
         void fit( Dataset& points ) {
             expect( quantization_width == 0.0 );
-            using Vec      = std::vector<float>;
+            using Vec = std::vector<float>;
             Dataset random( dimensions );
             for ( size_t i = 0; i < 1000; i++ ) {
                 std::vector<float> dir = sample_random_normal_vector( dimensions );
@@ -136,25 +137,26 @@ namespace panna {
             // TODO: we migh consider using only 4 bits per hash.
             quantization_width = ( max - min ) / 16;
 
-            // Build 4 repetitions of K hashes and count the mean number of collisions in the dataset
-            size_t collisions = 0;
+            // Build 4 repetitions of K hashes and count the mean number of collisions in the
+            // dataset
             size_t rep = 4;
-            size_t high_thresh = sqrt(points.size())* 1.3;
-            size_t low_thresh = sqrt(points.size())*0.7;
-            std::cout << high_thresh << " " << low_thresh << std::endl; 
+            size_t high_thresh = sqrt( points.size() ) * 1.3;
+            size_t low_thresh = sqrt( points.size() ) * 0.7;
+            std::cout << high_thresh << " " << low_thresh << std::endl;
             size_t max_iters = 10;
-            float incr_mul= 2, decr_mul = 2, r_low = 0, r_high = 0;
+            float incr_mul = 2, decr_mul = 2, r_low = 0, r_high = 0;
 
             for ( std::size_t iter = 0; iter < max_iters; ++iter ) {
                 // Generate random vectors for the projections
-                Dataset proj ( dimensions );
-                for (std::size_t i = 0; i < rep * K; ++i) {
-                    Vec a = sample_random_normal_vector(dimensions);
-                    proj.push_back(a.begin(), a.end());
+                Dataset proj( dimensions );
+                for ( std::size_t i = 0; i < rep * K; ++i ) {
+                    Vec a = sample_random_normal_vector( dimensions );
+                    proj.push_back( a.begin(), a.end() );
                 }
-                // Save the dot of the points with the random vectors so that we just have to try the r values without recomputing the dot products
-                std::vector<float> dot_products(points.size() * rep * K);
-#pragma omp parallel for collapse(2)
+                // Save the dot of the points with the random vectors so that we just have to try
+                // the r values without recomputing the dot products
+                std::vector<float> dot_products( points.size() * rep * K );
+#pragma omp parallel for collapse( 2 )
                 for ( size_t idx_point = 0; idx_point < points.size(); idx_point++ ) {
                     for ( size_t rep_c = 0; rep_c < rep; rep_c++ ) {
                         for ( size_t k = 0; k < K; k++ ) {
@@ -164,64 +166,59 @@ namespace panna {
                         }
                     }
                 }
-                //Hash the points
+                // Hash the points
                 float total_collisions = 0.0;
-                for (size_t rep_c = 0; rep_c < rep; ++rep_c)
-                {
+                for ( size_t rep_c = 0; rep_c < rep; ++rep_c ) {
                     std::unordered_map<std::string, size_t> buckets;
-                    buckets.reserve(points.size());
+                    buckets.reserve( points.size() );
 
-                    for (size_t idx_point = 0; idx_point < points.size(); ++idx_point)        
-                    {
+                    for ( size_t idx_point = 0; idx_point < points.size(); ++idx_point ) {
+                        // QUESTION: why are we not using a proper hash type?
                         std::ostringstream key;
-                        key.precision(0);
-                        key.setf(std::ios::fixed);
+                        key.precision( 0 );
+                        key.setf( std::ios::fixed );
 
-                        for (std::size_t k = 0; k < K; ++k)
-                        {
-                            const auto& a = proj[rep_c * K + k];
-
+                        for ( std::size_t k = 0; k < K; ++k ) {
                             float dot_value = dot_products[idx_point * rep * K + rep_c * K + k];
-                            int h = std::floor( dot_value /
-                                                    quantization_width );
-                            key << h << '|';  // cheap concatenation
+                            int h = std::floor( dot_value / quantization_width );
+                            key << h << '|'; // cheap concatenation
                         }
                         ++buckets[key.str()];
                     }
 
                     // Count the collisions
-                    for (const auto& [_, cnt] : buckets)
-                        total_collisions += (cnt > 1) ? (cnt * (cnt - 1) / 2.0) : 0.0;
+                    for ( const auto& [_, cnt] : buckets ) {
+                        total_collisions += ( cnt > 1 ) ? ( cnt * ( cnt - 1 ) / 2.0 ) : 0.0;
+                    }
                 }
 
                 float mean_collisions = total_collisions / rep;
-                std::cout << "E2LSH: mean collisions = " << mean_collisions << " with r = " << quantization_width << std::endl;
+                std::cout << "E2LSH: mean collisions = " << mean_collisions
+                          << " with r = " << quantization_width << std::endl;
 
-                if ( r_low != 0 && r_high != 0 && (mean_collisions > high_thresh || mean_collisions < low_thresh) ) {
+                if ( r_low != 0 && r_high != 0 &&
+                     ( mean_collisions > high_thresh || mean_collisions < low_thresh ) ) {
                     if ( mean_collisions > high_thresh ) {
                         r_high = quantization_width;
-                    }
-                    else {
+                    } else {
                         r_low = quantization_width;
                     }
                     // Do binary search between the two values to find the optimal one
                     std::cout << r_low << " " << r_high << std::endl;
-                    quantization_width = (r_low + r_high) / 2.0;
+                    quantization_width = ( r_low + r_high ) / 2.0;
                 }
                 // Adjust the quantization width based on the mean number of collisions
-                else if (mean_collisions > high_thresh) {
-                    r_high = quantization_width; // save the last good value
-                    quantization_width /= decr_mul;      // too many collisions
-                }
-                else if (mean_collisions < low_thresh) {
-                    r_low = quantization_width; // save the last good value
-                    quantization_width *= incr_mul;      // too few – buckets too small
-                }
-                else
-                    break;                           
-            }                
-            //quantization_width = 0.55;
-            // TODO If target is not met return to the original value
+                else if ( mean_collisions > high_thresh ) {
+                    r_high = quantization_width;    // save the last good value
+                    quantization_width /= decr_mul; // too many collisions
+                } else if ( mean_collisions < low_thresh ) {
+                    r_low = quantization_width;     // save the last good value
+                    quantization_width *= incr_mul; // too few – buckets too small
+                } else
+                    break;
+            }
+            // quantization_width = 0.55;
+            //  TODO If target is not met return to the original value
             std::cout << "E2LSH: quantization width = " << quantization_width << std::endl;
         }
 

@@ -250,7 +250,6 @@ namespace panna {
         std::pair<size_t, bool> next( std::vector<std::pair<Iter, Iter>>& scratch_space ) {
             // Setup
             size_t collisions = 0;
-            size_t len_buff = scratch_space.size();
             bool continue_cycle = false;
 
             while ( range_end < hashes.size() ) {

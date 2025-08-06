@@ -15,36 +15,38 @@
         });
   in {
     devShells = forEachSupportedSystem ({pkgs}: {
-      default =(pkgs.mkShell.override { }) {
-
+      default = (pkgs.mkShell.override {}) {
         venvDir = ".venv";
-        
-        packages = with pkgs; [
-          gcc
-          lldb
-          python312
-          hdf5
-          sqlite-interactive
-          cmake
-          just
-          bear # To generate compile_commands.json files
-          llvmPackages.openmp
-          llvmPackages.libcxx
-          rr
-          gdbgui
-          valgrind
-          highfive
-          samply
-          boost
-          cereal
-        ] ++ ( with python312Packages; [
-          venvShellHook
-          numpy
-          h5py
-          nanobind
-          icecream
-          scikit-build-core
-        ]);
+
+        packages = with pkgs;
+          [
+            gcc
+            lldb
+            clang-tools
+            python312
+            hdf5
+            sqlite-interactive
+            cmake
+            just
+            bear # To generate compile_commands.json files
+            llvmPackages.openmp
+            llvmPackages.libcxx
+            rr
+            gdbgui
+            valgrind
+            highfive
+            samply
+            boost
+            cereal
+          ]
+          ++ (with python312Packages; [
+            venvShellHook
+            numpy
+            h5py
+            nanobind
+            icecream
+            scikit-build-core
+          ]);
 
         NIX_ENFORCE_NO_NATIVE = false;
       };
