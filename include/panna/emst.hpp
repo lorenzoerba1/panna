@@ -92,7 +92,6 @@ namespace panna{
 
                 // Insert the data
                 for ( auto& point: data_in ) {
-                    normalize( point );
                     table.insert( point.begin(), point.end() );
                 }
                 table.rebuild();
