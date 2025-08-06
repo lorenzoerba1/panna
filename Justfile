@@ -8,6 +8,20 @@ install-python-extension:
 example: build-example
     build/fashion
 
+debug target:
+    just build {{target}}
+    rr record build/{{target}}
+
+run target:
+    just build {{target}}
+    build/{{target}}
+
+open-debugger:
+    gdbgui --gdb-cmd 'rr replay --'
+
+build target:
+    cmake --build build --config RelWithDebugInfo -j --target {{target}}
+
 profile-example: build-example
     samply record build/fashion
 
