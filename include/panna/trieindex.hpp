@@ -11,6 +11,7 @@
 #include <type_traits>
 
 #include "cereal/archives/binary.hpp"
+#include "dbg.h"
 #include "panna/kdtree.hpp"
 #include "panna/lsh/predicates.hpp"
 #include "panna/prefixmap.hpp"
@@ -272,6 +273,9 @@ namespace panna {
             if ( concatenations != hasher->get_concatenations() )
                 cursor.shorten_prefix( concatenations );
 
+            // QUESTION: wouldn't it be better to avoid materializing
+            // all the pairs if we then filter them?
+            // 
             // Collect all ranges then we will process them
             std::vector<std::pair<uint32_t*, uint32_t*>> pairs; // 256k pairs
             for ( auto info = cursor.next_filter(); std::get<2>( info );
@@ -298,6 +302,7 @@ namespace panna {
                         for ( const auto& pair : pairs ) {
                             output.push_back( pair );
                         }
+                        // QUESTION: to me it seems that the following contine 
                         continue; // skip the brute force part
                     } else {
                         for ( auto cur = pairs[i].first; cur < pairs[i].second; ++cur ) {
@@ -340,8 +345,6 @@ namespace panna {
             }
             while ( keep_going ) {
                 size_t cursor_collisions = 0;
-                // FIXME: we should probably reset the scratch space,
-                // otherwise we end up with an ever-growing scratch size
                 std::tie( cursor_collisions, keep_going ) = cursor.next( scratch );
                 size_t current_size = output.size();
 
