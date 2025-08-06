@@ -5,10 +5,10 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <iostream>
 #include <stdexcept>
 #include <utility>
 #include <vector>
-#include <iostream>
 
 #include "omp.h"
 #include "panna/expect.hpp"
@@ -118,6 +118,12 @@ namespace panna {
             prev_range_end = range_end;
         }
 
+        //! Builds the cursor, placing it at the smallest hash value in the provided list
+        PrefixMapCursor( const std::vector<THashValue>& hashes,
+                         const std::vector<uint32_t>& indices ):
+            PrefixMapCursor( hashes[0], hashes, indices ) {
+        }
+
         size_t current_prefix() const {
             return prefix_length;
         }
@@ -167,6 +173,25 @@ namespace panna {
             assert( range_start <= range_end );
         }
 
+        //! Moves the reference hash of the cursor to the next one in the `hashes` array.
+        //! Returns `false` if we reached the end of the available hashes,
+        //! and true otherwise
+        bool next_hash() {
+            if ( range_end == hashes.size() ) {
+                return false;
+            }
+            hash = hashes[range_end];
+            // We don't need to search for the start
+            range_start = range_end;
+            // but we do need to search for the end
+            update_range_end();
+            // We set the previous range to the empty range, because no computations
+            // on longer prefixes were carried out on this hash.
+            prev_range_start = range_end;
+            prev_range_end = range_end;
+            return true;
+        }
+
         std::array<std::pair<size_t, size_t>, 2> get_ranges() const {
             return { std::make_pair( range_start, prev_range_start ),
                      std::make_pair( prev_range_end, range_end ) };
@@ -183,7 +208,7 @@ namespace panna {
 
     template <typename THashValue>
     class PairPrefixMapCursor {
-        private:
+    private:
         const std::vector<THashValue>& hashes;
         const std::vector<uint32_t>& indices;
         THashValue current_hash;
@@ -196,9 +221,8 @@ namespace panna {
     public:
         using Iter = const uint32_t*;
 
-        PairPrefixMapCursor(
-                         const std::vector<THashValue>& hashes,
-                         const std::vector<uint32_t>& indices ):
+        PairPrefixMapCursor( const std::vector<THashValue>& hashes,
+                             const std::vector<uint32_t>& indices ):
             hashes( hashes ),
             indices( indices ),
             prefix_length( THashValue::get_concatenations() ) {
@@ -226,7 +250,7 @@ namespace panna {
             current_index = current_comparison = 0;
             current_hash = hashes[0];
         }
-  
+
         // Find the first index such that the prefix is >= the given hash.
         // In other words, in the first part the hashes are all < the given hash.
         void update_range_start() {
@@ -258,9 +282,8 @@ namespace panna {
                 update_range_end();
                 for ( size_t current = range_start; current < range_end; current++ ) {
                     for ( size_t next = current + 1; next < range_end; next++ ) {
-                        
-                        scratch_space.emplace_back(
-                            &indices[current], &indices[next] );
+
+                        scratch_space.emplace_back( &indices[current], &indices[next] );
                         collisions++;
                     }
                 }
@@ -271,16 +294,17 @@ namespace panna {
             return std::make_pair( collisions, continue_cycle );
 
             // // We have an unfinished run
-            // if ( current_index != current_comparison ) { 
+            // if ( current_index != current_comparison ) {
             //     for ( current_index; current_index < range_end; current_index++ ) {
-            //         for ( current_comparison; current_comparison < range_end; current_comparison++ ) {                                               
+            //         for ( current_comparison; current_comparison < range_end;
+            //         current_comparison++ ) {
             //             // Full buffer
             //             if ( collisions >= len_buff ) {
             //                 continue_cycle = true;
             //                 return std::make_pair( collisions, continue_cycle );
             //             }
-            //             scratch_space[collisions] = std::make_pair( &indices[current_index], &indices[current_comparison] );
-            //             collisions++;
+            //             scratch_space[collisions] = std::make_pair( &indices[current_index],
+            //             &indices[current_comparison] ); collisions++;
             //         }
             //     }
             //     // Reset the run indices
@@ -292,7 +316,7 @@ namespace panna {
             //     update_range_end();
             //     for ( size_t current = range_start; current < range_end; current++ ) {
             //         for ( size_t next = current + 1; next < range_end; next++ ) {
-                        
+
             //             // Full buffer
             //             if ( collisions >= len_buff ) {
             //                 current_index = current;
@@ -300,8 +324,8 @@ namespace panna {
             //                 continue_cycle = true;
             //                 return std::make_pair( collisions, continue_cycle );
             //             }
-            //             scratch_space[collisions] = std::make_pair( &indices[current], &indices[next] );
-            //             collisions++;
+            //             scratch_space[collisions] = std::make_pair( &indices[current],
+            //             &indices[next] ); collisions++;
             //         }
             //     }
             //     // Switch to the next hash
@@ -310,21 +334,17 @@ namespace panna {
             // return std::make_pair( collisions, continue_cycle);
         }
 
-        std::tuple<Iter, Iter, bool>
-        next_filter() {
-                    update_range_start();
-                    update_range_end();
+        std::tuple<Iter, Iter, bool> next_filter() {
+            update_range_start();
+            update_range_end();
 
-                    current_hash = hashes[range_end];
-                    bool continue_cycle = true;
-                    if ( range_end >= hashes.size() ) {
-                        continue_cycle = false;
-                    }
+            current_hash = hashes[range_end];
+            bool continue_cycle = true;
+            if ( range_end >= hashes.size() ) {
+                continue_cycle = false;
+            }
 
-                    return std::make_tuple( &indices[range_start],
-                                            &indices[range_end],
-                                            continue_cycle );
-
+            return std::make_tuple( &indices[range_start], &indices[range_end], continue_cycle );
         }
     };
 
@@ -364,6 +384,28 @@ namespace panna {
         // Add a hash value, and associated index, to be included next time rebuild is called.
         void insert( int tid, uint32_t idx, THashValue hash_value ) {
             parallel_rebuilding_data[tid].push_back( { idx, hash_value } );
+        }
+
+        template <typename Dataset, typename Hasher>
+        static void populate_from( std::vector<PrefixMap<THashValue>>& prefix_maps,
+                                   Dataset& points,
+                                   Hasher& hasher ) {
+            // this vector is reused across hashing calls
+            std::vector<typename Hasher::Value> hashes;
+
+#pragma omp parallel for private( hashes )
+            for ( size_t i = 0; i < points.size(); i++ ) {
+                auto tid = omp_get_thread_num();
+                hasher.hash( points[i], hashes );
+                for ( size_t rep = 0; rep < prefix_maps.size(); rep++ ) {
+                    prefix_maps[rep].insert( tid, i, hashes[rep] );
+                }
+            }
+
+#pragma omp parallel for
+            for ( size_t rep = 0; rep < prefix_maps.size(); rep++ ) {
+                prefix_maps[rep].rebuild();
+            }
         }
 
         // Reserve the correct amount of memory before inserting.
@@ -417,14 +459,18 @@ namespace panna {
             return PrefixMapCursor<THashValue>( hash, hashes, indices );
         }
 
-        PairPrefixMapCursor<THashValue> create_pair_cursor () const {
-            return PairPrefixMapCursor<THashValue> ( hashes, indices );
+        PrefixMapCursor<THashValue> create_cursor() const {
+            return PrefixMapCursor<THashValue>( hashes, indices );
+        }
+
+        PairPrefixMapCursor<THashValue> create_pair_cursor() const {
+            return PairPrefixMapCursor<THashValue>( hashes, indices );
         }
 
         THashValue hash_for( size_t idx ) const {
             auto pos =
                 std::distance( indices.begin(), std::find( indices.begin(), indices.end(), idx ) );
-            expect(pos < hashes.size());
+            expect( pos < hashes.size() );
             return hashes[pos];
         }
     };

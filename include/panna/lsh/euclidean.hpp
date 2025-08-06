@@ -1,12 +1,13 @@
 #pragma once
 #include <limits>
+#include <optional>
 #include <random>
-#include <unordered_map>
 #include <vector>
 
 #include "panna/expect.hpp"
 #include "panna/linalg.hpp"
 #include "panna/lsh/values.hpp"
+#include "panna/prefixmap.hpp"
 #include "panna/rand.hpp"
 
 namespace panna {
@@ -112,7 +113,6 @@ namespace panna {
 
         void fit( Dataset& points ) {
             expect( quantization_width == 0.0 );
-            using Vec = std::vector<float>;
             Dataset random( dimensions );
             for ( size_t i = 0; i < 1000; i++ ) {
                 std::vector<float> dir = sample_random_normal_vector( dimensions );
@@ -137,89 +137,54 @@ namespace panna {
             // TODO: we migh consider using only 4 bits per hash.
             quantization_width = ( max - min ) / 16;
 
-            // Build 4 repetitions of K hashes and count the mean number of collisions in the
-            // dataset
-            size_t rep = 4;
+            // Now we can adjust the quantization width so that there are
+            // enough collisions at the lowest level, but not too many
+            const size_t sample_repetitions = 4;
+            std::optional<float> qw_lower = std::nullopt, qw_upper = std::nullopt;
             size_t high_thresh = sqrt( points.size() ) * 1.3;
             size_t low_thresh = sqrt( points.size() ) * 0.7;
-            std::cout << high_thresh << " " << low_thresh << std::endl;
-            size_t max_iters = 10;
-            float incr_mul = 2, decr_mul = 2, r_low = 0, r_high = 0;
 
-            for ( std::size_t iter = 0; iter < max_iters; ++iter ) {
-                // Generate random vectors for the projections
-                Dataset proj( dimensions );
-                for ( std::size_t i = 0; i < rep * K; ++i ) {
-                    Vec a = sample_random_normal_vector( dimensions );
-                    proj.push_back( a.begin(), a.end() );
-                }
-                // Save the dot of the points with the random vectors so that we just have to try
-                // the r values without recomputing the dot products
-                std::vector<float> dot_products( points.size() * rep * K );
-#pragma omp parallel for collapse( 2 )
-                for ( size_t idx_point = 0; idx_point < points.size(); idx_point++ ) {
-                    for ( size_t rep_c = 0; rep_c < rep; rep_c++ ) {
-                        for ( size_t k = 0; k < K; k++ ) {
-                            const auto& a = proj[rep_c * K + k];
-                            float dot_value = dot_product( points[idx_point], a );
-                            dot_products[idx_point * rep * K + rep_c * K + k] = dot_value;
-                        }
-                    }
-                }
-                // Hash the points
-                float total_collisions = 0.0;
-                for ( size_t rep_c = 0; rep_c < rep; ++rep_c ) {
-                    std::unordered_map<std::string, size_t> buckets;
-                    buckets.reserve( points.size() );
-
-                    for ( size_t idx_point = 0; idx_point < points.size(); ++idx_point ) {
-                        // QUESTION: why are we not using a proper hash type?
-                        std::ostringstream key;
-                        key.precision( 0 );
-                        key.setf( std::ios::fixed );
-
-                        for ( std::size_t k = 0; k < K; ++k ) {
-                            float dot_value = dot_products[idx_point * rep * K + rep_c * K + k];
-                            int h = std::floor( dot_value / quantization_width );
-                            key << h << '|'; // cheap concatenation
-                        }
-                        ++buckets[key.str()];
-                    }
-
-                    // Count the collisions
-                    for ( const auto& [_, cnt] : buckets ) {
-                        total_collisions += ( cnt > 1 ) ? ( cnt * ( cnt - 1 ) / 2.0 ) : 0.0;
-                    }
+            // Do a binary search to find the fight value
+            while ( true ) {
+                if ( qw_lower && qw_upper ) {
+                    quantization_width = ( *qw_lower + *qw_upper ) / 2.0;
                 }
 
-                float mean_collisions = total_collisions / rep;
-                std::cout << "E2LSH: mean collisions = " << mean_collisions
-                          << " with r = " << quantization_width << std::endl;
+                // instantiate some repetitions, and count the collisions
+                std::vector<PrefixMap<typename Output::Value>> pmaps;
+                pmaps.resize( sample_repetitions );
+                Output hasher( quantization_width, dimensions, sample_repetitions );
+                PrefixMap<typename Output::Value>::populate_from( pmaps, points, hasher );
 
-                if ( r_low != 0 && r_high != 0 &&
-                     ( mean_collisions > high_thresh || mean_collisions < low_thresh ) ) {
-                    if ( mean_collisions > high_thresh ) {
-                        r_high = quantization_width;
-                    } else {
-                        r_low = quantization_width;
-                    }
-                    // Do binary search between the two values to find the optimal one
-                    std::cout << r_low << " " << r_high << std::endl;
-                    quantization_width = ( r_low + r_high ) / 2.0;
+                // Count the average pairwise collisions
+                size_t collisions = 0;
+                for ( PrefixMap<typename Output::Value>& pmap : pmaps ) {
+                    PrefixMapCursor<typename Output::Value> cursor = pmap.create_cursor();
+                    do {
+                        auto ranges = cursor.get_ranges();
+                        // when using the cursor like this we expect the second of the
+                        // two returned ranges to be empty at all times
+                        assert( ranges[1].first == ranges[1].second );
+                        size_t bucket_size = ranges[0].second - ranges[0].first;
+                        collisions += bucket_size * ( bucket_size - 1 ) / 2;
+                    } while ( cursor.next_hash() );
                 }
-                // Adjust the quantization width based on the mean number of collisions
-                else if ( mean_collisions > high_thresh ) {
-                    r_high = quantization_width;    // save the last good value
-                    quantization_width /= decr_mul; // too many collisions
-                } else if ( mean_collisions < low_thresh ) {
-                    r_low = quantization_width;     // save the last good value
-                    quantization_width *= incr_mul; // too few – buckets too small
-                } else
+                float avg_collisions = ( (float)collisions ) / pmaps.size();
+
+                if ( avg_collisions < low_thresh ) {
+                    // the quantization width is too small
+                    qw_lower = quantization_width;
+                    quantization_width *= 2.0;
+                } else if ( ( avg_collisions >
+                              high_thresh ) && // too many collisions
+                                               // the difference between bounds is not too small
+                            ( qw_upper.value_or( 0.0 ) - qw_lower.value_or( 0.0 ) > 1e-7 ) ) {
+                    qw_upper = quantization_width;
+                    quantization_width /= 2.0;
+                } else {
                     break;
+                }
             }
-            // quantization_width = 0.55;
-            //  TODO If target is not met return to the original value
-            std::cout << "E2LSH: quantization width = " << quantization_width << std::endl;
         }
 
         Output build( size_t repetitions ) const {
