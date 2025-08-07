@@ -163,6 +163,9 @@ namespace panna {
             for ( size_t i = MAX_HASHBITS; i >= 0; i-- ) {
                 if ( found )
                     break;
+                // QUESTION: if we do all the repetitions in parallel,
+                // how can we evaluate the stopping condition? We need to know that
+                // the previous iterations have been carried out
 #pragma omp parallel
 #pragma omp for nowait
                 for ( size_t j = 0; j < MAX_REPETITIONS; j++ ) {
@@ -213,6 +216,8 @@ namespace panna {
                                 }
                                 std::cout << "Tree size: " << top.size() << std::endl;
 
+                                // QUESTION: shouldn't we check that
+                                // the tree is connected?
                                 if ( top.size() == num_data - 1 ) {
                                     float new_tree_weight = 0;
                                     max_weight = std::get<float>( top.back() );
@@ -239,6 +244,10 @@ namespace panna {
                                     }
                                 }
                                 // Lose the unused edges, MST is composable wrt to edge partitioning
+                                // QUESTION: I keep getting not so sure that this works.
+                                // We are not de-duplicating the edges, are we? Then it might be that
+                                // some edges that we are clearing end up re-appearing later on,
+                                // thus breaking the edge partition on which the composability relies.
                                 edges.clear();
                             }
                         }
@@ -246,6 +255,8 @@ namespace panna {
                 }
                 std::cout << "Finished prefix " << i << std::endl;
             }
+            // QUESTION: why don't we use the union-find
+            // data structure to check if it is connected? We might have a DSU::is_connected method
             is_connected( tree );
             return tree_weight;
         }
