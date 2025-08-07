@@ -103,7 +103,7 @@ namespace panna {
             // Get info on the index
             MAX_HASHBITS = table.num_concatenations();
             MAX_REPETITIONS = table.num_repetitions();
-            delta = delta_in / num_data /*BinomialCoefficient(num_data, 2)*/;
+            delta = delta_in / num_data;
             max_weight = std::numeric_limits<float>::infinity();
 
             local_edges.resize( MAX_REPETITIONS );
@@ -122,25 +122,15 @@ namespace panna {
             // Clear from any previous runs
             clear();
             // Compute all the distances
-            //  FIXME: we can pre-allocate all the memory, and avoid the critical region
-            std::vector<EdgeTuple> all_edges;
-#pragma omp parallel
-            {
-                std::vector<EdgeTuple> local_edges;
-#pragma omp for collapse( 2 )
-                for ( size_t i = 0; i < num_data; i++ ) {
-                    for ( size_t j = i + 1; j < num_data; j++ ) {
-                        float d2 = table.get_distance( i, j );
-                        // QUESTION: what are we doing here?
-                        if ( d2 <= max_weight ) {
-                            local_edges.emplace_back( d2, std::make_pair( i, j ) );
-                        }
-                    }
+            //  We can pre-allocate all the memory, and avoid the critical region
+            std::vector<EdgeTuple> all_edges( binomial_coefficient( num_data, 2 ) );
+#pragma omp parallel for collapse (2)
+            for ( size_t i = 0; i < num_data; i++ ) {
+                for ( size_t j = i + 1; j < num_data; j++ ) {
+                    float dist = table.get_distance( i, j );
+                    all_edges[ i * (num_data -1) - ( i * ( i + 1 ) / 2 ) + j - 1 ] =
+                        std::make_tuple( dist, std::make_pair( i, j ) );
                 }
-
-#pragma omp critical
-                // QUESTION: why not push_back?
-                all_edges.insert( all_edges.end(), local_edges.begin(), local_edges.end() );
             }
             // Sort the edges
             std::sort( all_edges.begin(), all_edges.end() );

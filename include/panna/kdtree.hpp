@@ -110,22 +110,8 @@ namespace panna {
 
         /// min squared distance between two bounding boxes
         float min_dist_sq_( size_t a_idx, size_t b_idx ) const {
-            float acc = 0.f;
-            const auto& a_node = nodes_[a_idx];
-            const auto& b_node = nodes_[b_idx];
+            return Distance::compute( dataset_[a_idx], dataset_[b_idx] );
 
-            for ( int d = 0; d < dim_; d++ ) {
-                float diff = 0.f;
-                if ( a_node.max[d] < b_node.min[d] )
-                    diff = b_node.min[d] - a_node.max[d];
-                else if ( b_node.max[d] < a_node.min[d] )
-                    diff = a_node.min[d] - b_node.max[d];
-
-                acc += diff * diff;
-                if ( acc > radius2_ )
-                    break; // Early exit
-            }
-            return acc;
         }
 
         // Enumerate pairs of points within the radius
@@ -136,7 +122,7 @@ namespace panna {
                     std::vector<std::tuple<float, std::pair<uint32_t, uint32_t>>>& out ) const {
             if ( a_idx == NO_NODE || b_idx == NO_NODE )
                 return;
-            if ( min_dist_sq_( a_idx, b_idx ) > radius2_ )
+            if ( min_dist_sq_( a_idx, b_idx ) > radius_ )
                 return;
 
             const auto& a_node = nodes_[a_idx];
@@ -176,9 +162,9 @@ namespace panna {
         maybe_emit_( uint32_t i,
                      uint32_t j,
                      std::vector<std::tuple<float, std::pair<uint32_t, uint32_t>>>& out ) const {
-            float d2 = Distance::compute_nosq( dataset_[i], dataset_[j] );
-            if ( d2 <= radius2_ )
-                out.emplace_back( std::sqrt( d2 ), std::make_pair( i, j ) );
+            float d2 = Distance::compute( dataset_[i], dataset_[j] );
+            if ( d2 <= radius_ )
+                out.emplace_back( d2, std::make_pair( i, j ) );
         }
 
         // Data
