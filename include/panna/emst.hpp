@@ -166,6 +166,13 @@ namespace panna {
                 // QUESTION: if we do all the repetitions in parallel,
                 // how can we evaluate the stopping condition? We need to know that
                 // the previous iterations have been carried out
+                //  If we stop as some iteration j, we will still carry out all previous ones
+                //  as they are already dispatched, now it may happen that one of the j'<j iterations
+                //  find a smaller edge for the mst that would confirmed the tree at iteration j
+                //  in this case there's just a delay in the confirmation
+                // If we remove the nowait, instead, we are guaranteed that
+                // all the previous iterations have been carried out before checking the stopping condition
+                //  https://ppc.cs.aalto.fi/ch3/nowait/
 #pragma omp parallel
 #pragma omp for nowait
                 for ( size_t j = 0; j < MAX_REPETITIONS; j++ ) {
@@ -218,6 +225,8 @@ namespace panna {
 
                                 // QUESTION: shouldn't we check that
                                 // the tree is connected?
+                                // If we add n-1 edges using DSU 
+                                // isn't it guaranteed that the tree is connected?
                                 if ( top.size() == num_data - 1 ) {
                                     float new_tree_weight = 0;
                                     max_weight = std::get<float>( top.back() );
@@ -248,6 +257,7 @@ namespace panna {
                                 // We are not de-duplicating the edges, are we? Then it might be that
                                 // some edges that we are clearing end up re-appearing later on,
                                 // thus breaking the edge partition on which the composability relies.
+
                                 edges.clear();
                             }
                         }
@@ -257,6 +267,7 @@ namespace panna {
             }
             // QUESTION: why don't we use the union-find
             // data structure to check if it is connected? We might have a DSU::is_connected method
+            // This is just a sanity check to see if dsu works as intended
             is_connected( tree );
             return tree_weight;
         }
