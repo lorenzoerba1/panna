@@ -257,6 +257,8 @@ namespace panna {
                                 // We are not de-duplicating the edges, are we? Then it might be that
                                 // some edges that we are clearing end up re-appearing later on,
                                 // thus breaking the edge partition on which the composability relies.
+                                // It's true that we have overlapping partitions, we can see
+                                // extracting the MST from each partition as 
 
                                 edges.clear();
                             }

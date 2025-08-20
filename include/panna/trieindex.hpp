@@ -261,7 +261,8 @@ namespace panna {
                              std::vector<std::tuple<float, std::pair<uint32_t, uint32_t>>>& output,
                              float weight_filter ) {
             expect( hasher );
-            const uint32_t SMALL_BUCKET = 0;
+            const uint32_t SMALL_BUCKET = 512;
+            const float squared_weight_filter = weight_filter * weight_filter;
             // Parallel region starts here
             // #pragma omp parallel
             //{
@@ -305,10 +306,13 @@ namespace panna {
                             uint32_t cur_ind = *cur;
                             PointHandle pi = dataset[cur_ind];
                             for ( auto nxt = cur + 1; nxt < pairs[i].second; ++nxt ) {
-                                uint32_t j = *nxt;
-                                float d2 = Distance::compute( pi, dataset[j] );
-                                if ( d2 <= weight_filter )
-                                    output.emplace_back( d2 , std::make_pair( i, j ) );
+                                uint32_t nxt_ind = *nxt;
+                                float d2 = Distance::compute_nosq( pi, dataset[nxt_ind] );
+                                if ( d2 <= squared_weight_filter ) {
+                                    // We can use the squared distance to avoid computing the
+                                    // square root, that is computed only when we need to
+                                    output.emplace_back( sqrt( d2 ) , std::make_pair( cur_ind, nxt_ind ) );
+                                }
                             }
                         }
                     }
