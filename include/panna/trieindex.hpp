@@ -11,7 +11,6 @@
 #include <type_traits>
 
 #include "cereal/archives/binary.hpp"
-#include "dbg.h"
 #include "panna/kdtree.hpp"
 #include "panna/lsh/predicates.hpp"
 #include "panna/prefixmap.hpp"

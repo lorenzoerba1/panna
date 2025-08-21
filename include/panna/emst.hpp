@@ -160,7 +160,8 @@ namespace panna {
 
             bool found = false;
             std::vector<EdgeTuple> edges;
-            for ( size_t i = MAX_HASHBITS; i >= 0; i-- ) {
+            for ( size_t i_rev = 0; i_rev <= MAX_HASHBITS; i_rev++ ) {
+                size_t i = MAX_HASHBITS - i_rev;
                 if ( found )
                     break;
                 // QUESTION: if we do all the repetitions in parallel,
@@ -283,7 +284,8 @@ namespace panna {
 
             bool found = false;
             std::vector<EdgeTuple> edges;
-            for ( size_t i = MAX_HASHBITS; i >= 0; i-- ) {
+            for ( size_t i_rev = 0; i_rev <= MAX_HASHBITS; i_rev++ ) {
+                size_t i = MAX_HASHBITS - i_rev;
                 if ( found )
                     break;
 #pragma omp parallel
