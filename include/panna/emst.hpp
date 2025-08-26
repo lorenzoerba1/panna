@@ -168,9 +168,9 @@ namespace panna {
                 // how can we evaluate the stopping condition? We need to know that
                 // the previous iterations have been carried out
                 //  If we stop as some iteration j, we will still carry out all previous ones
-                //  as they are already dispatched, now it may happen that one of the j'<j iterations
-                //  find a smaller edge for the mst that would confirmed the tree at iteration j
-                //  in this case there's just a delay in the confirmation
+                //  as they are already dispatched. Now it may happen that one of the j'<j iterations
+                //  finds a smaller edge for the mst that would confirm the tree at iteration j
+                //  in this case there's just a delay in the confirmation.
                 // If we remove the nowait, instead, we are guaranteed that
                 // all the previous iterations have been carried out before checking the stopping condition
                 //  https://ppc.cs.aalto.fi/ch3/nowait/
@@ -258,8 +258,7 @@ namespace panna {
                                 // We are not de-duplicating the edges, are we? Then it might be that
                                 // some edges that we are clearing end up re-appearing later on,
                                 // thus breaking the edge partition on which the composability relies.
-                                // It's true that we have overlapping partitions, we can see
-                                // extracting the MST from each partition as 
+                                // 
 
                                 edges.clear();
                             }
@@ -405,28 +404,14 @@ namespace panna {
         //*** Private methods */
     private:
         /// @brief Obtain the couples of nodes that share the same prefix from the hash table
-        ///        and split them into edges whose recall is above the threshold and the others
         /// @param i Current concatenation in the hash index
         /// @param j current repetition in the hash index
-        /// @param Tu_local vector that stores the unconfirmed edges
-        /// @param Tc_local vector that stores the confirmed edges
+        /// @param Tu_local vector that stores the edges
         void enumerate_edges( size_t i, size_t j, std::vector<EdgeTuple>& Tu_local ) {
             // Discover edges that share the same prefix at iteration i, j
             std::vector<EdgeTuple> couples;
             table.search_pairs_filter( j, i, couples, max_weight );
-            // table.search_pairs(j, i, couples);
-            //  Find the edges that are confirmed and the ones that are not, the edges are ordered
-            //  in ascending order so we can binary search the splitting point We compute the
-            //  probability using collision_probability(distance) of each edge, and find all the
-            //  edges that are above the threshold delta auto it = std::partition_point(
-            //  couples.begin(), couples.end(), [&] (const auto& e) {
-            //      return table.fail_probability( std::get<float> (e), i, j ) < delta;
-            //      } );
-            //  Tu_local.insert(Tu_local.end(), it, couples.end());
-            //  Tc_local.insert(Tc_local.end(), couples.begin(), it);
             Tu_local.insert( Tu_local.end(), couples.begin(), couples.end() );
-            // std::cout << "Size Tu: " << Tu_local.size() << " Size Tc: " << Tc_local.size() <<
-            // std::endl;
             return;
         };
 
