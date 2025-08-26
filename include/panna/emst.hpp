@@ -258,7 +258,12 @@ namespace panna {
                                 // We are not de-duplicating the edges, are we? Then it might be that
                                 // some edges that we are clearing end up re-appearing later on,
                                 // thus breaking the edge partition on which the composability relies.
-                                // 
+                                // From what I'm getting, an edge can re-appear but its one of those things
+                                // -edge in MST, Kruskal will ignore all copies of an edge already in the MST
+                                // -edge out MST, in this case Kruskal will keep discarding the edge
+                                // because it induces a cycle
+                                // So our partitioning does not satisfy the composability condition inherently,
+                                // but Kruskal makes up for it. (?)
 
                                 edges.clear();
                             }
