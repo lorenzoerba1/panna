@@ -11,22 +11,6 @@ using EdgeTuple = std::tuple<float, std::pair<uint32_t, uint32_t>>;
 
 namespace panna {
 
-    // @brief Computes the binomial coefficient,
-    //        adapted from
-    //        https://stackoverflow.com/questions/55421835/c-binomial-coefficient-is-too-slow
-    // @param n number of elements
-    // @param k number of elements to choose
-    // @return the binomial coefficient C(n, k)
-    static double binomial_coefficient( const double n, const double k ) {
-        double aSolutions = 0, oldSolutions = n - k + 1;
-
-        for ( double i = 1; i < k; ++i ) {
-            aSolutions = oldSolutions * ( n - k + 1 + i ) / ( i + 1 );
-            oldSolutions = aSolutions;
-        }
-        return aSolutions;
-    }
-
     template <typename Dataset, typename Hasher, typename Distance>
     class EMST {
         // Object variables
@@ -264,7 +248,6 @@ namespace panna {
                                 // because it induces a cycle
                                 // So our partitioning does not satisfy the composability condition inherently,
                                 // but Kruskal makes up for it. (?)
-
                                 edges.clear();
                             }
                         }
@@ -385,6 +368,127 @@ namespace panna {
             is_connected( tree );
             return tree_weight;
         }
+
+        std::pair<
+        std::vector<std::tuple<float, float, float>>,
+        std::vector< std::vector< std::pair<float, unsigned int>>> > find_tree_dbscan( size_t k=5 ) {
+            clear();
+            // dirty_start(local_confirmed[0]);
+            float tree_weight = 0;
+            std::vector<std::tuple<float, float, float>> tree;
+            std::vector< std::vector< std::pair<float, unsigned int>>> neighbors (num_data, std::vector< std::pair<float, unsigned int> >() );
+
+            bool found = false;
+            std::vector<EdgeTuple> edges;
+            // Find the top-k nearest neighbors for each node
+            for ( size_t index = 0; index < data.size(); index++ ) {
+                table.search( data[index].begin(), data[index].end(), k+1, 0.1, neighbors[index] );
+                // Remove the self loop
+            }
+
+            for ( size_t i_rev = 0; i_rev <= MAX_HASHBITS; i_rev++ ) {
+                size_t i = MAX_HASHBITS - i_rev;
+                if ( found )
+                    break;
+
+#pragma omp parallel
+#pragma omp for nowait
+                for ( size_t j = 0; j < MAX_REPETITIONS; j++ ) {
+                    if ( found )
+                        continue;
+                    DSU local_dsu( num_data );
+                    std::vector<EdgeTuple> local_top, local_Tu;
+                    enumerate_edges( i, j, local_Tu );
+
+                    for ( auto& edge : local_Tu ) {
+                        // Use the reachability
+                        std::get<float>( edge ) = std::max( 
+                            std::get<float>( edge ),
+                            std::max( neighbors[ std::get<1>( edge ).first ].front().first, //Remember it's a heap
+                                      neighbors[ std::get<1>( edge ).second ].front().first ) );
+                        if ( local_top.size() == num_data - 1 ) {
+                            break;
+                        }
+                        add_edge( edge, local_dsu, local_top );
+                    }
+
+                    local_confirmed[j].insert( local_confirmed[j].end(),
+                                               std::make_move_iterator( local_top.begin() ),
+                                               std::make_move_iterator( local_top.end() ) );
+
+                    // Every x iterations we have a batch, construct the MST from these edges
+                    if ( ( i > 3 && ( ( j + 1 ) == MAX_REPETITIONS ||
+                                      ( j + 1 ) == (size_t)MAX_REPETITIONS / 2 ) ) ||
+                         ( i <= 4 && j % 5 == 0 ) ) {
+#pragma omp critical
+                        {   
+
+                            edges.insert( edges.end(),
+                                          std::make_move_iterator( top.begin() ),
+                                          std::make_move_iterator( top.end() ) );
+                            top.clear();
+                            dsu_true = DSU( num_data );
+                            for ( size_t local_index = 0; local_index < j + 1; local_index++ ) {
+                                auto& local = local_confirmed[local_index];
+                                edges.insert( edges.end(), local.begin(), local.end() );
+                                // std::make_move_iterator(local.begin()),
+                                // std::make_move_iterator(local.end()) );
+                                local.clear();
+                            }
+                            std::sort( edges.begin(), edges.end() );
+                            // edges.erase( std::unique( edges.begin(), edges.end() ), edges.end()
+                            // );
+                            if ( edges.size() > num_data - 1 ) {
+                                for ( const auto& edge : edges ) {
+                                    add_edge( edge, dsu_true, top );
+                                    if ( top.size() == num_data - 1 ) {
+                                        break;
+                                    }
+                                }
+
+                                if ( top.size() == num_data - 1 ) {
+                                    float new_tree_weight = 0;
+                                    max_weight = std::get<float>( top.back() );
+                                    for ( const auto& edge : top ) {
+                                        new_tree_weight += std::get<0>( edge );
+                                    }
+                                    auto partition_point = std::partition_point(
+                                        top.begin(), top.end(), [&]( const auto& e ) {
+                                            return table.fail_probability(
+                                                       std::get<float>( e ), i, j ) < delta;
+                                        } );
+                                    tree_weight = new_tree_weight;
+                                    float bound_weight =
+                                        ( 1 + epsilon ) *
+                                            std::accumulate( top.begin(),
+                                                             partition_point,
+                                                             0.0f,
+                                                             []( float acc, const EdgeTuple& e ) {
+                                                                 return acc + std::get<float>( e );
+                                                             } ) +
+                                        ( std::get<float>( *( partition_point - 1 ) ) *
+                                          std::distance( partition_point, top.end() ) );
+                                          std::cout << "Bound weight: " << bound_weight << ", Tree weight: " << tree_weight << std::endl;
+                                    if ( tree_weight <= bound_weight ) {
+                                        found = true;
+                                        // Fill the tree
+                                        for ( const auto& edge : top ) {
+                                            tree.emplace_back( (float) std::get<1>( edge ).first,
+                                                               (float) std::get<1>( edge ).second,
+                                                               (float) std::get<0>( edge ) );
+                                        }
+                                    }
+                                }
+                                // Lose the unused edges, MST is composable wrt to edge partitioning
+                                edges.clear();
+                            }
+                        }
+                    }
+                }
+            }
+            return { tree, neighbors };
+        }
+
 
         float mean_weight() {
             size_t edges_to_pick = std::min<size_t>( binomial_coefficient( num_data, 2 ), 10000 );

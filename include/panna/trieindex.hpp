@@ -242,7 +242,6 @@ namespace panna {
                                                   // the vector is a heap so it should be the first
                         float fp = failure_probability(
                             *hasher, topdist, concat, rep + 1, lsh_maps.size() );
-                        std::cout << "FP: " << fp << " dist: " << topdist << std::endl;
                         if ( fp <= delta ) {
                             stop = true;
                             break;
@@ -254,8 +253,7 @@ namespace panna {
         }
 
         // Function to return all colliding couples in a given repetition and concatenation
-        void
-        search_pairs_filter( size_t repetition,
+        void search_pairs_filter( size_t repetition,
                              size_t concatenations,
                              std::vector<std::tuple<float, std::pair<uint32_t, uint32_t>>>& output,
                              float weight_filter ) {
