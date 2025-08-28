@@ -11,6 +11,22 @@ using EdgeTuple = std::tuple<float, std::pair<uint32_t, uint32_t>>;
 
 namespace panna {
 
+    // @brief Computes the binomial coefficient,
+    //        adapted from
+    //        https://stackoverflow.com/questions/55421835/c-binomial-coefficient-is-too-slow
+    // @param n number of elements
+    // @param k number of elements to choose
+    // @return the binomial coefficient C(n, k)
+    static double binomial_coefficient( const double n, const double k ) {
+        double aSolutions = 0, oldSolutions = n - k + 1;
+
+        for ( double i = 1; i < k; ++i ) {
+            aSolutions = oldSolutions * ( n - k + 1 + i ) / ( i + 1 );
+            oldSolutions = aSolutions;
+        }
+        return aSolutions;
+    }
+
     template <typename Dataset, typename Hasher, typename Distance>
     class EMST {
         // Object variables
