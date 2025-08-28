@@ -189,20 +189,17 @@ struct EMST_exposed {
             data_cpp.emplace_back(row_start, row_start + dimensions);
         }
 
-        // Create the appropriate hasher builder for our EMST instantiation
         using Hasher = panna::E2LSH<12, panna::NormedPoints>;
         Hasher::Builder builder(0.0, dimensions);
 
-        // Create the EMST object using the processed data and parameters
         inner = std::make_unique<EMST_t>(dimensions, repetitions, builder, data_cpp, delta, epsilon);
     }
 
-    // The method to find the MST. It returns a Python tuple.
     nb::tuple find_mst(unsigned int k) {
         // Call the underlying C++ method
         auto result_pair = inner->find_tree_dbscan(k);
         
-        // --- 1. MST Edges (as a proper NumPy array) ---
+        // MST edges
         auto& tree_edges_vec = result_pair.first;
         size_t num_edges = tree_edges_vec.size();
         
@@ -222,11 +219,11 @@ struct EMST_exposed {
         
         nb::ndarray<float, nb::numpy> tree_array = nb::ndarray<float, nb::numpy>(
             tree_data_ptr,
-            {num_edges, 3}, // Shape: (num_edges, 2)
+            {num_edges, 3}, // Shape: (num_edges, 3), HDBSCAN wants 3 floats terminal1, terminal2, distance
             tree_owner
         );
 
-        // --- 2. Core Distances (as a NumPy array) ---
+        // Core Distances
         auto& neighbor_results = result_pair.second;
         size_t num_points = neighbor_results.size();
 
@@ -235,7 +232,7 @@ struct EMST_exposed {
 
         for (size_t i = 0; i < num_points; ++i) {
             if (!neighbor_results[i].empty()) {
-                // The core distance is the distance to the k-th neighbor (or first in the sorted list).
+                // The core distance is the distance to the k-th neighbor (or first in the heap that is returned from the search).
                 core_data_ptr[i] = neighbor_results[i].front().first;
             } else {
                 core_data_ptr[i] = std::numeric_limits<float>::infinity();
@@ -250,8 +247,7 @@ struct EMST_exposed {
             core_owner
         );
 
-        // --- 3. Neighbor Indices (as a 2D NumPy array) ---
-        // We must flatten the vector-of-vectors into a single contiguous memory block.
+        // Neighbors
         size_t num_neighbors_per_point = k + 1; // Search returns k+1 neighbors (including self)
         auto* neighbors_data_ptr = new uint32_t[num_points * num_neighbors_per_point];
 
@@ -261,8 +257,7 @@ struct EMST_exposed {
                 if (j < neighbor_results[i].size()) {
                     neighbors_data_ptr[i * num_neighbors_per_point + j] = neighbor_results[i][j].second;
                 } else {
-                    // Handle cases with fewer neighbors if necessary, e.g., by padding.
-                    neighbors_data_ptr[i * num_neighbors_per_point + j] = -1; // Or some other sentinel value
+                    neighbors_data_ptr[i * num_neighbors_per_point + j] = -1;
                 }
             }
         }
