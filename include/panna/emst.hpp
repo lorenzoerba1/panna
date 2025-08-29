@@ -396,12 +396,12 @@ namespace panna {
 
             bool found = false;
             std::vector<EdgeTuple> edges;
-            // Find the top-k nearest neighbors for each node
-            for ( size_t index = 0; index < data.size(); index++ ) {
-                table.search( data[index].begin(), data[index].end(), k+1, 0.1, neighbors[index] );
-                // Remove the self loop
-            }
-
+            // // Find the top-k nearest neighbors for each node
+            // for ( size_t index = 0; index < data.size(); index++ ) {
+            //     table.search( data[index].begin(), data[index].end(), k+1, 0.1, neighbors[index] );
+            //     // Remove the self loop
+            // }
+            // std::cout << "Neighbors found" << std::endl;
             for ( size_t i_rev = 0; i_rev <= MAX_HASHBITS; i_rev++ ) {
                 size_t i = MAX_HASHBITS - i_rev;
                 if ( found )
@@ -413,15 +413,28 @@ namespace panna {
                     if ( found )
                         continue;
                     DSU local_dsu( num_data );
+                    std::vector< std::vector< std::pair<float, unsigned int>>> local_neighbors (num_data, std::vector< std::pair<float, unsigned int> >() );
                     std::vector<EdgeTuple> local_top, local_Tu;
                     enumerate_edges( i, j, local_Tu );
 
+                    // Fill the neighbors
+                    for ( const auto& edge : local_Tu ) {
+                        local_neighbors[ std::get<1>( edge ).first ].emplace_back( std::get<0>( edge ), std::get<1>( edge ).second );
+                        local_neighbors[ std::get<1>( edge ).second ].emplace_back( std::get<0>( edge ), std::get<1>( edge ).first );
+                    }
+                    for ( size_t index = 0; index < local_neighbors.size(); index++ ) {
+                        std::sort( local_neighbors[index].begin(), local_neighbors[index].end() );
+                        // Keep just the best k
+                        if ( local_neighbors[index].size() > k ) {
+                            local_neighbors[index].resize( k );
+                        }
+                    }
                     for ( auto& edge : local_Tu ) {
                         // Use the reachability
-                        std::get<float>( edge ) = std::max( 
-                            std::get<float>( edge ),
-                            std::max( neighbors[ std::get<1>( edge ).first ].front().first, //Remember it's a heap
-                                      neighbors[ std::get<1>( edge ).second ].front().first ) );
+                        // std::get<float>( edge ) = std::max( 
+                        //     std::get<float>( edge ),
+                        //     std::max( neighbors[ std::get<1>( edge ).first ].back().first,
+                        //                neighbors[ std::get<1>( edge ).second ].back().first ) );
                         if ( local_top.size() == num_data - 1 ) {
                             break;
                         }
@@ -431,6 +444,24 @@ namespace panna {
                     local_confirmed[j].insert( local_confirmed[j].end(),
                                                std::make_move_iterator( local_top.begin() ),
                                                std::make_move_iterator( local_top.end() ) );
+                    #pragma omp critical
+                    {
+                        // Fill the global neighbors
+                        for ( size_t index = 0; index < local_neighbors.size(); index++ ) {
+                            neighbors[index].insert( neighbors[index].end(),
+                                                      std::make_move_iterator( local_neighbors[index].begin() ),
+                                                      std::make_move_iterator( local_neighbors[index].end() ) );
+                        }
+                        std::sort( neighbors.begin(), neighbors.end() );
+                        neighbors.erase( std::unique( neighbors.begin(), neighbors.end() ), neighbors.end() );
+                        // Keep just the best k
+                        for ( size_t index = 0; index < neighbors.size(); index++ ) {
+                            if ( neighbors[index].size() > k ) {
+                                neighbors[index].resize( k );
+                            }
+                        }
+
+                    }
 
                     // Every x iterations we have a batch, construct the MST from these edges
                     if ( ( i > 3 && ( ( j + 1 ) == MAX_REPETITIONS ||
@@ -450,6 +481,13 @@ namespace panna {
                                 // std::make_move_iterator(local.begin()),
                                 // std::make_move_iterator(local.end()) );
                                 local.clear();
+                            }
+                            // Change the edge weights basen on their reachability
+                            for (auto& edge: edges){
+                                std::get<float>( edge ) = std::max( 
+                                    std::get<float>( edge ),
+                                    std::max( neighbors[ std::get<1>( edge ).first ].back().first,
+                                              neighbors[ std::get<1>( edge ).second ].back().first ) );
                             }
                             std::sort( edges.begin(), edges.end() );
                             // edges.erase( std::unique( edges.begin(), edges.end() ), edges.end()
@@ -486,12 +524,13 @@ namespace panna {
                                           std::distance( partition_point, top.end() ) );
                                           std::cout << "Bound weight: " << bound_weight << ", Tree weight: " << tree_weight << std::endl;
                                     if ( tree_weight <= bound_weight ) {
+                                        tree.clear();
                                         found = true;
                                         // Fill the tree
                                         for ( const auto& edge : top ) {
-                                            tree.emplace_back( (float) std::get<1>( edge ).first,
-                                                               (float) std::get<1>( edge ).second,
-                                                               (float) std::get<0>( edge ) );
+                                            tree.emplace_back( static_cast<float>( std::get<1>( edge ).first ),
+                                                               static_cast<float>( std::get<1>( edge ).second ),
+                                                                std::get<0>( edge ) ); 
                                         }
                                     }
                                 }
@@ -502,6 +541,7 @@ namespace panna {
                     }
                 }
             }
+            
             return { tree, neighbors };
         }
 

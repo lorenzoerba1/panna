@@ -13,7 +13,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED On)
 set(CMAKE_CXX_EXTENSIONS Off)
 set(CMAKE_BUILD_PARALLEL_LEVEL 8)
 #set(CMAKE_CXX_COMPILER "/nix/store/gj9lra51hwhxnhz05jqk5lh03wipamv0-gcc-wrapper-14-20241116/bin/gcc")
-# set(CMAKE_CXX_CLANG_TIDY clang-tidy)
+# set(CMAKE_CXX_CLANG_TIDY 
+#     clang-tidy;
+#     -format-style='file';
+#     -header-filter=${CMAKE_CURRENT_SOURCE_DIR}
+#     )
+
 
 # Add warnings
 add_compile_options(-Wall -Wextra -Wno-noexcept-type -Wno-implicit-fallthrough -Wno-unused-function)
@@ -40,22 +45,25 @@ if (NOT SKBUILD)
   FetchContent_MakeAvailable(Catch2)
 
 
-  include_directories("test/include")
-  add_executable(tests test/tests.cpp)
-  target_link_libraries(tests PRIVATE Catch2::Catch2WithMain dbg_macro)
+  # include_directories("test/include")
+  # add_executable(tests test/tests.cpp)
+  # target_link_libraries(tests PRIVATE Catch2::Catch2WithMain dbg_macro)
 
   find_package(HighFive)
   add_executable(emst test/emst_test.cpp)
   target_link_libraries(emst PRIVATE dbg_macro HighFive)
 
   add_executable(recall test/recall_test.cpp)
-  target_link_libraries(recall PRIVATE Catch2::Catch2WithMain dbg_macro HighFive)
+  target_link_libraries(recall PRIVATE dbg_macro HighFive)
 
   add_executable(scalability test/scalability_test.cpp)
-  target_link_libraries(scalability PRIVATE Catch2::Catch2WithMain dbg_macro HighFive)
+  target_link_libraries(scalability PRIVATE dbg_macro HighFive)
+
+  add_executable(mare test/mare_test.cpp)
+  target_link_libraries(mare PRIVATE HighFive)
 
   add_executable(dtb test/DTB_test.cpp)
-  target_link_libraries(dtb PRIVATE Catch2::Catch2WithMain dbg_macro HighFive)
+  target_link_libraries(dtb PRIVATE dbg_macro HighFive)
 
   # if (HighFive_FOUND)
   #   add_executable(glove examples/glove.cpp)
@@ -73,17 +81,17 @@ endif()
 # - https://nanobind.readthedocs.io/en/latest/building.html
 # - https://nanobind.readthedocs.io/en/latest/packaging.html
 
-# find_package(Python 3.8
-#   REQUIRED COMPONENTS Interpreter Development.Module
-#   OPTIONAL_COMPONENTS Development.SABIModule)
+find_package(Python 3.12
+  REQUIRED COMPONENTS Interpreter Development.Module
+  OPTIONAL_COMPONENTS Development.SABIModule)
 
-# # Detect the installed nanobind package and import it into CMake
-# execute_process(
-#   COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
-#   OUTPUT_STRIP_TRAILING_WHITESPACE OUTPUT_VARIABLE nanobind_ROOT)
-# find_package(nanobind CONFIG REQUIRED)
+# Detect the installed nanobind package and import it into CMake
+execute_process(
+  COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
+  OUTPUT_STRIP_TRAILING_WHITESPACE OUTPUT_VARIABLE nanobind_ROOT)
+find_package(nanobind CONFIG REQUIRED)
 
-# nanobind_add_module(_panna_impl NOMINSIZE python/wrapper.cpp)
-# target_link_libraries(_panna_impl PRIVATE dbg_macro)
+nanobind_add_module(_panna_impl NOMINSIZE NB_STATIC python/wrapper.cpp)
+target_link_libraries(_panna_impl PRIVATE dbg_macro)
 
-# install(TARGETS _panna_impl LIBRARY DESTINATION panna)
+install(TARGETS _panna_impl LIBRARY DESTINATION panna)

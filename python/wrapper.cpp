@@ -166,7 +166,7 @@ struct EMST_exposed {
         size_t dimensions = data_in.shape(1);
 
         // Set default parameters, which can be overridden by kwargs from Python
-        size_t repetitions = 200;
+        size_t repetitions = 500;
         double delta = 0.2;
         float epsilon = 0.2;
 
@@ -202,15 +202,15 @@ struct EMST_exposed {
         // MST edges
         auto& tree_edges_vec = result_pair.first;
         size_t num_edges = tree_edges_vec.size();
-        
+
         // Allocate memory on the heap that nanobind will manage.
         auto* tree_data_ptr = new float[num_edges * 3];
 
         // Copy the edge data into the new buffer.
         for (size_t i = 0; i < num_edges; ++i) {
-            tree_data_ptr[i * 3 + 0] = (float) std::get<0>( tree_edges_vec[i] );
-            tree_data_ptr[i * 3 + 1] = (float) std::get<1>( tree_edges_vec[i] );
-            tree_data_ptr[i * 3 + 2] = (float) std::get<2>( tree_edges_vec[i] );
+            tree_data_ptr[i * 3 + 0] = ( std::get<0>( tree_edges_vec[i] ) );
+            tree_data_ptr[i * 3 + 1] = ( std::get<1>( tree_edges_vec[i] ) );
+            tree_data_ptr[i * 3 + 2] = ( std::get<2>( tree_edges_vec[i] ) );
         }
 
         // Create a capsule to give ownership of the pointer to the NumPy array.
@@ -257,7 +257,7 @@ struct EMST_exposed {
                 if (j < neighbor_results[i].size()) {
                     neighbors_data_ptr[i * num_neighbors_per_point + j] = neighbor_results[i][j].second;
                 } else {
-                    neighbors_data_ptr[i * num_neighbors_per_point + j] = -1;
+                    neighbors_data_ptr[i * num_neighbors_per_point + j] = i;
                 }
             }
         }
