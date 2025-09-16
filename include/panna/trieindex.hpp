@@ -256,53 +256,38 @@ namespace panna {
         void search_pairs_filter( size_t repetition,
                              size_t concatenations,
                              std::vector<std::tuple<float, std::pair<uint32_t, uint32_t>>>& output,
-                             float weight_filter ) {
+                             float weight_filter) {
             expect( hasher );
             const uint32_t SMALL_BUCKET = 512;
             const float squared_weight_filter = weight_filter * weight_filter;
-            // Parallel region starts here
-            // #pragma omp parallel
-            //{
-            // Each thread gets its own cursor and output buffer
+
             PairPrefixMapCursor<typename Hasher::Value> cursor =
                 lsh_maps[repetition].create_pair_cursor();
             if ( concatenations != hasher->get_concatenations() )
                 cursor.shorten_prefix( concatenations );
 
-            // QUESTION: wouldn't it be better to avoid materializing
-            // all the pairs if we then filter them?
-            // 
+            // Avoid materializing all the pairs 
             // Collect all ranges then we will process them
-            std::vector<std::pair<uint32_t*, uint32_t*>> pairs; // 256k pairs
             for ( auto info = cursor.next_filter(); std::get<2>( info );
                   info = cursor.next_filter() ) {
                 const uint32_t* range_start = std::get<0>( info );
                 const uint32_t* range_end = std::get<1>( info );
-                pairs.emplace_back( const_cast<uint32_t*>( range_start ),
-                                    const_cast<uint32_t*>( range_end ) );
-            }
-            // #pragma omp parallel
-            {
-                // std::vector<std::tuple<float, std::pair<uint32_t, uint32_t>>> local_output;
-                output.reserve( 256 ); // reserve small space to reduce reallocs
-                // #pragma omp for nowait
-                for ( size_t i = 0; i < pairs.size(); ++i ) {
-                    if ( ( pairs[i].second - pairs[i].first ) *
-                             ( pairs[i].second - pairs[i].first ) >
-                         SMALL_BUCKET ) {
-                        KDTree<Dataset, Distance> tree(
-                            pairs[i].first, pairs[i].second, dataset, weight_filter );
-                        // We can do a range search query to find the pairs
+                 output.reserve( 256 ); // reserve small space to reduce reallocs
+
+                if ( ( range_end - range_start ) * ( range_end - range_start ) >
+                     SMALL_BUCKET ) {
+                    KDTree<Dataset, Distance> tree(
+                        range_start, range_end, dataset, weight_filter );
+                    // We can do a range search query to find the pairs
                         std::vector<std::tuple<float, std::pair<uint32_t, uint32_t>>> pairs;
                         tree.range_pairs( pairs );
-                        for ( const auto& pair : pairs ) {
-                            output.push_back( pair );
-                        }
+                        output.insert( output.end(), std::make_move_iterator(pairs.begin()), std::make_move_iterator(pairs.end()) );
+
                     } else {
-                        for ( auto cur = pairs[i].first; cur < pairs[i].second; ++cur ) {
+                        for ( auto cur = range_start; cur < range_end; ++cur ) {
                             uint32_t cur_ind = *cur;
                             PointHandle pi = dataset[cur_ind];
-                            for ( auto nxt = cur + 1; nxt < pairs[i].second; ++nxt ) {
+                            for ( auto nxt = cur + 1; nxt < range_end; ++nxt ) {
                                 uint32_t nxt_ind = *nxt;
                                 float d2 = Distance::compute_nosq( pi, dataset[nxt_ind] );
                                 if ( d2 <= squared_weight_filter ) {
@@ -314,14 +299,6 @@ namespace panna {
                         }
                     }
                 }
-
-                // #pragma omp critical
-                // Merge into output under lock
-                // output.insert(output.end(),
-                //                   std::make_move_iterator(local_output.begin()),
-                //                   std::make_move_iterator(local_output.end()));
-            }
-
             std::sort( output.begin(), output.end() );
         }
         // Function to return all colliding couples in a given repetition and concatenation
