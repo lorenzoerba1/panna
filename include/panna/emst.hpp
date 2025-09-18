@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "panna/dsu.hpp"
+#include "panna/logging.hpp"
 #include "panna/trieindex.hpp"
 using EdgeTuple = std::tuple<float, std::pair<uint32_t, uint32_t>>;
 
@@ -222,7 +223,9 @@ namespace panna {
                                         break;
                                     }
                                 }
-                                std::cout << "Tree size: " << top.size() << std::endl;
+                                LOG_INFO("prefix", i,
+                                         "repetition", j,
+                                         "tree_size", top.size());
 
                                 // QUESTION: shouldn't we check that
                                 // the tree is connected?
@@ -235,15 +238,14 @@ namespace panna {
                                         new_tree_weight += std::get<0>( edge );
                                     }
                                     tree_weight = new_tree_weight;
-                                    std::cout << "Tree weight: " << tree_weight << std::endl;
-                                    std::cout << "Probability: "
-                                              << table.fail_probability(
-                                                     std::get<float>( top.back() ), i, j )
-                                              << std::endl;
-                                    std::cout
-                                        << "Max edge weight: " << std::get<float>( top.back() )
-                                        << " Mean edge weight: " << tree_weight / ( num_data - 1 )
-                                        << std::endl;
+                                    LOG_INFO("prefix", i,
+                                             "repetition", j,
+                                             "tree_weight", tree_weight,
+                                             "failure_probability", table.fail_probability(
+                                                     std::get<float>( top.back() ), i, j ),
+                                             "max_edge_weight", std::get<float>(top.back()),
+                                             "mean_edge_weight", tree_weight / (num_data - 1)
+                                    );
                                     if ( table.fail_probability(
                                              std::get<float>( top.back() ), i, j ) < delta ) {
                                         found = true;
@@ -269,7 +271,7 @@ namespace panna {
                         }
                     }
                 }
-                std::cout << "Finished prefix " << i << std::endl;
+                LOG_INFO("msg", "finished prefix", "prefix", i);
             }
             // QUESTION: why don't we use the union-find
             // data structure to check if it is connected? We might have a DSU::is_connected method
@@ -633,10 +635,10 @@ namespace panna {
 
             if ( !std::accumulate(
                      visited.begin(), visited.end(), true, std::logical_and<bool>() ) ) {
-                std::cout << "Not connected" << std::endl;
+                LOG_INFO("msg", "Not connected");
                 return false;
             }
-            std::cout << "Connected" << std::endl;
+            LOG_INFO("msg", "Connected");
             return true;
         };
 
