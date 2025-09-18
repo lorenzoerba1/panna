@@ -2,20 +2,26 @@
   description = "PUFFINN - Parameterless and Universal Fast FInding of Nearest Neighbors";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs.hl.url = "github:pamburus/hl";
 
   outputs = {
     self,
     nixpkgs,
+    hl,
   }: let
     supportedSystems = ["x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin"];
     forEachSupportedSystem = f:
       nixpkgs.lib.genAttrs supportedSystems (system:
         f {
           pkgs = import nixpkgs {inherit system;};
+          hlbin = hl.packages.${system}.default;
         });
   in {
-    devShells = forEachSupportedSystem ({pkgs}: {
-      default = (pkgs.mkShell.override {}) {
+    devShells = forEachSupportedSystem ({
+      pkgs,
+      hlbin,
+    }: {
+      default = (pkgs.mkShell.override {stdenv = pkgs.clangStdenv;}) {
         venvDir = ".venv";
 
         packages = with pkgs;
@@ -46,7 +52,8 @@
             nanobind
             icecream
             scikit-build-core
-          ]);
+          ])
+          ++ [hlbin];
 
         NIX_ENFORCE_NO_NATIVE = false;
       };
