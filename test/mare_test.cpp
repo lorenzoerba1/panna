@@ -49,16 +49,17 @@ int main()  {
                     points.resize(10000); // Limit to 1000 points for testing
 
                 EMST<Point, Hasher, Distance> tree(dimensions[index], 500, builder, points, 0.2, ep);
-
-                auto time = std::chrono::high_resolution_clock::now();
-                float weight = tree.find_tree();
-                auto duration = std::chrono::duration<double>( std::chrono::high_resolution_clock::now() - time ).count();
-                outfile <<"K+" << ", " << points.size() << ", " << name << ", " << weight << ", "<< duration << std::endl;
-                
                 float weight;
                 double duration;
 
                 auto time = std::chrono::high_resolution_clock::now();
+                weight = tree.find_tree();
+                duration = std::chrono::duration<double>( std::chrono::high_resolution_clock::now() - time ).count();
+                outfile <<"K+" << ", " << points.size() << ", " << name << ", " << weight << ", "<< duration << std::endl;
+                
+
+
+                time = std::chrono::high_resolution_clock::now();
                 weight = tree.find_epsilon_tree();
                 duration = std::chrono::duration<double>( std::chrono::high_resolution_clock::now() - time ).count();
                 outfile <<"Konverge ɛ " << ep << ", " << points.size() << ", " << name << ", " << weight << ", "<< duration << std::endl;
