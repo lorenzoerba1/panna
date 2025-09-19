@@ -72,7 +72,7 @@ namespace panna {
               const size_t repetitions,
               const typename Hasher::Builder builder,
               std::vector<std::vector<float>>& data_in,
-              const double delta_in = 0.2,
+              const double delta_in = 0.1,
               const float epsilon = 0.2 ):
             dimensionality( dimensions ),
             table( Index<Dataset, Hasher, Distance>( dimensions, builder, repetitions ) ),
@@ -207,9 +207,9 @@ namespace panna {
                             dsu_true = DSU( num_data );
                             for ( size_t local_index = 0; local_index < j + 1; local_index++ ) {
                                 auto& local = local_confirmed[local_index];
-                                edges.insert( edges.end(), local.begin(), local.end() );
-                                // std::make_move_iterator(local.begin()),
-                                // std::make_move_iterator(local.end()) );
+                                edges.insert( edges.end(),
+                                    std::make_move_iterator(local.begin()),
+                                    std::make_move_iterator(local.end()) );
                                 local.clear();
                             }
                             std::sort( edges.begin(), edges.end() );
@@ -278,11 +278,98 @@ namespace panna {
             return tree_weight;
         }
 
+//         float find_epsilon_tree_boruvka() {
+//             clear(); // Reset DSU and other member variables
+//             std::vector<EdgeTuple> batch_edges;
+//             float tree_weight;
+//             size_t num_components = num_data;
+//             std::vector<EdgeTuple> mst_edges;
+
+
+
+//             while ( num_components > 1 ) {
+//                 DSU dsu(num_data);
+//                 auto changes_made = true;
+//                 size_t iteration = 0;
+//                 tree_weight = 0.0f;
+//                 num_components = num_data;
+//                 size_t prefix_index = MAX_HASHBITS;
+
+//                 // Step 1A: use LSH to find a batch of edges
+// #pragma omp parallel for
+//                 for ( iteration = 0; iteration < MAX_REPETITIONS; iteration++ ) {
+//                     std::vector<EdgeTuple> batch_internal;
+//                     enumerate_edges( prefix_index, iteration, batch_internal );
+//                     // Step 1B: add edges to the cheapest edge list
+// #pragma omp critical
+//                     {
+//                         batch_edges.insert( batch_edges.end(),
+//                             std::make_move_iterator(batch_internal.begin()),
+//                             std::make_move_iterator(batch_internal.end()));
+//                     }
+//                 }
+
+//                 // Fill the cheapest edge structure
+//                 std::vector<EdgeTuple> cheapest_edge(num_data, std::make_tuple(std::numeric_limits<float>::max(), std::make_pair(0, 0)));
+//                 for ( auto& edge : batch_edges ) {
+//                     auto& terminal = std::get<1>(edge).first;
+//                     if ( std::get<0>(edge) < std::get<0>(cheapest_edge[terminal].back()) ) {
+//                         cheapest_edge[terminal]. = edge;
+//                         std::sort(cheapest_edge[terminal].begin(), cheapest_edge[terminal].end());
+//                     }
+//                 }
+
+//                 // Run Boruvka's algorithm
+//                 while (num_components > 1 && changes_made) {
+//                     changes_made = false;
+
+//                     // Step 2: Find the cheapest edge for each component
+//                     std::vector<EdgeTuple> component_cheapest(num_components,
+//                                                             std::make_tuple(std::numeric_limits<float>::max(), std::make_pair(0, 0)));
+//                     for (size_t i = 0; i < num_data; ++i) {
+//                         uint32_t comp = dsu.find(i);
+//                         // Find the cheapest outgoing edge from this terminal's component to another component
+//                         for (const auto& edge : cheapest_edge[i]) {
+//                             if (std::get<0>(edge) < std::get<0>(component_cheapest[comp]) && comp != dsu.find(std::get<1>(edge).second)) {
+//                                 component_cheapest[comp] = edge;
+//                             }
+//                         }
+//                     }
+
+//                     // Step 3: Add the cheapest edges to the MST
+//                     for (const auto& edge : component_cheapest) {
+//                         if (std::get<0>(edge) != std::numeric_limits<float>::max()) {
+//                             uint32_t u = std::get<1>(edge).first;
+//                             uint32_t v = std::get<1>(edge).second;
+                            
+//                             if (dsu.union_sets(u, v)) {
+//                                 mst_edges.push_back(edge);
+//                                 tree_weight += std::get<0>(edge);
+//                                 --num_components;
+//                                 changes_made = true;
+//                             }
+//                         }
+//                     }
+//                     std::cout << "Number of components: " << num_components << std::endl;
+//                 }
+
+//                 batch_edges.clear();
+//                 batch_edges.insert(batch_edges.end(),
+//                                     std::make_move_iterator(mst_edges.begin()),
+//                                     std::make_move_iterator(mst_edges.end()));
+//                 mst_edges.clear();
+//                 prefix_index--;
+//             }
+//             std::cout << "Boruvka completed with " << mst_edges.size() << " edges." << std::endl;
+
+//             return tree_weight; // Return the weight even if not fully connected or confirmed
+//         }
         /// @brief Find the ɛ-EMST using both confirmed and unconfirmed edges
         float find_epsilon_tree() {
             clear();
             // dirty_start(local_confirmed[0]);
             float tree_weight = 0;
+            float old_weight = std::numeric_limits<float>::infinity();
             std::vector<std::pair<unsigned int, unsigned int>> tree;
 
             bool found = false;
@@ -372,6 +459,16 @@ namespace panna {
                                             tree.push_back( std::get<1>( edge ) );
                                         }
                                     }
+                                    // If the weight hasn't changed epsilon*old_weight
+                                    else if ( i <= 5 && std::abs( old_weight - tree_weight ) / old_weight < epsilon ) {
+                                        std::cout << "Tree weight converged" << std::endl;
+                                        found = true;
+                                        // Fill the tree
+                                        for ( const auto& edge : top ) {
+                                            tree.push_back( std::get<1>( edge ) );
+                                        }
+                                    }
+                                    old_weight = tree_weight;
                                 }
                                 // Lose the unused edges, MST is composable wrt to edge partitioning
                                 edges.clear();
@@ -390,30 +487,25 @@ namespace panna {
         std::vector< std::vector< std::pair<float, unsigned int>>> > find_tree_dbscan( size_t k=5 ) {
             clear();
             // dirty_start(local_confirmed[0]);
-            float tree_weight = 0;
+            float tree_weight = 0, old_weight = std::numeric_limits<float>::infinity();
             std::vector<std::tuple<float, float, float>> tree;
             std::vector< std::vector< std::pair<float, unsigned int>>> neighbors (num_data, std::vector< std::pair<float, unsigned int> >() );
+            std::vector<std::vector< std::vector< std::pair<float, unsigned int>>>> local_neighbors_list( 16, std::vector< std::vector< std::pair<float, unsigned int> > >(num_data, std::vector< std::pair<float, unsigned int> >(1, std::make_pair( 0.0f, -1) ) ) );
 
             bool found = false;
             std::vector<EdgeTuple> edges;
-            // // Find the top-k nearest neighbors for each node
-            // for ( size_t index = 0; index < data.size(); index++ ) {
-            //     table.search( data[index].begin(), data[index].end(), k+1, 0.1, neighbors[index] );
-            //     // Remove the self loop
-            // }
-            // std::cout << "Neighbors found" << std::endl;
+            // Find also the top-k nearest neighbors for each node
             for ( size_t i_rev = 0; i_rev <= MAX_HASHBITS; i_rev++ ) {
                 size_t i = MAX_HASHBITS - i_rev;
                 if ( found )
                     break;
-
 #pragma omp parallel
 #pragma omp for nowait
                 for ( size_t j = 0; j < MAX_REPETITIONS; j++ ) {
                     if ( found )
                         continue;
                     DSU local_dsu( num_data );
-                    std::vector< std::vector< std::pair<float, unsigned int>>> local_neighbors (num_data, std::vector< std::pair<float, unsigned int> >() );
+                    auto& local_neighbors = local_neighbors_list[ omp_get_thread_num() ];
                     std::vector<EdgeTuple> local_top, local_Tu;
                     enumerate_edges( i, j, local_Tu );
 
@@ -423,45 +515,31 @@ namespace panna {
                         local_neighbors[ std::get<1>( edge ).second ].emplace_back( std::get<0>( edge ), std::get<1>( edge ).first );
                     }
                     for ( size_t index = 0; index < local_neighbors.size(); index++ ) {
-                        std::sort( local_neighbors[index].begin(), local_neighbors[index].end() );
-                        // Keep just the best k
-                        if ( local_neighbors[index].size() > k ) {
+                        // Use partial sort to keep just the best k
+                        if ( local_neighbors[index].size() > k) {
+                            std::partial_sort( local_neighbors[index].begin(),
+                                                  local_neighbors[index].begin() + k,
+                                                    local_neighbors[index].end() );
                             local_neighbors[index].resize( k );
+                            continue;
                         }
+
+                        std::sort( local_neighbors[index].begin(), local_neighbors[index].end() );
                     }
                     for ( auto& edge : local_Tu ) {
                         // Use the reachability
-                        // std::get<float>( edge ) = std::max( 
-                        //     std::get<float>( edge ),
-                        //     std::max( neighbors[ std::get<1>( edge ).first ].back().first,
-                        //                neighbors[ std::get<1>( edge ).second ].back().first ) );
+                        std::get<float>( edge ) = std::max( 
+                            std::get<float>( edge ),
+                            std::max( local_neighbors[ std::get<1>( edge ).first ].back().first,
+                                       local_neighbors[ std::get<1>( edge ).second ].back().first ) );
                         if ( local_top.size() == num_data - 1 ) {
                             break;
                         }
                         add_edge( edge, local_dsu, local_top );
                     }
-
                     local_confirmed[j].insert( local_confirmed[j].end(),
                                                std::make_move_iterator( local_top.begin() ),
                                                std::make_move_iterator( local_top.end() ) );
-                    #pragma omp critical
-                    {
-                        // Fill the global neighbors
-                        for ( size_t index = 0; index < local_neighbors.size(); index++ ) {
-                            neighbors[index].insert( neighbors[index].end(),
-                                                      std::make_move_iterator( local_neighbors[index].begin() ),
-                                                      std::make_move_iterator( local_neighbors[index].end() ) );
-                        }
-                        std::sort( neighbors.begin(), neighbors.end() );
-                        neighbors.erase( std::unique( neighbors.begin(), neighbors.end() ), neighbors.end() );
-                        // Keep just the best k
-                        for ( size_t index = 0; index < neighbors.size(); index++ ) {
-                            if ( neighbors[index].size() > k ) {
-                                neighbors[index].resize( k );
-                            }
-                        }
-
-                    }
 
                     // Every x iterations we have a batch, construct the MST from these edges
                     if ( ( i > 3 && ( ( j + 1 ) == MAX_REPETITIONS ||
@@ -469,7 +547,32 @@ namespace panna {
                          ( i <= 4 && j % 5 == 0 ) ) {
 #pragma omp critical
                         {   
+                            // Merge the local neighbors
+                            for ( size_t thread_index = 0; thread_index < local_neighbors_list.size();
+                                    thread_index++ ) {
+                                    auto& thread_neighbors = local_neighbors_list[ thread_index ];
+                                    for ( size_t index = 0; index < thread_neighbors.size(); index++ ) {
+                                        auto& local = thread_neighbors[index];
+                                        neighbors[index].insert( neighbors[index].end(),
+                                                                std::make_move_iterator( local.begin() ),
+                                                                std::make_move_iterator( local.end() ) );
+                                        local.clear();
+                                    }
+                                }
+                            for ( size_t index = 0; index < neighbors.size(); index++ ) {
+                                if ( neighbors[index].size() > k) {
+                                    // Use partial sort to keep just the best k
+                                    std::partial_sort( neighbors[index].begin(),
+                                                       neighbors[index].begin() + k,
+                                                       neighbors[index].end() );
+                                    neighbors[index].resize( k );
+                                    continue;
+                                }
 
+                                std::sort( neighbors[index].begin(), neighbors[index].end() );
+                            }
+
+                            // Merge the local tops
                             edges.insert( edges.end(),
                                           std::make_move_iterator( top.begin() ),
                                           std::make_move_iterator( top.end() ) );
@@ -477,9 +580,9 @@ namespace panna {
                             dsu_true = DSU( num_data );
                             for ( size_t local_index = 0; local_index < j + 1; local_index++ ) {
                                 auto& local = local_confirmed[local_index];
-                                edges.insert( edges.end(), local.begin(), local.end() );
-                                // std::make_move_iterator(local.begin()),
-                                // std::make_move_iterator(local.end()) );
+                                edges.insert( edges.end(),
+                                                std::make_move_iterator(local.begin()),
+                                                std::make_move_iterator(local.end()) );
                                 local.clear();
                             }
                             // Change the edge weights basen on their reachability
@@ -490,8 +593,7 @@ namespace panna {
                                               neighbors[ std::get<1>( edge ).second ].back().first ) );
                             }
                             std::sort( edges.begin(), edges.end() );
-                            // edges.erase( std::unique( edges.begin(), edges.end() ), edges.end()
-                            // );
+
                             if ( edges.size() > num_data - 1 ) {
                                 for ( const auto& edge : edges ) {
                                     add_edge( edge, dsu_true, top );
@@ -533,11 +635,29 @@ namespace panna {
                                                                 std::get<0>( edge ) ); 
                                         }
                                     }
+                                    // If the weight hasn't changed epsilon*old_weight
+                                    else if ( i <= 5 && std::abs( old_weight - tree_weight ) / old_weight < epsilon ) {
+                                        std::cout << "Tree weight converged" << std::endl;
+                                        found = true;
+                                        // Fill the tree
+                                        for ( const auto& edge : top ) {
+                                            tree.emplace_back( static_cast<float>( std::get<1>( edge ).first ),
+                                                               static_cast<float>( std::get<1>( edge ).second ),
+                                                                std::get<0>( edge ) );
+                                        }
+                                    }
+                                    old_weight = tree_weight;
                                 }
                                 // Lose the unused edges, MST is composable wrt to edge partitioning
                                 edges.clear();
                             }
                         }
+                    }
+                }
+                // Clear the local neighbors
+                for ( auto& local : local_neighbors_list ) {
+                    for ( auto& vec : local ) {
+                        vec.clear();
                     }
                 }
             }

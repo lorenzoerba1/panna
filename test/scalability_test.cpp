@@ -15,8 +15,10 @@ int main () {
     seed_global_rng( std::chrono::high_resolution_clock::now().time_since_epoch().count() );
     const size_t conc = 12;
     const uint8_t rotations = 3;
-    const std::vector<size_t> dimensions = {50, 100, 200};//,  400, 800, 1600};
+    const size_t dimension = 50;
+    const std::vector<size_t> dimensions = {50, 400, 800, 1600};
     const size_t rep = 500;
+    const std::vector<size_t> lenghts = {10000, 100000, 1000000};
     const size_t n = 10000;
     using Point = NormedPoints; // UnitNormPoints or NormedPoints
     using Distance = EuclideanDistance; // EuclideanDistance or AngularDistance or CosineDistance
@@ -24,7 +26,7 @@ int main () {
     //using Hasher = CrossPolytope<conc, Point, Distance, rotations>;
     std::ofstream outfile("results/weight_results.csv", std::ios_base::app);
 
-    for (const auto& dimension : dimensions){
+    for (const auto& n : lenghts){
         E2LSHBuilder<conc, NormedPoints> builder ( dimension );
         //CrossPolytopeBuilder<conc, Point, Distance, rotations> builder( dimensions );
 
@@ -35,13 +37,13 @@ int main () {
         }
 
         // Exact computation
-        EMST<Point, Hasher, Distance> tree( dimension, rep, builder, points );
+        EMST<Point, Hasher, Distance> tree( dimension, rep, builder, points, 0.1, 5.0 );
         // auto start = std::chrono::high_resolution_clock::now();
         // float weight = tree.exact_tree();
         // auto end = std::chrono::high_resolution_clock::now();
         // outfile << "Exact, "<< n << "," << dimension << "," << weight << "," << std::chrono::duration<double>(end - start).count() << std::endl;
 
-        for ( size_t repet= 0; repet <3 ; repet++) {
+        for ( size_t repet= 0; repet <1 ; repet++) {
             // // Exact with Kruskal+
             // start = std::chrono::high_resolution_clock::now();
             // weight = tree.find_tree();
@@ -52,7 +54,7 @@ int main () {
             auto start = std::chrono::high_resolution_clock::now();
             float weight = tree.find_epsilon_tree();
             auto end = std::chrono::high_resolution_clock::now();
-            outfile << "K± e0.2, "<< n << "," << dimension << "," << weight << "," << std::chrono::duration<double>(end - start).count() << std::endl;
+            outfile << "K+ ɛ 5.0, "<< n << "," << dimension << "," << weight << "," << std::chrono::duration<double>(end - start).count() << std::endl;
         }
     }
 

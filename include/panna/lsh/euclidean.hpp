@@ -111,81 +111,91 @@ namespace panna {
             ar( quantization_width, dimensions );
         }
 
-        void fit( Dataset& points ) {
-            expect( quantization_width == 0.0 );
-            Dataset random( dimensions );
-            for ( size_t i = 0; i < 1000; i++ ) {
-                std::vector<float> dir = sample_random_normal_vector( dimensions );
-                random.push_back( dir.begin(), dir.end() );
+        void fit(Dataset& points) {
+            expect(quantization_width == 0.0);
+
+            Dataset random(dimensions);
+            for (size_t i = 0; i < 1000; i++) {
+                std::vector<float> dir = sample_random_normal_vector(dimensions);
+                random.push_back(dir.begin(), dir.end());
             }
 
             float min = std::numeric_limits<float>::infinity();
             float max = -std::numeric_limits<float>::infinity();
-            for ( size_t i = 0; i < random.size(); i++ ) {
-                for ( size_t j = 0; j < points.size(); j++ ) {
-                    float dotp = dot_product( random[i], points[j] );
-                    if ( dotp < min ) {
-                        min = dotp;
-                    }
-                    if ( dotp > max ) {
-                        max = dotp;
-                    }
+            for (size_t i = 0; i < random.size(); i++) {
+                for (size_t j = 0; j < points.size(); j++) {
+                    float dotp = dot_product(random[i], points[j]);
+                    if (dotp < min) min = dotp;
+                    if (dotp > max) max = dotp;
                 }
             }
 
-            // This uses fewer than 8 bits per hash, but it makes the hashes go faster
-            // TODO: we migh consider using only 4 bits per hash.
-            quantization_width = ( max - min ) / 16;
+            quantization_width = (max - min) / 16.0f;
+            std::cout << "Initial quantization width set to " << quantization_width << std::endl;
 
-            // Now we can adjust the quantization width so that there are
-            // enough collisions at the lowest level, but not too many
             const size_t sample_repetitions = 4;
-            std::optional<float> qw_lower = std::nullopt, qw_upper = std::nullopt;
-            size_t high_thresh = sqrt( points.size() ) * 1.3;
-            size_t low_thresh = sqrt( points.size() ) * 0.7;
+            size_t high_thresh = static_cast<size_t>(sqrt(points.size()) * 1.3);
+            size_t low_thresh  = static_cast<size_t>(sqrt(points.size()) * 0.7);
 
-            // Do a binary search to find the fight value
-            while ( true ) {
-                if ( qw_lower && qw_upper ) {
-                    quantization_width = ( *qw_lower + *qw_upper ) / 2.0;
-                }
+            std::optional<float> qw_lower = std::nullopt;
+            std::optional<float> qw_upper = std::nullopt;
 
-                // instantiate some repetitions, and count the collisions
-                std::vector<PrefixMap<typename Output::Value>> pmaps;
-                pmaps.resize( sample_repetitions );
-                Output hasher( quantization_width, dimensions, sample_repetitions );
-                PrefixMap<typename Output::Value>::populate_from( pmaps, points, hasher );
+            auto compute_avg_collisions = [&](float qwidth) -> float {
+                std::vector<PrefixMap<typename Output::Value>> pmaps(sample_repetitions);
+                Output hasher(qwidth, dimensions, sample_repetitions);
+                PrefixMap<typename Output::Value>::populate_from(pmaps, points, hasher);
 
-                // Count the average pairwise collisions
                 size_t collisions = 0;
-                for ( PrefixMap<typename Output::Value>& pmap : pmaps ) {
+                for (auto& pmap : pmaps) {
                     PrefixMapCursor<typename Output::Value> cursor = pmap.create_cursor();
                     do {
                         auto ranges = cursor.get_ranges();
-                        // when using the cursor like this we expect the second of the
-                        // two returned ranges to be empty at all times
-                        assert( ranges[1].first == ranges[1].second );
+                        assert(ranges[1].first == ranges[1].second);
                         size_t bucket_size = ranges[0].second - ranges[0].first;
-                        collisions += bucket_size * ( bucket_size - 1 ) / 2;
-                    } while ( cursor.next_hash() );
+                        collisions += bucket_size * (bucket_size - 1) / 2;
+                    } while (cursor.next_hash());
                 }
-                float avg_collisions = ( (float)collisions ) / pmaps.size();
+                return static_cast<float>(collisions) / pmaps.size();
+            };
 
-                if ( avg_collisions < low_thresh ) {
-                    // the quantization width is too small
-                    qw_lower = quantization_width;
-                    quantization_width *= 2.0;
-                } else if ( ( avg_collisions >
-                              high_thresh ) && // too many collisions
-                                               // the difference between bounds is not too small
-                            ( qw_upper.value_or( 0.0 ) - qw_lower.value_or( 0.0 ) > 1e-7 ) ) {
-                    qw_upper = quantization_width;
-                    quantization_width /= 2.0;
+            // ---- Phase 1: exponential search until both bounds known ----
+            for (int iter = 0; iter < 5 && !(qw_lower && qw_upper); ++iter) {
+                float avg_collisions = compute_avg_collisions(quantization_width);
+                if (avg_collisions < low_thresh) {
+                    qw_lower = quantization_width;           // too few collisions → increase width
+                    quantization_width *= 2.0f;
+                } else if (avg_collisions > high_thresh) {
+                    qw_upper = quantization_width;           // too many collisions → decrease width
+                    quantization_width /= 2.0f;
                 } else {
+                    // already in band
                     break;
                 }
             }
+
+            // ---- Phase 2: binary search between bounds ----
+            if (qw_lower && qw_upper) {
+                for (int iter = 0; iter < 5; ++iter) {
+                    quantization_width = (*qw_lower + *qw_upper) / 2.0f;
+                    float avg_collisions = compute_avg_collisions(quantization_width);
+
+                    if (avg_collisions < low_thresh) {
+                        *qw_lower = quantization_width;
+                    } else if (avg_collisions > high_thresh) {
+                        *qw_upper = quantization_width;
+                    } else {
+                        break; // within acceptable band
+                    }
+
+                    if (fabs(*qw_upper - *qw_lower) < 1e-7f) {
+                        break; // converged
+                    }
+                }
+            }
+
+            std::cout << "Quantization width set to " << quantization_width << std::endl;
         }
+
 
         Output build( size_t repetitions ) const {
             expect( quantization_width > 0 );
