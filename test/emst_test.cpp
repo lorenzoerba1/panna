@@ -8,6 +8,7 @@
 #include "panna/emst.hpp"
 #include "panna/lsh/euclidean.hpp"
 #include "panna/rand.hpp"
+#include "panna/logging.hpp"
 
 using namespace panna;
 
@@ -50,9 +51,9 @@ int main() {
     auto start_exact = std::chrono::high_resolution_clock::now();
     float weight_exact = tree.exact_tree();
     auto end_exact = std::chrono::high_resolution_clock::now();
-    std::cout << "Exact weight is: " << weight_exact << " in "
-              << std::chrono::duration<double>( end_exact - start_exact ).count() << " seconds"
-              << std::endl;
+    LOG_INFO("msg", "Computed exact weight",
+             "exact_weight", weight_exact,
+             "elapsed_s", std::chrono::duration<double>( end_exact - start_exact ).count());
 
     // Exact with predictions (?)
     auto start = std::chrono::high_resolution_clock::now();
@@ -63,7 +64,9 @@ int main() {
     // }
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = ( end - start );
-    std::cout << "Elapsed time: " << elapsed.count() << " seconds, weight: " << weigth << std::endl;
+    LOG_INFO("msg", "Computed approximate weight",
+             "approximate_weight", weigth,
+             "elapsed_s", elapsed.count());
 
     // std::cout << "----- Epsilon Version -----" << std::endl;
     // // Approximate with predictions
