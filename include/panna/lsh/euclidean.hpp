@@ -9,6 +9,7 @@
 #include "panna/lsh/values.hpp"
 #include "panna/prefixmap.hpp"
 #include "panna/rand.hpp"
+#include "panna/logging.hpp"
 
 namespace panna {
 
@@ -131,7 +132,7 @@ namespace panna {
             }
 
             quantization_width = (max - min) / 16.0f;
-            std::cout << "Initial quantization width set to " << quantization_width << std::endl;
+            LOG_INFO("msg", "Quantization width guess", "quantization_width", quantization_width);
 
             const size_t sample_repetitions = 4;
             size_t high_thresh = static_cast<size_t>(sqrt(points.size()) * 1.3);
@@ -193,7 +194,7 @@ namespace panna {
                 }
             }
 
-            std::cout << "Quantization width set to " << quantization_width << std::endl;
+            LOG_INFO("msg", "Quantization width set to", "quantization_width", quantization_width);
         }
 
 

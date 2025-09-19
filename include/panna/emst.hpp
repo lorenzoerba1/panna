@@ -109,9 +109,11 @@ namespace panna {
 
             local_edges.resize( MAX_REPETITIONS );
             local_confirmed.resize( MAX_REPETITIONS );
-            std::cout << "Index constructed, L: " << MAX_REPETITIONS << " K: " << MAX_HASHBITS
-                      << " num data: " << num_data << std::endl;
-            std::cout << "Delta: " << delta << std::endl;
+            LOG_INFO("msg", "Index constructed",
+                     "L", MAX_REPETITIONS,
+                     "K", MAX_HASHBITS,
+                     "num_data", num_data,
+                     "delta", delta);
         };
 
         /// @brief Destructor

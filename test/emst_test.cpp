@@ -27,20 +27,20 @@ int main() {
 
     // CrossPolytopeBuilder<conc, Point, Distance, rotations> builder( dimensions );
 
-    std::vector<std::vector<float>> points;
-    for ( size_t i = 0; i < n; i++ ) {
-        std::vector<float> point = sample_random_normal_vector( 20 );
-        points.push_back( point );
-    }
-    H5Easy::File file( "fashion-mnist-784-euclidean.hdf5", H5Easy::File::ReadOnly );
-    // H5Easy::File file( "glove-100-angular.hdf5", H5Easy::File::ReadOnly );
-    //   H5Easy::File file( "nytimes-256-angular.hdf5", H5Easy::File::ReadOnly );
-    // H5Easy::File file( "simplewiki-openai-3072-normalized.hdf5", H5Easy::File::ReadOnly );
-    // H5Easy::File file( "gist-960-euclidean.hdf5", H5Easy::File::ReadOnly );
-    // H5Easy::File file( "deep-image-96-angular.hdf5", H5Easy::File::ReadOnly );
+    // std::vector<std::vector<float>> points;
+    // for ( size_t i = 0; i < n; i++ ) {
+    //     std::vector<float> point = sample_random_normal_vector( 20 );
+    //     points.push_back( point );
+    // }
+    H5Easy::File file( "datasets/fashion-mnist-784-euclidean.hdf5", H5Easy::File::ReadOnly );
+    // H5Easy::File file( "datasets/glove-100-angular.hdf5", H5Easy::File::ReadOnly );
+    //   H5Easy::File file( "datasets/nytimes-256-angular.hdf5", H5Easy::File::ReadOnly );
+    // H5Easy::File file( "datasets/simplewiki-openai-3072-normalized.hdf5", H5Easy::File::ReadOnly );
+    // H5Easy::File file( "datasets/gist-960-euclidean.hdf5", H5Easy::File::ReadOnly );
+    // H5Easy::File file( "datasets/deep-image-96-angular.hdf5", H5Easy::File::ReadOnly );
 
-    // std::vector<std::vector<float>> points =
-    //     H5Easy::load<std::vector<std::vector<float>>>( file, "/train" );
+    std::vector<std::vector<float>> points =
+        H5Easy::load<std::vector<std::vector<float>>>( file, "/train" );
     points.resize( n );
 
     size_t dimensions = points[0].size();
@@ -48,12 +48,12 @@ int main() {
     EMST<Point, Hasher, Distance> tree( dimensions, rep, builder, points );
 
     // Exact computation
-    auto start_exact = std::chrono::high_resolution_clock::now();
-    float weight_exact = tree.exact_tree();
-    auto end_exact = std::chrono::high_resolution_clock::now();
-    LOG_INFO("msg", "Computed exact weight",
-             "exact_weight", weight_exact,
-             "elapsed_s", std::chrono::duration<double>( end_exact - start_exact ).count());
+    // auto start_exact = std::chrono::high_resolution_clock::now();
+    // float weight_exact = tree.exact_tree();
+    // auto end_exact = std::chrono::high_resolution_clock::now();
+    // LOG_INFO("msg", "Computed exact weight",
+    //          "exact_weight", weight_exact,
+    //          "elapsed_s", std::chrono::duration<double>( end_exact - start_exact ).count());
 
     // Exact with predictions (?)
     auto start = std::chrono::high_resolution_clock::now();

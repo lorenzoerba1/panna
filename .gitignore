@@ -22,6 +22,7 @@ txts/
 *.sh
 *.txt
 *.pyc
+*.log
 CMake/
 deps/
 external/
