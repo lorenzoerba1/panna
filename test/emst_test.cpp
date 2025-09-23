@@ -48,12 +48,12 @@ int main() {
     EMST<Point, Hasher, Distance> tree( dimensions, rep, builder, points );
 
     // Exact computation
-    // auto start_exact = std::chrono::high_resolution_clock::now();
-    // float weight_exact = tree.exact_tree();
-    // auto end_exact = std::chrono::high_resolution_clock::now();
-    // LOG_INFO("msg", "Computed exact weight",
-    //          "exact_weight", weight_exact,
-    //          "elapsed_s", std::chrono::duration<double>( end_exact - start_exact ).count());
+    auto start_exact = std::chrono::high_resolution_clock::now();
+    float weight_exact = tree.exact_tree();
+    auto end_exact = std::chrono::high_resolution_clock::now();
+    LOG_INFO("msg", "Computed exact weight",
+             "exact_weight", weight_exact,
+             "elapsed_s", std::chrono::duration<double>( end_exact - start_exact ).count());
 
     // Exact with predictions (?)
     auto start = std::chrono::high_resolution_clock::now();

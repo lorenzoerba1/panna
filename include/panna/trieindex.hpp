@@ -12,6 +12,7 @@
 
 #include "cereal/archives/binary.hpp"
 #include "panna/kdtree.hpp"
+#include "panna/logging.hpp"
 #include "panna/lsh/predicates.hpp"
 #include "panna/prefixmap.hpp"
 
@@ -253,52 +254,49 @@ namespace panna {
         }
 
         // Function to return all colliding couples in a given repetition and concatenation
-        void search_pairs_filter( size_t repetition,
+        void
+        search_pairs_filter( size_t repetition,
                              size_t concatenations,
                              std::vector<std::tuple<float, std::pair<uint32_t, uint32_t>>>& output,
-                             float weight_filter) {
+                             float weight_filter ) {
             expect( hasher );
-            const uint32_t SMALL_BUCKET = 512;
             const float squared_weight_filter = weight_filter * weight_filter;
 
-            PairPrefixMapCursor<typename Hasher::Value> cursor =
-                lsh_maps[repetition].create_pair_cursor();
-            if ( concatenations != hasher->get_concatenations() )
-                cursor.shorten_prefix( concatenations );
+            std::vector<std::tuple<uint32_t, uint32_t, float>> scratch;
+            scratch.reserve(1 << 16);
 
-            // Avoid materializing all the pairs 
-            // Collect all ranges then we will process them
-            for ( auto info = cursor.next_filter(); std::get<2>( info );
-                  info = cursor.next_filter() ) {
-                const uint32_t* range_start = std::get<0>( info );
-                const uint32_t* range_end = std::get<1>( info );
-                 output.reserve( 256 ); // reserve small space to reduce reallocs
+            PairPrefixMapCursorNew<typename Hasher::Value> cursor =
+                lsh_maps[repetition].create_pair_cursor_new(
+                    concatenations,
+                    ( concatenations < hasher->get_concatenations() ) ? std::optional(concatenations + 1)
+                                                                      : std::nullopt );
 
-                if ( ( range_end - range_start ) * ( range_end - range_start ) >
-                     SMALL_BUCKET ) {
-                    KDTree<Dataset, Distance> tree(
-                        range_start, range_end, dataset, weight_filter );
-                    // We can do a range search query to find the pairs
-                        std::vector<std::tuple<float, std::pair<uint32_t, uint32_t>>> pairs;
-                        tree.range_pairs( pairs );
-                        output.insert( output.end(), std::make_move_iterator(pairs.begin()), std::make_move_iterator(pairs.end()) );
-
-                    } else {
-                        for ( auto cur = range_start; cur < range_end; ++cur ) {
-                            uint32_t cur_ind = *cur;
-                            PointHandle pi = dataset[cur_ind];
-                            for ( auto nxt = cur + 1; nxt < range_end; ++nxt ) {
-                                uint32_t nxt_ind = *nxt;
-                                float d2 = Distance::compute_nosq( pi, dataset[nxt_ind] );
-                                if ( d2 <= squared_weight_filter ) {
-                                    // We can use the squared distance to avoid computing the
-                                    // square root, that is computed only when we need to
-                                    output.emplace_back( sqrt( d2 ) , std::make_pair( cur_ind, nxt_ind ) );
-                                }
-                            }
-                        }
-                    }
+            while (true) {
+                cursor.fill_pairs_buffer(scratch);
+                if (scratch.size() == 0 ) {
+                    // no new pairs
+                    break;
                 }
+                LOG_DEBUG("repetition", repetition,
+                          "prefix", concatenations,
+                          "num_new_pairs", scratch.size());
+                // TODO: run in parallel
+                for (size_t i=0; i < scratch.size(); i++) {
+                    PointHandle a = dataset[std::get<0>(scratch[i])];
+                    PointHandle b = dataset[std::get<1>(scratch[i])];
+                    std::get<2>(scratch[i]) = Distance::compute_nosq(a, b);
+                }
+                // add the tuples below the threshold
+                for (size_t i=0; i < scratch.size(); i++) {
+                    float squared_distance = std::get<2>(scratch[i]);
+                    if (squared_distance > squared_weight_filter) {
+                        continue;
+                    }
+                    uint32_t a = std::get<0>(scratch[i]);
+                    uint32_t b = std::get<1>(scratch[i]);
+                    output.emplace_back(sqrt(squared_distance), std::make_pair(a, b));
+                }
+            }
             std::sort( output.begin(), output.end() );
         }
         // Function to return all colliding couples in a given repetition and concatenation
