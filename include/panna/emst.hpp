@@ -415,9 +415,9 @@ namespace panna {
                             dsu_true = DSU( num_data );
                             for ( size_t local_index = 0; local_index < j + 1; local_index++ ) {
                                 auto& local = local_confirmed[local_index];
-                                edges.insert( edges.end(), local.begin(), local.end() );
-                                // std::make_move_iterator(local.begin()),
-                                // std::make_move_iterator(local.end()) );
+                                edges.insert( edges.end(), 
+                                    std::make_move_iterator(local.begin()),
+                                    std::make_move_iterator(local.end()) );
                                 local.clear();
                             }
                             std::sort( edges.begin(), edges.end() );
@@ -430,7 +430,6 @@ namespace panna {
                                         break;
                                     }
                                 }
-                                std::cout << "Tree size: " << top.size() << std::endl;
 
                                 if ( top.size() == num_data - 1 ) {
                                     float new_tree_weight = 0;
@@ -444,7 +443,6 @@ namespace panna {
                                                        std::get<float>( e ), i, j ) < delta;
                                         } );
                                     tree_weight = new_tree_weight;
-                                    std::cout << "Tree weight: " << tree_weight << std::endl;
                                     float bound_weight =
                                         ( 1 + epsilon ) *
                                             std::accumulate( top.begin(),
@@ -452,10 +450,18 @@ namespace panna {
                                                              0.0f,
                                                              []( float acc, const EdgeTuple& e ) {
                                                                  return acc + std::get<float>( e );
-                                                             } ) +
-                                        ( std::get<float>( *( partition_point - 1 ) ) *
-                                          std::distance( partition_point, top.end() ) );
-                                    std::cout << "Bound weight: " << bound_weight << std::endl;
+                                                             } );
+                                    if ( partition_point != top.begin() ) {
+                                        bound_weight += ( std::get<float>( *( partition_point - 1 ) ) *
+                                                          std::distance( partition_point, top.end() ) );
+                                    }
+                                    LOG_INFO("prefix", i,
+                                             "repetition", j,
+                                             "tree_weight", tree_weight,
+                                             "bound_weight", bound_weight,
+                                             "max_edge_weight", std::get<float>(top.back()),
+                                             "mean_edge_weight", tree_weight / (num_data - 1)
+                                    );
                                     if ( tree_weight <= bound_weight ) {
                                         found = true;
                                         // Fill the tree
@@ -465,7 +471,10 @@ namespace panna {
                                     }
                                     // If the weight hasn't changed epsilon*old_weight
                                     else if ( i <= 5 && std::abs( old_weight - tree_weight ) / old_weight < epsilon ) {
-                                        std::cout << "Tree weight converged" << std::endl;
+                                        LOG_INFO("msg", "Tree weight converged",
+                                                 "old_weight", old_weight,
+                                                 "tree_weight", tree_weight,
+                                                 "relative_change", std::abs( old_weight - tree_weight ) / old_weight);
                                         found = true;
                                         // Fill the tree
                                         for ( const auto& edge : top ) {
@@ -480,8 +489,7 @@ namespace panna {
                         }
                     }
                 }
-                std::cout << "Finished prefix " << i << std::endl;
-            }
+                LOG_INFO("msg", "finished prefix", "prefix", i);}
             is_connected( tree );
             return tree_weight;
         }
@@ -532,10 +540,13 @@ namespace panna {
                     }
                     for ( auto& edge : local_Tu ) {
                         // Use the reachability
-                        std::get<float>( edge ) = std::max( 
-                            std::get<float>( edge ),
-                            std::max( local_neighbors[ std::get<1>( edge ).first ].back().first,
-                                       local_neighbors[ std::get<1>( edge ).second ].back().first ) );
+                        // Check if we have the elements in local neighbors before accessing the back
+                        if ( !local_neighbors[ std::get<1>( edge ).first ].empty() && !local_neighbors[ std::get<1>( edge ).second ].empty() ) {
+                            std::get<float>( edge ) = std::max( 
+                                std::get<float>( edge ),
+                                std::max( local_neighbors[ std::get<1>( edge ).first ].back().first,
+                                           local_neighbors[ std::get<1>( edge ).second ].back().first ) );
+                        }
                         if ( local_top.size() == num_data - 1 ) {
                             break;
                         }
@@ -625,10 +636,17 @@ namespace panna {
                                                              0.0f,
                                                              []( float acc, const EdgeTuple& e ) {
                                                                  return acc + std::get<float>( e );
-                                                             } ) +
-                                        ( std::get<float>( *( partition_point - 1 ) ) *
-                                          std::distance( partition_point, top.end() ) );
-                                          std::cout << "Bound weight: " << bound_weight << ", Tree weight: " << tree_weight << std::endl;
+                                                             } );
+                                    if ( partition_point != top.begin() ){
+                                        bound_weight += ( std::get<float>( *( partition_point - 1 ) ) *
+                                                          std::distance( partition_point, top.end() ) );
+                                    }
+                                    LOG_INFO("prefix", i,
+                                             "repetition", j,
+                                             "tree_weight", tree_weight,
+                                             "bound_weight", bound_weight,
+                                             "max_edge_weight", std::get<float>(top.back()),
+                                             "mean_edge_weight", tree_weight / (num_data - 1));
                                     if ( tree_weight <= bound_weight ) {
                                         tree.clear();
                                         found = true;
@@ -641,7 +659,11 @@ namespace panna {
                                     }
                                     // If the weight hasn't changed epsilon*old_weight
                                     else if ( i <= 5 && std::abs( old_weight - tree_weight ) / old_weight < epsilon ) {
-                                        std::cout << "Tree weight converged" << std::endl;
+                                        tree.clear();
+                                        LOG_INFO("msg", "Tree weight converged",
+                                                 "old_weight", old_weight,
+                                                 "tree_weight", tree_weight,
+                                                 "relative_change", std::abs( old_weight - tree_weight ) / old_weight);
                                         found = true;
                                         // Fill the tree
                                         for ( const auto& edge : top ) {
@@ -700,7 +722,9 @@ namespace panna {
             // Discover edges that share the same prefix at iteration i, j
             std::vector<EdgeTuple> couples;
             table.search_pairs_filter( j, i, couples, max_weight );
-            Tu_local.insert( Tu_local.end(), couples.begin(), couples.end() );
+            Tu_local.insert( Tu_local.end(), 
+                std::make_move_iterator(couples.begin()),
+                std::make_move_iterator(couples.end()) );
             return;
         };
 

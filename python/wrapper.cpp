@@ -12,6 +12,7 @@
 #include "panna/lsh/simhash.hpp"
 #include "panna/trieindex.hpp"
 #include "panna/emst.hpp"
+#include "panna/logging.hpp"
 
 namespace nb = nanobind;
 
@@ -167,7 +168,7 @@ struct EMST_exposed {
 
         // Set default parameters, which can be overridden by kwargs from Python
         size_t repetitions = 500;
-        double delta = 0.2;
+        double delta = 0.1;
         float epsilon = 0.2;
 
         if (kwargs.contains("repetitions")) {
@@ -198,79 +199,82 @@ struct EMST_exposed {
     nb::tuple find_mst(unsigned int k) {
         // Call the underlying C++ method
         auto result_pair = inner->find_tree_dbscan(k);
-        
-        // MST edges
+
+        // 1. MST Edges
         auto& tree_edges_vec = result_pair.first;
         size_t num_edges = tree_edges_vec.size();
 
-        // Allocate memory on the heap that nanobind will manage.
-        auto* tree_data_ptr = new float[num_edges * 3];
+        // Create a vector on the heap that will be owned by NumPy
+        auto tree_vec_ptr = std::make_unique<std::vector<float>>(num_edges * 3);
 
-        // Copy the edge data into the new buffer.
         for (size_t i = 0; i < num_edges; ++i) {
-            tree_data_ptr[i * 3 + 0] = ( std::get<0>( tree_edges_vec[i] ) );
-            tree_data_ptr[i * 3 + 1] = ( std::get<1>( tree_edges_vec[i] ) );
-            tree_data_ptr[i * 3 + 2] = ( std::get<2>( tree_edges_vec[i] ) );
+            (*tree_vec_ptr)[i * 3 + 0] = std::get<0>(tree_edges_vec[i]);
+            (*tree_vec_ptr)[i * 3 + 1] = std::get<1>(tree_edges_vec[i]);
+            (*tree_vec_ptr)[i * 3 + 2] = std::get<2>(tree_edges_vec[i]);
         }
 
-        // Create a capsule to give ownership of the pointer to the NumPy array.
-        // The lambda function tells nanobind how to free the memory later.
-        nb::capsule tree_owner(tree_data_ptr, [](void *p) noexcept { delete[] (float *) p; });
+        nb::capsule tree_owner(tree_vec_ptr.get(), [](void *p) noexcept {
+            delete static_cast<std::vector<float>*>(p);
+        });
         
-        nb::ndarray<float, nb::numpy> tree_array = nb::ndarray<float, nb::numpy>(
-            tree_data_ptr,
-            {num_edges, 3}, // Shape: (num_edges, 3), HDBSCAN wants 3 floats terminal1, terminal2, distance
-            tree_owner
+        nb::ndarray<float, nb::numpy> tree_array(
+            tree_vec_ptr.release()->data(), 
+            {num_edges, 3},
+            tree_owner 
         );
+        LOG_INFO("msg", "Created tree array", "num_edges", num_edges);
 
-        // Core Distances
+        // 2. Core Distances
         auto& neighbor_results = result_pair.second;
         size_t num_points = neighbor_results.size();
 
-        // Allocate heap memory for the core distances.
-        auto* core_data_ptr = new float[num_points];
-
+        auto core_vec_ptr = std::make_unique<std::vector<float>>(num_points);
         for (size_t i = 0; i < num_points; ++i) {
             if (!neighbor_results[i].empty()) {
-                // The core distance is the distance to the k-th neighbor (or first in the heap that is returned from the search).
-                core_data_ptr[i] = neighbor_results[i].front().first;
+                (*core_vec_ptr)[i] = neighbor_results[i].front().first;
             } else {
-                core_data_ptr[i] = std::numeric_limits<float>::infinity();
+                (*core_vec_ptr)[i] = std::numeric_limits<float>::infinity();
             }
         }
 
-        nb::capsule core_owner(core_data_ptr, [](void *p) noexcept { delete[] (float *) p; });
+        nb::capsule core_owner(core_vec_ptr.get(), [](void *p) noexcept {
+            delete static_cast<std::vector<float>*>(p);
+        });
+
+        LOG_INFO("msg", "Created core array", "num_points", num_points);
 
         nb::ndarray<float, nb::numpy, nb::ndim<1>> core_array(
-            core_data_ptr,
+            core_vec_ptr.release()->data(),
             {num_points},
             core_owner
         );
 
-        // Neighbors
-        size_t num_neighbors_per_point = k + 1; // Search returns k+1 neighbors (including self)
-        auto* neighbors_data_ptr = new uint32_t[num_points * num_neighbors_per_point];
 
+        // 3. Neighbors
+        size_t num_neighbors_per_point = k + 1;
+        auto neighbors_vec_ptr = std::make_unique<std::vector<uint32_t>>(num_points * num_neighbors_per_point);
+        
         for (size_t i = 0; i < num_points; ++i) {
             for (size_t j = 0; j < num_neighbors_per_point; ++j) {
-                // Ensure we don't read out of bounds if fewer than k neighbors were found
                 if (j < neighbor_results[i].size()) {
-                    neighbors_data_ptr[i * num_neighbors_per_point + j] = neighbor_results[i][j].second;
+                    (*neighbors_vec_ptr)[i * num_neighbors_per_point + j] = neighbor_results[i][j].second;
                 } else {
-                    neighbors_data_ptr[i * num_neighbors_per_point + j] = i;
+                    (*neighbors_vec_ptr)[i * num_neighbors_per_point + j] = i;
                 }
             }
         }
 
-        nb::capsule neighbors_owner(neighbors_data_ptr, [](void *p) noexcept { delete[] (uint32_t *) p; });
+        nb::capsule neighbors_owner(neighbors_vec_ptr.get(), [](void *p) noexcept {
+            delete static_cast<std::vector<uint32_t>*>(p);
+        });
 
         nb::ndarray<uint32_t, nb::numpy, nb::ndim<2>> neighbors_array(
-            neighbors_data_ptr,
+            neighbors_vec_ptr.release()->data(),
             {num_points, num_neighbors_per_point},
             neighbors_owner
         );
-
-        // Return a Python tuple containing the three new NumPy arrays.
+        LOG_INFO("msg", "Created neighbors array", "num_points", num_points, "num_neighbors_per_point", num_neighbors_per_point);
+        // Return as a python tuple
         return nb::make_tuple(tree_array, core_array, neighbors_array);
     }
 };

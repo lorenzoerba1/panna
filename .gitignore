@@ -27,6 +27,7 @@ CMake/
 deps/
 external/
 mlpack/
+datasets/
 dtb
 emst
 mare
