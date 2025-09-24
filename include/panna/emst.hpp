@@ -104,7 +104,7 @@ namespace panna {
             // Get info on the index
             MAX_HASHBITS = table.num_concatenations();
             MAX_REPETITIONS = table.num_repetitions();
-            delta = delta_in / num_data;
+            delta = delta_in;// / num_data;
             max_weight = std::numeric_limits<float>::infinity();
 
             local_edges.resize( MAX_REPETITIONS );
@@ -148,6 +148,11 @@ namespace panna {
                     break;
                 }
             }
+            size_t position_last_edge = static_cast<size_t>(std::find( all_edges.begin(), all_edges.end(), tree.back() ) - all_edges.begin());
+            LOG_INFO("msg", "MST created",
+                      "heaviest_edge", std::get<0>( tree.back() ),
+                      "Weight_edge_2n", std::get<0>( all_edges[std::min(2 * (position_last_edge), (all_edges.size() - 1))] )
+            );
             for ( const auto& edge : tree ) {
                 tree_weight += std::get<0>( edge );
             }
@@ -243,13 +248,13 @@ namespace panna {
                                     LOG_INFO("prefix", i,
                                              "repetition", j,
                                              "tree_weight", tree_weight,
-                                             "failure_probability", table.fail_probability(
-                                                     std::get<float>( top.back() ), i, j ),
+                                             "failure_probability", failure_probablity(i, j),
+                                            //  "failure_probability", table.fail_probability(
+                                            //          std::get<float>( top.back() ), i, j ),
                                              "max_edge_weight", std::get<float>(top.back()),
                                              "mean_edge_weight", tree_weight / (num_data - 1)
                                     );
-                                    if ( table.fail_probability(
-                                             std::get<float>( top.back() ), i, j ) < delta ) {
+                                    if ( failure_probablity(i, j) < delta ) {
                                         found = true;
                                         // Fill the tree
                                         for ( const auto& edge : top ) {
@@ -437,11 +442,22 @@ namespace panna {
                                     for ( const auto& edge : top ) {
                                         new_tree_weight += std::get<0>( edge );
                                     }
-                                    auto partition_point = std::partition_point(
+                                    // auto partition_point = std::partition_point(
+                                    //     top.begin(), top.end(), [&]( const auto& e ) {
+                                    //         return table.fail_probability(
+                                    //                    std::get<float>( e ), i, j ) < delta;
+                                    //     } );
+                                    // The partition point is until we sum the failure probabilities
+                                    //  and exceed delta
+                                    float delta_local = delta;
+                                    auto partition_point = std::find_if(
                                         top.begin(), top.end(), [&]( const auto& e ) {
-                                            return table.fail_probability(
-                                                       std::get<float>( e ), i, j ) < delta;
+                                            delta_local -= table.fail_probability(
+                                                       std::get<float>( e ), i, j );
+                                            return delta_local <= 0;
                                         } );
+                                    LOG_INFO("msg", "Partitioning",
+                                    "delta_local", delta_local);
                                     tree_weight = new_tree_weight;
                                     float bound_weight =
                                         ( 1 + epsilon ) *
@@ -470,17 +486,17 @@ namespace panna {
                                         }
                                     }
                                     // If the weight hasn't changed epsilon*old_weight
-                                    else if ( i <= 5 && std::abs( old_weight - tree_weight ) / old_weight < epsilon ) {
-                                        LOG_INFO("msg", "Tree weight converged",
-                                                 "old_weight", old_weight,
-                                                 "tree_weight", tree_weight,
-                                                 "relative_change", std::abs( old_weight - tree_weight ) / old_weight);
-                                        found = true;
-                                        // Fill the tree
-                                        for ( const auto& edge : top ) {
-                                            tree.push_back( std::get<1>( edge ) );
-                                        }
-                                    }
+                                    // else if ( i <= 5 && std::abs( old_weight - tree_weight ) / old_weight < epsilon ) {
+                                    //     LOG_INFO("msg", "Tree weight converged",
+                                    //              "old_weight", old_weight,
+                                    //              "tree_weight", tree_weight,
+                                    //              "relative_change", std::abs( old_weight - tree_weight ) / old_weight);
+                                    //     found = true;
+                                    //     // Fill the tree
+                                    //     for ( const auto& edge : top ) {
+                                    //         tree.push_back( std::get<1>( edge ) );
+                                    //     }
+                                    // }
                                     old_weight = tree_weight;
                                 }
                                 // Lose the unused edges, MST is composable wrt to edge partitioning
@@ -795,8 +811,7 @@ namespace panna {
         /// @param edge_list the current edges in the tree
         /// @return true if an edge has been added to the edge_list and the DSU data structure,
         /// false otherwise
-        bool
-        add_edge( const EdgeTuple& new_edge_input, DSU& dsu, std::vector<EdgeTuple>& edge_list ) {
+        bool add_edge( const EdgeTuple& new_edge_input, DSU& dsu, std::vector<EdgeTuple>& edge_list ) {
             // Extract new edge and its weight.
             std::pair<uint32_t, uint32_t> new_edge = std::get<1>( new_edge_input );
 
@@ -818,6 +833,14 @@ namespace panna {
                 clean.emplace_back( table.get_distance( vertices[i - 1], vertices[i] ),
                                     std::make_pair( vertices[i - 1], vertices[i] ) );
             }
+        }
+
+        float failure_probablity( size_t i, size_t j) {
+            float prob = 0.0f;
+            for ( auto& edge : top ) {
+                prob += table.fail_probability( std::get<float>( edge ), i, j );
+            }
+            return prob;
         }
 
         /// @brief Clear the data structures from previous runs
