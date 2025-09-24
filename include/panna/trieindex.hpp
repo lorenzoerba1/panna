@@ -258,7 +258,7 @@ namespace panna {
                              std::vector<std::tuple<float, std::pair<uint32_t, uint32_t>>>& output,
                              float weight_filter) {
             expect( hasher );
-            const uint32_t SMALL_BUCKET = 512;
+            const uint32_t SMALL_BUCKET = std::numeric_limits<uint32_t>::infinity();
             const float squared_weight_filter = weight_filter * weight_filter;
 
             PairPrefixMapCursor<typename Hasher::Value> cursor =
@@ -289,7 +289,7 @@ namespace panna {
                             PointHandle pi = dataset[cur_ind];
                             for ( auto nxt = cur + 1; nxt < range_end; ++nxt ) {
                                 uint32_t nxt_ind = *nxt;
-                                float d2 = Distance::compute_nosq( pi, dataset[nxt_ind] );
+                                float d2 = Distance::compute( pi, dataset[nxt_ind] );
                                 if ( d2 <= squared_weight_filter ) {
                                     // We can use the squared distance to avoid computing the
                                     // square root, that is computed only when we need to

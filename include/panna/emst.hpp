@@ -83,17 +83,17 @@ namespace panna {
             dsu_true( DSU( num_data ) ),
             filter( DSU( num_data ) ) {
             // Find the mean for each dimension and center the data
-#pragma omp parallel for
-            for ( size_t dim = 0; dim < dimensions; dim++ ) {
-                float mean = 0;
-                for ( size_t i = 0; i < num_data; i++ ) {
-                    mean += data_in[i][dim];
-                }
-                mean /= num_data;
-                for ( size_t i = 0; i < num_data; i++ ) {
-                    data_in[i][dim] -= mean;
-                }
-            }
+// #pragma omp parallel for
+//             for ( size_t dim = 0; dim < dimensions; dim++ ) {
+//                 float mean = 0;
+//                 for ( size_t i = 0; i < num_data; i++ ) {
+//                     mean += data_in[i][dim];
+//                 }
+//                 mean /= num_data;
+//                 for ( size_t i = 0; i < num_data; i++ ) {
+//                     data_in[i][dim] -= mean;
+//                 }
+            // }
 
             // Insert the data
             for ( auto& point : data_in ) {

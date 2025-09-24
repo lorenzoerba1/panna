@@ -175,7 +175,7 @@ namespace panna {
         maybe_emit_( uint32_t i,
                      uint32_t j,
                      std::vector<std::tuple<float, std::pair<uint32_t, uint32_t>>>& out ) const {
-            float d2 = Distance::compute_nosq( dataset_[i], dataset_[j] );
+            float d2 = Distance::compute( dataset_[i], dataset_[j] );
             if ( d2 <= radius2_ )
                 out.emplace_back( sqrt( d2 ), std::make_pair( i, j ) );
         }

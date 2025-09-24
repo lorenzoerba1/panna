@@ -70,11 +70,20 @@ namespace panna {
             float dot = panna::dot_product( a, b );
             return std::sqrt( a.squared_norm() + b.squared_norm() - 2 * dot );
         }
+    };
 
+    // Convenience struct to compute squared Euclidean distance without the square root
+    struct EuclideanDistanceNoSqrt {
+        static constexpr bool is_metric() {
+            return false; // Technically not a metric, but avoids sqrt for all filtered elements
+        };
+
+        //! Works on any `Point` type for which `panna::dot_product` is
+        //! implemented and that has a `squared_norm` method.
         template <typename Point>
-        static float compute_nosq( Point a, Point b ) {
+        static float compute( Point a, Point b ) {
             float dot = panna::dot_product( a, b );
-            return a.squared_norm() + b.squared_norm() - 2 * dot;
+            return  a.squared_norm() + b.squared_norm() - 2 * dot;
         }
     };
 
