@@ -348,15 +348,20 @@ namespace panna {
             if ( range_end >= hashes.size() ) {
                 continue_cycle = false;
             }
+            // If we are at the beginning, we have to compare everything in the range
+            if ( prefix_length == THashValue::get_concatenations() ) {
+                split_ranges.emplace_back( &indices[range_start], &indices[range_end] );
+                return std::make_tuple( &indices[range_start], &indices[range_end], split_ranges, continue_cycle );
+            }
             // Find the portions of the indices that are new
             // since we reduced the prefix, there is a part of comparisons that we already did
             Iter current_range_start = &indices[range_start];
             for (size_t i = range_start + 1; i < range_end; ++i) {
-                    // A split happens when the prefix of the current hash differs from the previous one
-                    if (hashes[i - 1].prefix_less(hashes[i], prefix_length + 1)) {
-                        split_ranges.emplace_back(current_range_start, &indices[i]);
-                        current_range_start = &indices[i];
-                    }
+                // A split happens when the prefix of the current hash differs from the previous one
+                if (hashes[i - 1].prefix_less(hashes[i], prefix_length + 1)) {
+                    split_ranges.emplace_back(current_range_start, &indices[i]);
+                    current_range_start = &indices[i];
+                }
             }
             if (current_range_start != &indices[range_end]) {
                 split_ranges.emplace_back(current_range_start, &indices[range_end]);

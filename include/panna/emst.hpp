@@ -132,7 +132,7 @@ namespace panna {
                 for ( size_t j = i + 1; j < num_data; j++ ) {
                     float dist = table.get_distance( i, j );
                     all_edges[ i * (num_data -1) - ( i * ( i + 1 ) / 2 ) + j - 1 ] =
-                        std::make_tuple( dist, std::make_pair( i, j ) );
+                        std::make_tuple( std::sqrt( dist ), std::make_pair( i, j ) );
                 }
             }
             // Sort the edges
@@ -142,12 +142,7 @@ namespace panna {
             float tree_weight = 0;
             std::cout << "Creating the MST" << std::endl;
             std::vector<EdgeTuple> tree;
-            for ( const auto& edge : all_edges ) {
-                add_edge( edge, dsu, tree );
-                if ( tree.size() == num_data - 1 ) {
-                    break;
-                }
-            }
+            kruskal( dsu, all_edges, tree );
             size_t position_last_edge = static_cast<size_t>(std::find( all_edges.begin(), all_edges.end(), tree.back() ) - all_edges.begin());
             LOG_INFO("msg", "MST created",
                       "heaviest_edge", std::get<0>( tree.back() ),
@@ -191,12 +186,7 @@ namespace panna {
                     std::vector<EdgeTuple> local_top, local_Tu;
                     enumerate_edges( i, j, local_Tu );
 
-                    for ( auto& edge : local_Tu ) {
-                        if ( local_top.size() == num_data - 1 ) {
-                            break;
-                        }
-                        add_edge( edge, local_dsu, local_top );
-                    }
+                    kruskal( local_dsu, local_Tu, local_top );
 
                     local_confirmed[j].insert( local_confirmed[j].end(),
                                                std::make_move_iterator( local_top.begin() ),
@@ -224,12 +214,7 @@ namespace panna {
                             // edges.erase( std::unique( edges.begin(), edges.end() ), edges.end()
                             // );
                             if ( edges.size() > num_data - 1 ) {
-                                for ( const auto& edge : edges ) {
-                                    add_edge( edge, dsu_true, top );
-                                    if ( top.size() == num_data - 1 ) {
-                                        break;
-                                    }
-                                }
+                                kruskal( dsu_true, edges, top );
                                 LOG_INFO("prefix", i,
                                          "repetition", j,
                                          "tree_size", top.size());
@@ -396,12 +381,7 @@ namespace panna {
                     std::vector<EdgeTuple> local_top, local_Tu;
                     enumerate_edges( i, j, local_Tu );
 
-                    for ( auto& edge : local_Tu ) {
-                        if ( local_top.size() == num_data - 1 ) {
-                            break;
-                        }
-                        add_edge( edge, local_dsu, local_top );
-                    }
+                    kruskal( local_dsu, local_Tu, local_top );
 
                     local_confirmed[j].insert( local_confirmed[j].end(),
                                                std::make_move_iterator( local_top.begin() ),
@@ -429,35 +409,30 @@ namespace panna {
                             // edges.erase( std::unique( edges.begin(), edges.end() ), edges.end()
                             // );
                             if ( edges.size() > num_data - 1 ) {
-                                for ( const auto& edge : edges ) {
-                                    add_edge( edge, dsu_true, top );
-                                    if ( top.size() == num_data - 1 ) {
-                                        break;
-                                    }
-                                }
-
+                               kruskal( dsu_true, edges, top );
+                                LOG_INFO("prefix", i,
+                                         "repetition", j,
+                                         "tree_size", top.size());
                                 if ( top.size() == num_data - 1 ) {
                                     float new_tree_weight = 0;
                                     max_weight = std::get<float>( top.back() );
                                     for ( const auto& edge : top ) {
                                         new_tree_weight += std::get<0>( edge );
                                     }
-                                    // auto partition_point = std::partition_point(
-                                    //     top.begin(), top.end(), [&]( const auto& e ) {
-                                    //         return table.fail_probability(
-                                    //                    std::get<float>( e ), i, j ) < delta;
-                                    //     } );
+                                    auto partition_point = std::partition_point(
+                                        top.begin(), top.end(), [&]( const auto& e ) {
+                                            return table.fail_probability(
+                                                       std::get<float>( e ), i, j ) < delta;
+                                        } );
                                     // The partition point is until we sum the failure probabilities
                                     //  and exceed delta
-                                    float delta_local = delta;
-                                    auto partition_point = std::find_if(
-                                        top.begin(), top.end(), [&]( const auto& e ) {
-                                            delta_local -= table.fail_probability(
-                                                       std::get<float>( e ), i, j );
-                                            return delta_local <= 0;
-                                        } );
-                                    LOG_INFO("msg", "Partitioning",
-                                    "delta_local", delta_local);
+                                    // float delta_local = delta;
+                                    // auto partition_point = std::find_if(
+                                    //     top.begin(), top.end(), [&]( const auto& e ) {
+                                    //         delta_local -= table.fail_probability(
+                                    //                    std::get<float>( e ), i, j );
+                                    //         return delta_local <= 0;
+                                    //     } );
                                     tree_weight = new_tree_weight;
                                     float bound_weight =
                                         ( 1 + epsilon ) *
@@ -823,6 +798,19 @@ namespace panna {
             return false;
         }
 
+        /// @brief Run Kruskal's algorithm to find the minimum spanning tree
+        /// @param dsu the data structure that keeps track of the connected components
+        /// @param edge_list the current edges in the tree
+        /// @param output the output vector that will contain the edges in the minimum spanning tree
+        inline void kruskal( DSU& dsu, std::vector<EdgeTuple>& edge_list, std::vector<EdgeTuple>& output ) {
+            for ( const auto& edge : edge_list ) {
+                if ( output.size() == num_data - 1 ) {
+                    break;
+                }
+                add_edge( edge, dsu, output );
+            }
+        }
+
         /// @brief Generate a random spanning tree to have an initial solution
         void dirty_start( std::vector<EdgeTuple>& clean ) {
             std::vector<unsigned int> vertices( num_data );
@@ -858,6 +846,8 @@ namespace panna {
             }
             local_confirmed.resize( MAX_REPETITIONS );
             local_edges.resize( MAX_REPETITIONS );
+            dsu_true = DSU( num_data );
+            max_weight = std::numeric_limits<float>::infinity();
         }
     }; // closes class
 } // namespace panna

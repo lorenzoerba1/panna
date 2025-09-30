@@ -285,41 +285,42 @@ namespace panna {
                         output.insert( output.end(), std::make_move_iterator(pairs.begin()), std::make_move_iterator(pairs.end()) );
 
                     } else {
-                        // Do the cross evaluation between ranges
-                        for (size_t first_range = 0; first_range < split_ranges.size() - 1; first_range++ ) {
-                            for (size_t second_range = first_range + 1; second_range < split_ranges.size(); second_range++ ) {
-                                for ( auto cur = split_ranges[first_range].first; cur != split_ranges[first_range].second; ++cur ) {
-                                    uint32_t cur_ind = *cur;
-                                    PointHandle pi = dataset[cur_ind];
-                                    for ( auto nxt = split_ranges[second_range].first; nxt != split_ranges[second_range].second; ++nxt ) {
-                                        uint32_t nxt_ind = *nxt;
-                                        float d2 = Distance::compute( pi, dataset[nxt_ind] );
-                                        if ( d2 <= squared_weight_filter ) {
-                                            // We can use the squared distance to avoid computing the
-                                            // square root, that is computed only when we need to
-                                            output.emplace_back( sqrt( d2 ) , std::make_pair( cur_ind, nxt_ind ) );
+                        // If we use full length hashes we have to compare everything in the range
+                        if (concatenations == hasher->get_concatenations() ) {
+                            for ( auto cur = range_start; cur != range_end; ++cur ) {
+                                uint32_t cur_ind = *cur;
+                                PointHandle pi = dataset[cur_ind];
+                                for ( auto nxt = cur + 1; nxt != range_end; ++nxt ) {
+                                    uint32_t nxt_ind = *nxt;
+                                    float d2 = Distance::compute( pi, dataset[nxt_ind] );
+                                    if ( d2 <= squared_weight_filter ) {
+                                        // We can use the squared distance to avoid computing the
+                                        // square root, that is computed only when we need to
+                                        output.emplace_back( sqrt( d2 ) , std::make_pair( cur_ind, nxt_ind ) );
+                                    }
+                                }
+                            }
+                        }
+                        else {
+                            // Do the cross evaluation between ranges
+                            for (size_t first_range = 0; first_range < split_ranges.size() - 1; first_range++ ) {
+                                for (size_t second_range = first_range + 1; second_range < split_ranges.size(); second_range++ ) {
+                                    for ( auto cur = split_ranges[first_range].first; cur != split_ranges[first_range].second; ++cur ) {
+                                        uint32_t cur_ind = *cur;
+                                        PointHandle pi = dataset[cur_ind];
+                                        for ( auto nxt = split_ranges[second_range].first; nxt != split_ranges[second_range].second; ++nxt ) {
+                                            uint32_t nxt_ind = *nxt;
+                                            float d2 = Distance::compute( pi, dataset[nxt_ind] );
+                                            if ( d2 <= squared_weight_filter ) {
+                                                // We can use the squared distance to avoid computing the
+                                                // square root, that is computed only when we need to
+                                                output.emplace_back( sqrt( d2 ) , std::make_pair( cur_ind, nxt_ind ) );
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
-                        // for ( auto cur = range_start; cur < range_end; ++cur ) {
-                        //     uint32_t cur_ind = *cur;
-                        //     PointHandle pi = dataset[cur_ind];
-                        //     for ( auto nxt = cur + 1; nxt < range_end; ++nxt ) {
-                        //         // If the indices are part of the same split we can skip the distance
-                        //         if ( std::find_if( split_ranges.begin(), split_ranges.end(), [&]( const auto & r ) { return cur >= r.first && nxt < r.second; } ) != split_ranges.end() ) {
-                        //             continue;
-                        //         }
-                        //         uint32_t nxt_ind = *nxt;
-                        //         float d2 = Distance::compute( pi, dataset[nxt_ind] );
-                        //         if ( d2 <= squared_weight_filter ) {
-                        //             // We can use the squared distance to avoid computing the
-                        //             // square root, that is computed only when we need to
-                        //             output.emplace_back( sqrt( d2 ) , std::make_pair( cur_ind, nxt_ind ) );
-                        //         }
-                        //     }
-                        // }
                     }
                 }
             std::sort( output.begin(), output.end() );
