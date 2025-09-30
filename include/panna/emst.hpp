@@ -178,22 +178,17 @@ namespace panna {
                     std::sort(local_Tu.begin(), local_Tu.end());
                     kruskal( local_dsu, local_Tu, local_top );
 
-                    local_confirmed[j].insert( local_confirmed[j].end(),
-                                               std::make_move_iterator( local_top.begin() ),
-                                               std::make_move_iterator( local_top.end() ) );
-
                     edges.insert( edges.end(),
                                   std::make_move_iterator( top.begin() ),
                                   std::make_move_iterator( top.end() ) );
+
                     top.clear();
                     dsu_true = DSU( num_data );
-                    for ( size_t local_index = 0; local_index < j + 1; local_index++ ) {
-                        auto& local = local_confirmed[local_index];
-                        edges.insert( edges.end(),
-                                      std::make_move_iterator( local.begin() ),
-                                      std::make_move_iterator( local.end() ) );
-                        local.clear();
-                    }
+
+                    edges.insert( edges.end(),
+                                  std::make_move_iterator( local_top.begin() ),
+                                  std::make_move_iterator( local_top.end() ) );
+
                     if ( edges.size() > num_data - 1 ) {
                         std::sort( edges.begin(), edges.end() );
                         kruskal( dsu_true, edges, top );
