@@ -194,6 +194,11 @@ namespace panna {
                 }
             }
 
+            // If the target is not met, just return to the intial guess
+            if (!qw_lower || !qw_upper) {
+                quantization_width = (max - min) / 16.0f;
+            }
+
             LOG_INFO("msg", "Quantization width set to", "quantization_width", quantization_width);
         }
 

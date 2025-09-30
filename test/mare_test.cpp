@@ -32,7 +32,7 @@ int main()  {
         float eps[3] = { 5.0, 10.0, 20.0 };
         std::vector<float> weigths; 
         using Point = NormedPoints; // UnitNormPoints or NormedPoints
-        using Distance = EuclideanDistance; // EuclideanDistance or AngularDistance or CosineDistance
+        using Distance = EuclideanDistanceNoSqrt; // EuclideanDistance or AngularDistance or CosineDistance
         using Hasher = E2LSH<conc, Point>;
         // using Hasher = CrossPolytope<conc, Point, Distance, rotations>;
         std::ofstream outfile("weight_results.csv", std::ios_base::app);
