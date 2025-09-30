@@ -6,6 +6,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <limits>
+#include <optional>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -80,6 +82,31 @@ namespace panna {
         }
         return lower;
     }
+
+    struct CombinationsIndex {
+        size_t begin;
+        size_t end;
+        size_t i;
+        size_t j;
+
+        CombinationsIndex(): CombinationsIndex(0, 0) {}
+
+        CombinationsIndex( size_t begin, size_t end ):
+            begin( begin ), end( end ), i( begin ), j( begin ) {
+        }
+
+        bool next() {
+            j += 1;
+            if ( j >= end ) {
+                i += 1;
+                j = i + 1;
+                if ( i >= end - 1 ) {
+                    return false;
+                }
+            }
+            return true;
+        }
+    };
 
     template <typename THashValue>
     class PrefixMapCursor {
@@ -177,19 +204,25 @@ namespace panna {
         //! Returns `false` if we reached the end of the available hashes,
         //! and true otherwise
         bool next_hash() {
-            if ( range_end == hashes.size() ) {
-                return false;
-            }
-            hash = hashes[range_end];
-            // We don't need to search for the start
-            range_start = range_end;
-            // but we do need to search for the end
-            update_range_end();
-            // We set the previous range to the empty range, because no computations
-            // on longer prefixes were carried out on this hash.
-            prev_range_start = range_end;
-            prev_range_end = range_end;
-            return true;
+            // if ( range_end == hashes.size() ) {
+            //     return false;
+            // }
+            // hash = hashes[range_end];
+            // // We don't need to search for the start
+            // range_start = range_end;
+            // // but we do need to search for the end
+            // range_end = first_lt_pos( hash, prefix_length );
+            // // The previous start and end are the bounds of the ranges of hashes with a prefix
+            // // equality at the old prefix
+            // if ( prefix_length == THashValue::get_concatenations() ) {
+            //     prev_range_start = range_end;
+            //     prev_range_end = range_end;
+            // } else {
+            //     prev_range_start = first_le_pos( hash, prefix_length + 1 );
+            //     prev_range_end = first_lt_pos( hash, prefix_length + 1 );
+            // }
+            // return true;
+            throw "boom";
         }
 
         std::array<std::pair<size_t, size_t>, 2> get_ranges() const {
@@ -205,8 +238,122 @@ namespace panna {
             };
         }
 
-        size_t fill_pairs_buffer(std::vector<std::pair<uint32_t, uint32_t>> & buffer) {
-            
+        // Fill the given output buffer, without changing its capacity.
+        void fill_pairs_buffer( std::vector<std::pair<uint32_t, uint32_t>>& buffer ) {
+            size_t max_num = buffer.capacity();
+            while ( buffer.size() < max_num ) {
+            }
+        }
+    };
+
+    template <typename THashValue>
+    class PairPrefixMapCursorNew {
+    private:
+        const std::vector<THashValue>& hashes;
+        const std::vector<uint32_t>& indices;
+        THashValue hash;
+        size_t range_start;
+        size_t range_end;
+        uint8_t prefix_length;
+        std::optional<uint8_t> prev_prefix_length;
+        CombinationsIndex idx;
+
+        // Find the first index such that the prefix is >= the given hash.
+        size_t first_ge_pos( THashValue hash, uint8_t prefix ) {
+            return std::distance(
+                hashes.begin(),
+                std::partition_point( hashes.begin(), hashes.end(), [&]( const auto& h ) {
+                    return h.prefix_less( hash, prefix );
+                } ) );
+        }
+
+        // Find the first index such that the prefix is > the given hash (**strictly** larger).
+        size_t first_gt_pos( THashValue hash, uint8_t prefix ) {
+            return std::distance(
+                hashes.begin(),
+                std::partition_point( hashes.begin(), hashes.end(), [&]( const auto& h ) {
+                    return !hash.prefix_less( h, prefix );
+                } ) );
+        }
+
+        //! Moves the reference hash of the cursor to the next one in the `hashes` array.
+        //! Returns `false` if we reached the end of the available hashes,
+        //! and true otherwise
+        bool next_hash() {
+            if ( range_end == hashes.size() ) {
+                return false;
+            }
+            hash = hashes[range_end];
+            // We don't need to search for the start
+            range_start = range_end;
+            // but we do need to search for the end
+            range_end = first_gt_pos( hash, prefix_length );
+            idx = CombinationsIndex( range_start, range_end );
+            return true;
+        }
+
+    public:
+        PairPrefixMapCursorNew( const std::vector<THashValue>& hashes,
+                                const std::vector<uint32_t>& indices,
+                                uint8_t prefix ):
+            PairPrefixMapCursorNew( hashes, indices, prefix, std::nullopt ) {
+        }
+
+        PairPrefixMapCursorNew( const std::vector<THashValue>& hashes,
+                                const std::vector<uint32_t>& indices,
+                                uint8_t prefix,
+                                std::optional<uint8_t> prev_prefix ):
+            hashes( hashes ),
+            indices( indices ),
+            prefix_length( prefix ),
+            prev_prefix_length( prev_prefix ) {
+
+            assert( hashes.size() > 0 );
+            assert( std::is_sorted( hashes.begin(), hashes.end() ) );
+
+            hash = hashes[0];
+            range_start = 0;
+            range_end = first_gt_pos( hash, prefix );
+            idx = CombinationsIndex( range_start, range_end );
+        }
+
+        //! fill the given buffer of pairs, without changing its capacity
+        void fill_pairs_buffer( std::vector<std::tuple<uint32_t, uint32_t, float>>& buffer ) {
+            size_t max_num = buffer.capacity();
+            buffer.clear();
+            while ( buffer.size() < max_num ) {
+                if ( !idx.next() ) {
+                    // we exhausted the bucket, move to the next one
+                    if ( !next_hash() ) {
+                        // there are no more buckets
+                        break;
+                    }
+                }
+                expect( idx.i < indices.size() );
+                expect( idx.j < indices.size() );
+                // check if we had a collision at the previous prefix
+                if ( prev_prefix_length &&
+                     hashes[idx.i].prefix_eq( hashes[idx.j], *prev_prefix_length ) ) {
+                    // skip the pair, in this case
+                    continue;
+                }
+                buffer.emplace_back(
+                    indices[idx.i], indices[idx.j], std::numeric_limits<float>::infinity() );
+            }
+        }
+
+        //! The total number of collisions, _including_ the ones on longer prefixes
+        size_t total_collisions() {
+            size_t cnt = 0;
+            while ( true ) {
+                size_t bucket_size = range_end - range_start;
+                cnt += (bucket_size - 1) * bucket_size / 2;
+                if ( !next_hash() ) {
+                    // there are no more buckets
+                    break;
+                }
+            }
+            return cnt;
         }
     };
 
@@ -296,46 +443,6 @@ namespace panna {
             }
 
             return std::make_pair( collisions, continue_cycle );
-
-            // // We have an unfinished run
-            // if ( current_index != current_comparison ) {
-            //     for ( current_index; current_index < range_end; current_index++ ) {
-            //         for ( current_comparison; current_comparison < range_end;
-            //         current_comparison++ ) {
-            //             // Full buffer
-            //             if ( collisions >= len_buff ) {
-            //                 continue_cycle = true;
-            //                 return std::make_pair( collisions, continue_cycle );
-            //             }
-            //             scratch_space[collisions] = std::make_pair( &indices[current_index],
-            //             &indices[current_comparison] ); collisions++;
-            //         }
-            //     }
-            //     // Reset the run indices
-            //     current_hash = hashes[range_end];
-            //     current_index = current_comparison = 0;
-            // }
-            // while ( range_end < hashes.size() ) { // do it until we scan all the vector
-            //     update_range_start();
-            //     update_range_end();
-            //     for ( size_t current = range_start; current < range_end; current++ ) {
-            //         for ( size_t next = current + 1; next < range_end; next++ ) {
-
-            //             // Full buffer
-            //             if ( collisions >= len_buff ) {
-            //                 current_index = current;
-            //                 current_comparison = next;
-            //                 continue_cycle = true;
-            //                 return std::make_pair( collisions, continue_cycle );
-            //             }
-            //             scratch_space[collisions] = std::make_pair( &indices[current],
-            //             &indices[next] ); collisions++;
-            //         }
-            //     }
-            //     // Switch to the next hash
-            //     current_hash = hashes[range_end];
-            // }
-            // return std::make_pair( collisions, continue_cycle);
         }
 
         std::tuple<Iter, Iter, std::vector<std::pair<Iter, Iter>>, bool> next_filter() {
@@ -490,6 +597,10 @@ namespace panna {
             return PairPrefixMapCursor<THashValue>( hashes, indices );
         }
 
+        PairPrefixMapCursorNew<THashValue>
+        create_pair_cursor_new( uint8_t prefix, std::optional<uint8_t> prev_prefix ) const {
+            return PairPrefixMapCursorNew<THashValue>( hashes, indices, prefix, prev_prefix );
+        }
         THashValue hash_for( size_t idx ) const {
             auto pos =
                 std::distance( indices.begin(), std::find( indices.begin(), indices.end(), idx ) );

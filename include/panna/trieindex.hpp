@@ -12,6 +12,7 @@
 
 #include "cereal/archives/binary.hpp"
 #include "panna/kdtree.hpp"
+#include "panna/logging.hpp"
 #include "panna/lsh/predicates.hpp"
 #include "panna/prefixmap.hpp"
 
@@ -253,78 +254,48 @@ namespace panna {
         }
 
         // Function to return all colliding couples in a given repetition and concatenation
-        void search_pairs_filter( size_t repetition,
+        void
+        search_pairs_filter( size_t repetition,
                              size_t concatenations,
                              std::vector<std::tuple<float, std::pair<uint32_t, uint32_t>>>& output,
-                             float weight_filter) {
+                             float weight_filter ) {
             expect( hasher );
-            const uint32_t SMALL_BUCKET = std::numeric_limits<uint32_t>::infinity();
-            const float squared_weight_filter = weight_filter * weight_filter;
+            std::vector<std::tuple<uint32_t, uint32_t, float>> scratch;
+            scratch.reserve( 1 << 16 );
 
-            PairPrefixMapCursor<typename Hasher::Value> cursor =
-                lsh_maps[repetition].create_pair_cursor();
-            if ( concatenations != hasher->get_concatenations() )
-                cursor.shorten_prefix( concatenations );
+            PairPrefixMapCursorNew<typename Hasher::Value> cursor =
+                lsh_maps[repetition].create_pair_cursor_new(
+                    concatenations,
+                    ( concatenations < hasher->get_concatenations() )
+                        ? std::optional( concatenations + 1 )
+                        : std::nullopt );
 
-            // Avoid materializing all the pairs 
-            // Collect all ranges then we will process them
-            for ( auto info = cursor.next_filter(); std::get<3>( info );
-                  info = cursor.next_filter() ) {
-                const uint32_t* range_start = std::get<0>( info );
-                const uint32_t* range_end = std::get<1>( info );
-                const std::vector<std::pair<const uint32_t*, const uint32_t*>> split_ranges = std::get<2>( info );
-                 output.reserve( 256 ); // reserve small space to reduce reallocs
-
-                if ( ( range_end - range_start ) * ( range_end - range_start ) >
-                     SMALL_BUCKET ) {
-                    KDTree<Dataset, Distance> tree(
-                        range_start, range_end, dataset, weight_filter );
-                    // We can do a range search query to find the pairs
-                        std::vector<std::tuple<float, std::pair<uint32_t, uint32_t>>> pairs;
-                        tree.range_pairs( pairs );
-                        output.insert( output.end(), std::make_move_iterator(pairs.begin()), std::make_move_iterator(pairs.end()) );
-
-                    } else {
-                        // If we use full length hashes we have to compare everything in the range
-                        if (concatenations == hasher->get_concatenations() ) {
-                            for ( auto cur = range_start; cur != range_end; ++cur ) {
-                                uint32_t cur_ind = *cur;
-                                PointHandle pi = dataset[cur_ind];
-                                for ( auto nxt = cur + 1; nxt != range_end; ++nxt ) {
-                                    uint32_t nxt_ind = *nxt;
-                                    float d2 = Distance::compute( pi, dataset[nxt_ind] );
-                                    if ( d2 <= squared_weight_filter ) {
-                                        // We can use the squared distance to avoid computing the
-                                        // square root, that is computed only when we need to
-                                        output.emplace_back( sqrt( d2 ) , std::make_pair( cur_ind, nxt_ind ) );
-                                    }
-                                }
-                            }
-                        }
-                        else {
-                            // Do the cross evaluation between ranges
-                            for (size_t first_range = 0; first_range < split_ranges.size() - 1; first_range++ ) {
-                                for (size_t second_range = first_range + 1; second_range < split_ranges.size(); second_range++ ) {
-                                    for ( auto cur = split_ranges[first_range].first; cur != split_ranges[first_range].second; ++cur ) {
-                                        uint32_t cur_ind = *cur;
-                                        PointHandle pi = dataset[cur_ind];
-                                        for ( auto nxt = split_ranges[second_range].first; nxt != split_ranges[second_range].second; ++nxt ) {
-                                            uint32_t nxt_ind = *nxt;
-                                            float d2 = Distance::compute( pi, dataset[nxt_ind] );
-                                            if ( d2 <= squared_weight_filter ) {
-                                                // We can use the squared distance to avoid computing the
-                                                // square root, that is computed only when we need to
-                                                output.emplace_back( sqrt( d2 ) , std::make_pair( cur_ind, nxt_ind ) );
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+            while ( true ) {
+                cursor.fill_pairs_buffer( scratch );
+                if ( scratch.size() == 0 ) {
+                    // no new pairs
+                    break;
                 }
-            std::sort( output.begin(), output.end() );
+                LOG_DEBUG( "repetition",
+                           repetition,
+                           "prefix",
+                           concatenations,
+                           "num_new_pairs",
+                           scratch.size() );
+                for ( size_t i = 0; i < scratch.size(); i++ ) {
+                    PointHandle a = dataset[std::get<0>( scratch[i] )];
+                    PointHandle b = dataset[std::get<1>( scratch[i] )];
+                    float distance = Distance::compute( a, b );
+                    if ( distance > weight_filter ) {
+                        continue;
+                    }
+                    uint32_t a_idx = std::get<0>( scratch[i] );
+                    uint32_t b_idx = std::get<1>( scratch[i] );
+                    output.emplace_back( distance, std::make_pair( a_idx, b_idx ) );
+                }
+            }
         }
+
         // Function to return all colliding couples in a given repetition and concatenation
         void search_pairs( size_t repetition,
                            size_t concatenations,
