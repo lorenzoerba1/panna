@@ -171,14 +171,13 @@ namespace panna {
                 // how can we evaluate the stopping condition? We need to know that
                 // the previous iterations have been carried out
                 //  If we stop as some iteration j, we will still carry out all previous ones
-                //  as they are already dispatched. Now it may happen that one of the j'<j iterations
-                //  finds a smaller edge for the mst that would confirm the tree at iteration j
-                //  in this case there's just a delay in the confirmation.
+                //  as they are already dispatched. Now it may happen that one of the j'<j
+                //  iterations finds a smaller edge for the mst that would confirm the tree at
+                //  iteration j in this case there's just a delay in the confirmation.
                 // If we remove the nowait, instead, we are guaranteed that
-                // all the previous iterations have been carried out before checking the stopping condition
+                // all the previous iterations have been carried out before checking the stopping
+                // condition
                 //  https://ppc.cs.aalto.fi/ch3/nowait/
-#pragma omp parallel
-#pragma omp for nowait
                 for ( size_t j = 0; j < MAX_REPETITIONS; j++ ) {
                     if ( found )
                         continue;
@@ -193,77 +192,74 @@ namespace panna {
                                                std::make_move_iterator( local_top.end() ) );
 
                     // Every x iterations we have a batch, construct the MST from these edges
-                    if ( ( i > 3 && ( ( j + 1 ) == MAX_REPETITIONS ||
-                                      ( j + 1 ) == (size_t)MAX_REPETITIONS / 2 ) ) ||
-                         ( i <= 3 && j % 5 == 0 ) ) {
-#pragma omp critical
-                        {
-                            edges.insert( edges.end(),
-                                          std::make_move_iterator( top.begin() ),
-                                          std::make_move_iterator( top.end() ) );
-                            top.clear();
-                            dsu_true = DSU( num_data );
-                            for ( size_t local_index = 0; local_index < j + 1; local_index++ ) {
-                                auto& local = local_confirmed[local_index];
-                                edges.insert( edges.end(),
-                                    std::make_move_iterator(local.begin()),
-                                    std::make_move_iterator(local.end()) );
-                                local.clear();
-                            }
-                            std::sort( edges.begin(), edges.end() );
-                            // edges.erase( std::unique( edges.begin(), edges.end() ), edges.end()
-                            // );
-                            if ( edges.size() > num_data - 1 ) {
-                                kruskal( dsu_true, edges, top );
-                                LOG_INFO("prefix", i,
-                                         "repetition", j,
-                                         "tree_size", top.size());
 
-                                // QUESTION: shouldn't we check that
-                                // the tree is connected?
-                                // If we add n-1 edges using DSU 
-                                // isn't it guaranteed that the tree is connected?
-                                if ( top.size() == num_data - 1 ) {
-                                    float new_tree_weight = 0;
-                                    max_weight = std::get<float>( top.back() );
-                                    for ( const auto& edge : top ) {
-                                        new_tree_weight += std::get<0>( edge );
-                                    }
-                                    tree_weight = new_tree_weight;
-                                    LOG_INFO("prefix", i,
-                                             "repetition", j,
-                                             "tree_weight", tree_weight,
-                                             "failure_probability", failure_probability(i, j),
-                                            //  "failure_probability", table.fail_probability(
-                                            //          std::get<float>( top.back() ), i, j ),
-                                             "max_edge_weight", std::get<float>(top.back()),
-                                             "mean_edge_weight", tree_weight / (num_data - 1)
-                                    );
-                                    if ( failure_probability(i, j) < delta ) {
-                                        found = true;
-                                        // Fill the tree
-                                        for ( const auto& edge : top ) {
-                                            tree.push_back( std::get<1>( edge ) );
-                                        }
-                                    }
+                    edges.insert( edges.end(),
+                                  std::make_move_iterator( top.begin() ),
+                                  std::make_move_iterator( top.end() ) );
+                    top.clear();
+                    dsu_true = DSU( num_data );
+                    for ( size_t local_index = 0; local_index < j + 1; local_index++ ) {
+                        auto& local = local_confirmed[local_index];
+                        edges.insert( edges.end(),
+                                      std::make_move_iterator( local.begin() ),
+                                      std::make_move_iterator( local.end() ) );
+                        local.clear();
+                    }
+                    std::sort( edges.begin(), edges.end() );
+                    // edges.erase( std::unique( edges.begin(), edges.end() ), edges.end()
+                    // );
+                    if ( edges.size() > num_data - 1 ) {
+                        kruskal( dsu_true, edges, top );
+                        LOG_INFO( "prefix", i, "repetition", j, "tree_size", top.size() );
+
+                        // QUESTION: shouldn't we check that
+                        // the tree is connected?
+                        // If we add n-1 edges using DSU
+                        // isn't it guaranteed that the tree is connected?
+                        if ( top.size() == num_data - 1 ) {
+                            float new_tree_weight = 0;
+                            max_weight = std::get<float>( top.back() );
+                            for ( const auto& edge : top ) {
+                                new_tree_weight += std::get<0>( edge );
+                            }
+                            tree_weight = new_tree_weight;
+                            LOG_INFO( "prefix",
+                                      i,
+                                      "repetition",
+                                      j,
+                                      "tree_weight",
+                                      tree_weight,
+                                      "failure_probability",
+                                      failure_probability( i, j ),
+                                      //  "failure_probability", table.fail_probability(
+                                      //          std::get<float>( top.back() ), i, j ),
+                                      "max_edge_weight",
+                                      std::get<float>( top.back() ),
+                                      "mean_edge_weight",
+                                      tree_weight / ( num_data - 1 ) );
+                            if ( failure_probability( i, j ) < delta ) {
+                                found = true;
+                                // Fill the tree
+                                for ( const auto& edge : top ) {
+                                    tree.push_back( std::get<1>( edge ) );
                                 }
-                                // Lose the unused edges, MST is composable wrt to edge partitioning
-                                // QUESTION: I keep getting not so sure that this works.
-                                // We are not de-duplicating the edges, are we? Then it might be that
-                                // some edges that we are clearing end up re-appearing later on,
-                                // thus breaking the edge partition on which the composability relies.
-                                // From what I'm getting, an edge can re-appear but its one of those things
-                                // -edge in MST, Kruskal will ignore all copies of an edge already in the MST
-                                // -edge out MST, in this case Kruskal will keep discarding the edge
-                                // because it induces a cycle
-                                // So our partitioning does not satisfy the composability condition inherently,
-                                // but Kruskal makes up for it. (?)
-                                edges.clear();
                             }
                         }
+                        // Lose the unused edges, MST is composable wrt to edge partitioning
+                        // QUESTION: I keep getting not so sure that this works.
+                        // We are not de-duplicating the edges, are we? Then it might be that
+                        // some edges that we are clearing end up re-appearing later on,
+                        // thus breaking the edge partition on which the composability relies.
+                        // From what I'm getting, an edge can re-appear but its one of those things
+                        // -edge in MST, Kruskal will ignore all copies of an edge already in the
+                        // MST -edge out MST, in this case Kruskal will keep discarding the edge
+                        // because it induces a cycle
+                        // So our partitioning does not satisfy the composability condition
+                        // inherently, but Kruskal makes up for it. (?)
+                        edges.clear();
                     }
                 }
-                LOG_INFO("msg", "finished prefix", "prefix", i);
+                LOG_INFO( "msg", "finished prefix", "prefix", i );
             }
             // QUESTION: why don't we use the union-find
             // data structure to check if it is connected? We might have a DSU::is_connected method
