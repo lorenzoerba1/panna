@@ -338,17 +338,31 @@ namespace panna {
             // return std::make_pair( collisions, continue_cycle);
         }
 
-        std::tuple<Iter, Iter, bool> next_filter() {
+        std::tuple<Iter, Iter, std::vector<std::pair<Iter, Iter>>, bool> next_filter() {
             update_range_start();
             update_range_end();
+            std::vector<std::pair<Iter, Iter>> split_ranges;
 
             current_hash = hashes[range_end];
             bool continue_cycle = true;
             if ( range_end >= hashes.size() ) {
                 continue_cycle = false;
             }
+            // Find the portions of the indices that are new
+            // since we reduced the prefix, there is a part of comparisons that we already did
+            Iter current_range_start = &indices[range_start];
+            for (size_t i = range_start + 1; i < range_end; ++i) {
+                    // A split happens when the prefix of the current hash differs from the previous one
+                    if (hashes[i - 1].prefix_less(hashes[i], prefix_length + 1)) {
+                        split_ranges.emplace_back(current_range_start, &indices[i]);
+                        current_range_start = &indices[i];
+                    }
+            }
+            if (current_range_start != &indices[range_end]) {
+                split_ranges.emplace_back(current_range_start, &indices[range_end]);
+            }
 
-            return std::make_tuple( &indices[range_start], &indices[range_end], continue_cycle );
+            return std::make_tuple( &indices[range_start], &indices[range_end], split_ranges, continue_cycle );
         }
     };
 
