@@ -1,7 +1,5 @@
 #include <highfive/H5Easy.hpp>
-
 #include <chrono>
-#include <iostream>
 
 #include "panna/data.hpp"
 #include "panna/distance.hpp"

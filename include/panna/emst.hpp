@@ -4,7 +4,6 @@
 #include <random>
 #include <unistd.h>
 #include <vector>
-#include "dbg.h"
 
 #include "panna/dsu.hpp"
 #include "panna/logging.hpp"
