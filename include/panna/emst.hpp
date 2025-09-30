@@ -168,9 +168,13 @@ namespace panna {
                 if ( found ) {
                     break;
                 }
+                size_t completed_repetitions = 0;
+
+                #pragma omp parallel for schedule(static, 1)
                 for ( size_t j = 0; j < MAX_REPETITIONS; j++ ) {
-                    if ( found )
+                    if ( found ) {
                         continue;
+                    }
                     DSU local_dsu( num_data );
                     std::vector<EdgeTuple> local_top, local_Tu;
                     enumerate_edges( i, j, local_Tu );
@@ -178,52 +182,55 @@ namespace panna {
                     std::sort(local_Tu.begin(), local_Tu.end());
                     kruskal( local_dsu, local_Tu, local_top );
 
-                    edges.insert( edges.end(),
-                                  std::make_move_iterator( top.begin() ),
-                                  std::make_move_iterator( top.end() ) );
+                    #pragma omp critical
+                    {
+                        edges.insert( edges.end(),
+                                      std::make_move_iterator( top.begin() ),
+                                      std::make_move_iterator( top.end() ) );
+                        edges.insert( edges.end(),
+                                      std::make_move_iterator( local_top.begin() ),
+                                      std::make_move_iterator( local_top.end() ) );
 
-                    top.clear();
-                    dsu_true = DSU( num_data );
+                        top.clear();
 
-                    edges.insert( edges.end(),
-                                  std::make_move_iterator( local_top.begin() ),
-                                  std::make_move_iterator( local_top.end() ) );
+                        if ( edges.size() > num_data - 1 ) {
+                            dsu_true = DSU( num_data );
+                            std::sort( edges.begin(), edges.end() );
+                            kruskal( dsu_true, edges, top );
 
-                    if ( edges.size() > num_data - 1 ) {
-                        std::sort( edges.begin(), edges.end() );
-                        kruskal( dsu_true, edges, top );
-
-                        LOG_INFO( "prefix", i, "repetition", j, "tree_size", top.size() );
-                        if ( top.size() == num_data - 1 ) {
-                            float new_tree_weight = 0;
-                            max_weight = std::get<float>( top.back() );
-                            for ( const auto& edge : top ) {
-                                new_tree_weight += std::get<0>( edge );
-                            }
-                            tree_weight = new_tree_weight;
-                            float fp = failure_probability(i, j);
-                            LOG_INFO( "prefix",
-                                      i,
-                                      "repetition",
-                                      j,
-                                      "tree_weight",
-                                      tree_weight,
-                                      "failure_probability",
-                                      fp,
-                                      "max_edge_weight",
-                                      std::get<float>( top.back() ),
-                                      "mean_edge_weight",
-                                      tree_weight / ( num_data - 1 ) );
-                            if ( fp < delta ) {
-                                found = true;
-                                // Fill the tree
+                            LOG_INFO( "prefix", i, "repetition", completed_repetitions, "tree_size", top.size() );
+                            if ( top.size() == num_data - 1 ) {
+                                float new_tree_weight = 0;
+                                max_weight = std::get<float>( top.back() );
                                 for ( const auto& edge : top ) {
-                                    tree.push_back( std::get<1>( edge ) );
+                                    new_tree_weight += std::get<0>( edge );
+                                }
+                                tree_weight = new_tree_weight;
+                                float fp = failure_probability( i, completed_repetitions );
+                                LOG_INFO( "prefix",
+                                          i,
+                                          "repetition",
+                                          completed_repetitions,
+                                          "tree_weight",
+                                          tree_weight,
+                                          "failure_probability",
+                                          fp,
+                                          "max_edge_weight",
+                                          std::get<float>( top.back() ),
+                                          "mean_edge_weight",
+                                          tree_weight / ( num_data - 1 ) );
+                                if ( fp < delta ) {
+                                    found = true;
+                                    // Fill the tree
+                                    for ( const auto& edge : top ) {
+                                        tree.push_back( std::get<1>( edge ) );
+                                    }
                                 }
                             }
+                            // Lose the unused edges, MST is composable wrt to edge partitioning
+                            edges.clear();
                         }
-                        // Lose the unused edges, MST is composable wrt to edge partitioning
-                        edges.clear();
+                        completed_repetitions++;
                     }
                 }
                 LOG_INFO( "msg", "finished prefix", "prefix", i );
