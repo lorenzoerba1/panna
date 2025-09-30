@@ -283,14 +283,20 @@ namespace panna {
                            "num_new_pairs",
                            scratch.size() );
                 for ( size_t i = 0; i < scratch.size(); i++ ) {
+                    uint32_t a_idx = std::get<0>( scratch[i] );
+                    uint32_t b_idx = std::get<1>( scratch[i] );
+                    if (b_idx < a_idx) {
+                        // ensure that a_idx is always smaller
+                        uint32_t tmp = b_idx;
+                        b_idx = a_idx;
+                        a_idx = tmp;
+                    }
                     PointHandle a = dataset[std::get<0>( scratch[i] )];
                     PointHandle b = dataset[std::get<1>( scratch[i] )];
                     float distance = Distance::compute( a, b );
                     if ( distance > weight_filter ) {
                         continue;
                     }
-                    uint32_t a_idx = std::get<0>( scratch[i] );
-                    uint32_t b_idx = std::get<1>( scratch[i] );
                     output.emplace_back( distance, std::make_pair( a_idx, b_idx ) );
                 }
             }
