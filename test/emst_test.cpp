@@ -21,7 +21,7 @@ int main() {
     const size_t rep = 500;
     const size_t n = 100000;
     using Point = NormedPoints;         // UnitNormPoints or NormedPoints
-    using Distance = EuclideanDistanceNoSqrt; // EuclideanDistance or AngularDistance or CosineDistance
+    using Distance = EuclideanDistance; // EuclideanDistance or AngularDistance or CosineDistance
     using Hasher = E2LSH<conc, Point>;
     // using Hasher = CrossPolytope<conc, Point, Distance, rotations>;
 

@@ -148,13 +148,9 @@ namespace panna {
 
                 size_t collisions = 0;
                 for (auto& pmap : pmaps) {
-                    PrefixMapCursor<typename Output::Value> cursor = pmap.create_cursor();
-                    do {
-                        auto ranges = cursor.get_ranges();
-                        assert(ranges[1].first == ranges[1].second);
-                        size_t bucket_size = ranges[0].second - ranges[0].first;
-                        collisions += bucket_size * (bucket_size - 1) / 2;
-                    } while (cursor.next_hash());
+                    PairPrefixMapCursorNew<typename Output::Value> cursor =
+                        pmap.create_pair_cursor_new(hasher.get_concatenations(), std::nullopt);
+                    collisions += cursor.total_collisions();
                 }
                 return static_cast<float>(collisions) / pmaps.size();
             };

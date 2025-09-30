@@ -74,6 +74,7 @@ namespace panna {
 
     // Convenience struct to compute squared Euclidean distance without the square root
     struct EuclideanDistanceNoSqrt {
+        // FIXME: we have to handle the computation of the collision probability differently
         static constexpr bool is_metric() {
             return false; // Technically not a metric, but avoids sqrt for all filtered elements
         };
