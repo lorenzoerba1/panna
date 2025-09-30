@@ -132,7 +132,7 @@ namespace panna {
                 for ( size_t j = i + 1; j < num_data; j++ ) {
                     float dist = table.get_distance( i, j );
                     all_edges[ i * (num_data -1) - ( i * ( i + 1 ) / 2 ) + j - 1 ] =
-                        std::make_tuple( std::sqrt( dist ), std::make_pair( i, j ) );
+                        std::make_tuple(  dist, std::make_pair( i, j ) );
                 }
             }
             // Sort the edges
