@@ -4,6 +4,7 @@
 #include <random>
 #include <unistd.h>
 #include <vector>
+#include "dbg.h"
 
 #include "panna/dsu.hpp"
 #include "panna/logging.hpp"
@@ -819,16 +820,22 @@ namespace panna {
             }
         }
 
-        /// @brief Compute the exact failure probability of the stored spanning tree
+        /// @brief Compute an upper bound to the failure probability of the stored spanning tree
         /// @param i current concatenation in the hash index
         /// @param j current repetition in the hash index
         /// @return failure probability of the minimum spanning tree
-        float failure_probability( size_t i, size_t j) {
+        float failure_probability( size_t i, size_t j ) {
+            float loose_upper_bound =
+                ( num_data - 1 ) * table.fail_probability( std::get<0>( top.back() ), i, j );
             float prob = 0.0f;
             for ( auto& edge : top ) {
                 prob += table.fail_probability( std::get<float>( edge ), i, j );
             }
-            return prob;    
+            expect( prob <= loose_upper_bound );
+            LOG_DEBUG( "msg", "failure-probability",
+                      "loose-upper-bound", loose_upper_bound,
+                      "union-bound", prob );
+            return prob;
         }
 
         /// @brief Clear the data structures from previous runs

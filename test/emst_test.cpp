@@ -19,7 +19,7 @@ int main() {
     const size_t conc = 12;
     // const size_t dimensions = 20;
     const size_t rep = 500;
-    const size_t n = 100;
+    const size_t n = 10000;
     using Point = NormedPoints;         // UnitNormPoints or NormedPoints
     using Distance = EuclideanDistance; // EuclideanDistance or AngularDistance or CosineDistance
     using Hasher = E2LSH<conc, Point>;
@@ -47,7 +47,7 @@ int main() {
 
     size_t dimensions = points[0].size();
     E2LSHBuilder<conc, NormedPoints> builder( dimensions );
-    EMST<Point, Hasher, Distance> tree( dimensions, rep, builder, points, 0.1, 0.5 );
+    EMST<Point, Hasher, Distance> tree( dimensions, rep, builder, points, 0.01, 0.5 );
 
     // Exact computation
     auto start_exact = std::chrono::high_resolution_clock::now();
