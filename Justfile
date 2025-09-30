@@ -16,6 +16,10 @@ run target:
     just build {{target}}
     build/{{target}}
 
+profile target:
+    just build {{target}}
+    samply record build/{{target}}
+
 open-debugger:
     gdbgui --gdb-cmd 'rr replay --'
 
