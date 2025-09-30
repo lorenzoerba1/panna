@@ -158,7 +158,6 @@ namespace panna {
         /// @brief Find the Minimum Spanning Tree using only confirmed edges
         float find_tree() {
             clear();
-            // dirty_start(local_confirmed[0]);
             float tree_weight = 0;
             std::vector<std::pair<unsigned int, unsigned int>> tree;
 
@@ -166,33 +165,22 @@ namespace panna {
             std::vector<EdgeTuple> edges;
             for ( size_t i_rev = 0; i_rev <= MAX_HASHBITS; i_rev++ ) {
                 size_t i = MAX_HASHBITS - i_rev;
-                if ( found )
+                if ( found ) {
                     break;
-                // QUESTION: if we do all the repetitions in parallel,
-                // how can we evaluate the stopping condition? We need to know that
-                // the previous iterations have been carried out
-                //  If we stop as some iteration j, we will still carry out all previous ones
-                //  as they are already dispatched. Now it may happen that one of the j'<j
-                //  iterations finds a smaller edge for the mst that would confirm the tree at
-                //  iteration j in this case there's just a delay in the confirmation.
-                // If we remove the nowait, instead, we are guaranteed that
-                // all the previous iterations have been carried out before checking the stopping
-                // condition
-                //  https://ppc.cs.aalto.fi/ch3/nowait/
+                }
                 for ( size_t j = 0; j < MAX_REPETITIONS; j++ ) {
                     if ( found )
                         continue;
                     DSU local_dsu( num_data );
                     std::vector<EdgeTuple> local_top, local_Tu;
                     enumerate_edges( i, j, local_Tu );
-
+                    
+                    std::sort(local_Tu.begin(), local_Tu.end());
                     kruskal( local_dsu, local_Tu, local_top );
 
                     local_confirmed[j].insert( local_confirmed[j].end(),
                                                std::make_move_iterator( local_top.begin() ),
                                                std::make_move_iterator( local_top.end() ) );
-
-                    // Every x iterations we have a batch, construct the MST from these edges
 
                     edges.insert( edges.end(),
                                   std::make_move_iterator( top.begin() ),
@@ -206,17 +194,11 @@ namespace panna {
                                       std::make_move_iterator( local.end() ) );
                         local.clear();
                     }
-                    std::sort( edges.begin(), edges.end() );
-                    // edges.erase( std::unique( edges.begin(), edges.end() ), edges.end()
-                    // );
                     if ( edges.size() > num_data - 1 ) {
+                        std::sort( edges.begin(), edges.end() );
                         kruskal( dsu_true, edges, top );
-                        LOG_INFO( "prefix", i, "repetition", j, "tree_size", top.size() );
 
-                        // QUESTION: shouldn't we check that
-                        // the tree is connected?
-                        // If we add n-1 edges using DSU
-                        // isn't it guaranteed that the tree is connected?
+                        LOG_INFO( "prefix", i, "repetition", j, "tree_size", top.size() );
                         if ( top.size() == num_data - 1 ) {
                             float new_tree_weight = 0;
                             max_weight = std::get<float>( top.back() );
@@ -224,6 +206,7 @@ namespace panna {
                                 new_tree_weight += std::get<0>( edge );
                             }
                             tree_weight = new_tree_weight;
+                            float fp = failure_probability(i, j);
                             LOG_INFO( "prefix",
                                       i,
                                       "repetition",
@@ -231,14 +214,12 @@ namespace panna {
                                       "tree_weight",
                                       tree_weight,
                                       "failure_probability",
-                                      failure_probability( i, j ),
-                                      //  "failure_probability", table.fail_probability(
-                                      //          std::get<float>( top.back() ), i, j ),
+                                      fp,
                                       "max_edge_weight",
                                       std::get<float>( top.back() ),
                                       "mean_edge_weight",
                                       tree_weight / ( num_data - 1 ) );
-                            if ( failure_probability( i, j ) < delta ) {
+                            if ( fp < delta ) {
                                 found = true;
                                 // Fill the tree
                                 for ( const auto& edge : top ) {
@@ -247,23 +228,11 @@ namespace panna {
                             }
                         }
                         // Lose the unused edges, MST is composable wrt to edge partitioning
-                        // QUESTION: I keep getting not so sure that this works.
-                        // We are not de-duplicating the edges, are we? Then it might be that
-                        // some edges that we are clearing end up re-appearing later on,
-                        // thus breaking the edge partition on which the composability relies.
-                        // From what I'm getting, an edge can re-appear but its one of those things
-                        // -edge in MST, Kruskal will ignore all copies of an edge already in the
-                        // MST -edge out MST, in this case Kruskal will keep discarding the edge
-                        // because it induces a cycle
-                        // So our partitioning does not satisfy the composability condition
-                        // inherently, but Kruskal makes up for it. (?)
                         edges.clear();
                     }
                 }
                 LOG_INFO( "msg", "finished prefix", "prefix", i );
             }
-            // QUESTION: why don't we use the union-find
-            // data structure to check if it is connected? We might have a DSU::is_connected method
             // This is just a sanity check to see if dsu works as intended
             is_connected( tree );
             return tree_weight;
