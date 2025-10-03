@@ -88,7 +88,7 @@
 
         container = pkgs.singularity-tools.buildImage {
           name = "panna";
-          runScript = "#!${pkgs.stdenv.shell}\npython";
+          runScript = "#!${pkgs.stdenv.shell}\npython $@";
           contents = [
             (python.withPackages
               (ppkgs:
