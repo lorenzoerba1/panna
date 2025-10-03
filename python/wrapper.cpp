@@ -4,7 +4,6 @@
 #include <nanobind/stl/string.h>
 #include <sstream>
 
-#include "dbg.h"
 #include "panna/data.hpp"
 #include "panna/distance.hpp"
 #include "panna/lsh/crosspolytope.hpp"

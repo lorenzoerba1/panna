@@ -33,16 +33,18 @@ endif()
 include_directories("include")
 include_directories("external")
 
-FetchContent_Declare(dbg_macro GIT_REPOSITORY https://github.com/sharkdp/dbg-macro)
-FetchContent_MakeAvailable(dbg_macro)
+# FetchContent_Declare(dbg_macro GIT_REPOSITORY https://github.com/sharkdp/dbg-macro FIND_PACKAGE_ARGS)
+# FetchContent_MakeAvailable(dbg_macro)
 
 if (NOT SKBUILD)
-  FetchContent_Declare(
-    Catch2
-    GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-    GIT_TAG        v3.8.0 # or a later release
-  )
-  FetchContent_MakeAvailable(Catch2)
+  # FetchContent_Declare(
+  #   Catch2
+  #   GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+  #   GIT_TAG        v3.8.0 # or a later release
+  #   FIND_PACKAGE_ARGS
+  # )
+  # FetchContent_MakeAvailable(Catch2)
+  find_package(Catch2)
 
 
   # include_directories("test/include")
@@ -51,19 +53,19 @@ if (NOT SKBUILD)
 
   find_package(HighFive)
   add_executable(emst test/emst_test.cpp)
-  target_link_libraries(emst PRIVATE dbg_macro HighFive)
+  target_link_libraries(emst PRIVATE HighFive)
 
   add_executable(recall test/recall_test.cpp)
-  target_link_libraries(recall PRIVATE dbg_macro HighFive)
+  target_link_libraries(recall PRIVATE  HighFive)
 
   add_executable(scalability test/scalability_test.cpp)
-  target_link_libraries(scalability PRIVATE dbg_macro HighFive)
+  target_link_libraries(scalability PRIVATE  HighFive)
 
   add_executable(mare test/mare_test.cpp)
   target_link_libraries(mare PRIVATE HighFive)
 
   add_executable(dtb test/DTB_test.cpp)
-  target_link_libraries(dtb PRIVATE dbg_macro HighFive)
+  target_link_libraries(dtb PRIVATE  HighFive)
 
   # if (HighFive_FOUND)
   #   add_executable(glove examples/glove.cpp)
@@ -92,6 +94,6 @@ execute_process(
 find_package(nanobind CONFIG REQUIRED)
 
 nanobind_add_module(_panna_impl NOMINSIZE NB_STATIC python/wrapper.cpp)
-target_link_libraries(_panna_impl PRIVATE dbg_macro)
+target_link_libraries(_panna_impl PRIVATE)
 
 install(TARGETS _panna_impl LIBRARY DESTINATION panna)

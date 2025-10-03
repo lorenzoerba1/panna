@@ -52,3 +52,12 @@ generate-compile-commands:
 scan-build:
     just clean
     scan-build just build
+
+# Build the apptainer container with the python package
+container:
+    nix build .#container
+
+# Build the apptainer container and copy it to the remote target,
+# that should be a valid rsync destination (e.g. ceccarello@login.dei.unipd.it:panna.sif)
+deploy-container remote: container
+    rsync --progress $(readlink result) {{remote}}
