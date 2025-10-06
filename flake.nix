@@ -52,6 +52,32 @@
           ];
         };
 
+        mlpack = pkgs.stdenv.mkDerivation rec {
+          name = "mlpack";
+          version = "4.6.2";
+          src = pkgs.fetchurl {
+            url = "https://www.mlpack.org/files/mlpack-${version}.tar.gz";
+            hash = "sha256-L+dy2jg6k1ZFztB6B7UZQsoXjTgSnfO/aFiQvDwXUs8=";
+          };
+          installPhase = ''
+            mkdir -p $out/include
+            cp -r src/* $out/include
+          '';
+        };
+
+        ensmallen = pkgs.stdenv.mkDerivation rec {
+          name = "ensmallen";
+          version = "3.10.0";
+          src = pkgs.fetchurl {
+            url = "https://ensmallen.org/files/ensmallen-${version}.tar.gz";
+            hash = "sha256-JI4gNoVveqj6s0ygL6Onmyya8g9TsdJuPek50VDcuzo=";
+          };
+          installPhase = ''
+            mkdir -p $out/include
+            cp -r include/* $out/include
+          '';
+        };
+
         panna-python = python.pkgs.buildPythonPackage {
           pname = "panna";
           version = "0.0.1";
@@ -130,6 +156,9 @@
               cereal
               catch2_3
               fast-hdbscan
+              ensmallen
+              mlpack
+              armadillo
             ]
             ++ (with python312Packages; [
               venvShellHook
