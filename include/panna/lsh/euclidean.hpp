@@ -155,9 +155,14 @@ namespace panna {
                 return static_cast<float>(collisions) / pmaps.size();
             };
 
-            // ---- Phase 1: exponential search until both bounds known ----
+            // Step 1: exponential search until both bounds known, starting from initial guess
             for (int iter = 0; iter < 5 && !(qw_lower && qw_upper); ++iter) {
                 float avg_collisions = compute_avg_collisions(quantization_width);
+                LOG_INFO("msg", "Exponential search quantization width",
+                         "quantization_width", quantization_width,
+                         "avg_collisions", avg_collisions,
+                         "low_thresh", low_thresh,
+                         "high_thresh", high_thresh);
                 if (avg_collisions < low_thresh) {
                     qw_lower = quantization_width;           // too few collisions → increase width
                     quantization_width *= 2.0f;
@@ -170,11 +175,16 @@ namespace panna {
                 }
             }
 
-            // ---- Phase 2: binary search between bounds ----
+            // Step 2: binary search between bounds
             if (qw_lower && qw_upper) {
                 for (int iter = 0; iter < 5; ++iter) {
                     quantization_width = (*qw_lower + *qw_upper) / 2.0f;
                     float avg_collisions = compute_avg_collisions(quantization_width);
+                    LOG_INFO("msg", "Binary search quantization width",
+                             "quantization_width", quantization_width,
+                             "avg_collisions", avg_collisions,
+                             "low_thresh", low_thresh,
+                             "high_thresh", high_thresh);
 
                     if (avg_collisions < low_thresh) {
                         *qw_lower = quantization_width;

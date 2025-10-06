@@ -297,7 +297,7 @@ namespace panna {
                     if ( distance > weight_filter ) {
                         continue;
                     }
-                    output.emplace_back( distance, std::make_pair( a_idx, b_idx ) );
+                    output.emplace_back( std::sqrt( distance ), std::make_pair( a_idx, b_idx ) );
                 }
             }
         }

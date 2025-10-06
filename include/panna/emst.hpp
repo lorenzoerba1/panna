@@ -181,14 +181,27 @@ namespace panna {
                     std::sort(local_Tu.begin(), local_Tu.end());
                     kruskal( local_dsu, local_Tu, local_top );
 
+                    local_confirmed[j].insert( local_confirmed[j].end(),
+                                               std::make_move_iterator( local_top.begin() ),
+                                               std::make_move_iterator( local_top.end() ) );
+
+                    if ( j%50 == 0 ) {
                     #pragma omp critical
                     {
                         edges.insert( edges.end(),
                                       std::make_move_iterator( top.begin() ),
                                       std::make_move_iterator( top.end() ) );
-                        edges.insert( edges.end(),
-                                      std::make_move_iterator( local_top.begin() ),
-                                      std::make_move_iterator( local_top.end() ) );
+                        // edges.insert( edges.end(),
+                        //               std::make_move_iterator( local_top.begin() ),
+                        //               std::make_move_iterator( local_top.end() ) );
+
+                        for ( size_t local_index = 0; local_index < j + 1; local_index++ ) {
+                            auto& local = local_confirmed[local_index];
+                            edges.insert( edges.end(),
+                                std::make_move_iterator(local.begin()),
+                                std::make_move_iterator(local.end()));
+                            local.clear();
+                        }
 
                         top.clear();
 
@@ -200,7 +213,7 @@ namespace panna {
                             LOG_INFO( "prefix", i, "repetition", completed_repetitions, "tree_size", top.size() );
                             if ( top.size() == num_data - 1 ) {
                                 float new_tree_weight = 0;
-                                max_weight = std::get<float>( top.back() );
+                                max_weight = std::pow( std::get<float>( top.back() ), 2 );
                                 for ( const auto& edge : top ) {
                                     new_tree_weight += std::get<0>( edge );
                                 }
@@ -229,9 +242,11 @@ namespace panna {
                             // Lose the unused edges, MST is composable wrt to edge partitioning
                             edges.clear();
                         }
-                        completed_repetitions++;
+                        completed_repetitions+= 50;
+                        //completed_repetitions++;
                     }
                 }
+            }
                 LOG_INFO( "msg", "finished prefix", "prefix", i );
             }
             // This is just a sanity check to see if dsu works as intended
@@ -382,7 +397,7 @@ namespace panna {
                                          "tree_size", top.size());
                                 if ( top.size() == num_data - 1 ) {
                                     float new_tree_weight = 0;
-                                    max_weight = std::get<float>( top.back() );
+                                    max_weight = std::pow( std::get<float>( top.back() ), 2 );
                                     for ( const auto& edge : top ) {
                                         new_tree_weight += std::get<0>( edge );
                                     }

@@ -180,14 +180,15 @@ struct EMST_exposed {
             epsilon = nb::cast<float>(kwargs["epsilon"]);
         }
 
-        // Convert the input NumPy array to the std::vector<std::vector<float>> needed by EMST
-        std::vector<std::vector<float>> data_cpp;
-        data_cpp.reserve(num_points);
-        const float* data_ptr = data_in.data();
-        for (size_t i = 0; i < num_points; ++i) {
-            const float* row_start = data_ptr + i * dimensions;
-            data_cpp.emplace_back(row_start, row_start + dimensions);
+        // Take ownership of the input data
+        std::vector<std::vector<float>> data_cpp(num_points, std::vector<float>(dimensions));
+        for (size_t i = 0; i < num_points; i++) {
+            for (size_t j = 0; j < dimensions; j++) {
+                data_cpp[i][j] = data_in.data()[i * dimensions + j];
+            }
         }
+
+
 
         using Hasher = panna::E2LSH<12, panna::NormedPoints>;
         Hasher::Builder builder(0.0, dimensions);
@@ -195,7 +196,16 @@ struct EMST_exposed {
         inner = std::make_unique<EMST_t>(dimensions, repetitions, builder, data_cpp, delta, epsilon);
     }
 
-    nb::tuple find_mst(unsigned int k) {
+    float find_exact_mst() {
+        return inner->find_tree();
+    }
+
+    float find_epsilon_mst() {
+        return inner->find_epsilon_tree();
+    }
+
+    // Method to find the MST for the reachability and return results as NumPy arrays
+    nb::tuple find_mst_dbscan(unsigned int k) {
         // Call the underlying C++ method
         auto result_pair = inner->find_tree_dbscan(k);
 
@@ -303,7 +313,11 @@ NB_MODULE( _panna_impl, m ) {
         .def(nb::init<const nb::ndarray<float, nb::c_contig>&, nb::kwargs>(),
              "Constructs the EMST index from a NumPy array of data points.")
         // Bind the find_mst method
-        .def("find_mst", &EMST_exposed::find_mst, nb::arg("k") = 5,
-            "Find the minimum spanning tree (MST) and the k-NNs for each node.");
+        .def("find_mst_dbscan", &EMST_exposed::find_mst_dbscan, nb::arg("k") = 5,
+            "Find the minimum spanning tree (MST) and the k-NNs for each node.")
+            .def("find_exact_mst", &EMST_exposed::find_exact_mst,
+                 "Find the exact minimum spanning tree (MST) for the dataset.")
+            .def("find_epsilon_mst", &EMST_exposed::find_epsilon_mst,
+                 "Find the 1+epsilon approximate minimum spanning tree (MST) for the dataset.");
 
 }
