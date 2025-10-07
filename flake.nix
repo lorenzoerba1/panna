@@ -10,12 +10,17 @@
   inputs.flake-utils = {
     url = "github:numtide/flake-utils";
   };
+  inputs.sigmod-hdbscan = {
+    url = "github:FrancescoMonaco/hdbscan";
+    inputs.nixpkgs.follows = "nixpkgs";
+  };
 
   outputs = {
     self,
     nixpkgs,
     hl,
     flake-utils,
+    sigmod-hdbscan,
   }:
     flake-utils.lib.eachDefaultSystem (
       system: let
@@ -134,41 +139,44 @@
         devShells.default = (pkgs.mkShell.override {stdenv = pkgs.clangStdenv;}) {
           venvDir = ".venv";
 
-          packages = with pkgs;
-            [
-              gcc
-              lldb
-              clang-tools
-              python
-              hdf5
-              sqlite-interactive
-              cmake
-              just
-              bear # To generate compile_commands.json files
-              llvmPackages.openmp
-              llvmPackages.libcxx
-              rr
-              gdbgui
-              valgrind
-              highfive
-              samply
-              boost
-              cereal
-              catch2_3
-              fast-hdbscan
-              ensmallen
-              mlpack
-              armadillo
-            ]
-            ++ (with python312Packages; [
-              venvShellHook
-              numpy
-              h5py
-              nanobind
-              icecream
-              scikit-build-core
-            ])
-            ++ [hl-bin];
+          packages = with pkgs; [
+            gcc
+            lldb
+            clang-tools
+            (
+              python.withPackages
+              (ps:
+                with ps; [
+                  venvShellHook
+                  numpy
+                  h5py
+                  nanobind
+                  icecream
+                  scikit-build-core
+                  sigmod-hdbscan.packages.${system}.default
+                ])
+            )
+            hdf5
+            sqlite-interactive
+            cmake
+            just
+            bear # To generate compile_commands.json files
+            llvmPackages.openmp
+            llvmPackages.libcxx
+            rr
+            gdbgui
+            valgrind
+            highfive
+            samply
+            boost
+            cereal
+            catch2_3
+            fast-hdbscan
+            ensmallen
+            mlpack
+            armadillo
+            hl-bin
+          ];
 
           NIX_ENFORCE_NO_NATIVE = false;
         };
