@@ -19,7 +19,7 @@ int main() {
     const size_t rep = 500;
     const size_t n = 10000;
     using Point = NormedPoints;         // UnitNormPoints or NormedPoints
-    using Distance = EuclideanDistance; // EuclideanDistance or AngularDistance or CosineDistance
+    using Distance = EuclideanDistanceNoSqrt; // EuclideanDistance or AngularDistance or CosineDistance
     using Hasher = E2LSH<conc, Point>;
     // using Hasher = CrossPolytope<conc, Point, Distance, rotations>;
 
@@ -41,19 +41,19 @@ int main() {
 
     std::vector<std::vector<float>> points =
         H5Easy::load<std::vector<std::vector<float>>>( file, "/train" );
-    points.resize( n );
+    //points.resize( n );
 
     size_t dimensions = points[0].size();
     E2LSHBuilder<conc, NormedPoints> builder( dimensions );
     EMST<Point, Hasher, Distance> tree( dimensions, rep, builder, points, 0.01, 0.5 );
 
     // Exact computation
-    auto start_exact = std::chrono::high_resolution_clock::now();
-    float weight_exact = tree.exact_tree();
-    auto end_exact = std::chrono::high_resolution_clock::now();
-    LOG_INFO("msg", "Computed exact weight",
-             "exact_weight", weight_exact,
-             "elapsed_s", std::chrono::duration<double>( end_exact - start_exact ).count());
+    // auto start_exact = std::chrono::high_resolution_clock::now();
+    // float weight_exact = tree.exact_tree();
+    // auto end_exact = std::chrono::high_resolution_clock::now();
+    // LOG_INFO("msg", "Computed exact weight",
+    //          "exact_weight", weight_exact,
+    //          "elapsed_s", std::chrono::duration<double>( end_exact - start_exact ).count());
     // Exact with predictions
     auto start = std::chrono::high_resolution_clock::now();
     // for (size_t iter= 0; iter< 3 ; iter++) {
@@ -64,19 +64,19 @@ int main() {
     std::chrono::duration<double> elapsed = ( end - start );
     LOG_INFO("msg", "Computed exact with predictions weight",
              "exact_weight", weight,
-             "weight-difference", weight - weight_exact,
+             //"weight-difference", weight - weight_exact,
              "elapsed_s", elapsed.count());
 
     // // Approximate with predictions
-    // start = std::chrono::high_resolution_clock::now();
+    start = std::chrono::high_resolution_clock::now();
     // // for (size_t iter= 0; iter< 3 ; iter++) {
-    // float approx_weight = tree.find_epsilon_tree();
+    float approx_weight = tree.find_epsilon_tree();
     // // }
-    // end = std::chrono::high_resolution_clock::now();
-    // elapsed = ( end - start );
-    // LOG_INFO("msg", "Computed approximate with predictions weight",
-    //          "approx_weight", approx_weight,
-    //             "elapsed_s", elapsed.count());
+    end = std::chrono::high_resolution_clock::now();
+    elapsed = ( end - start );
+    LOG_INFO("msg", "Computed approximate with predictions weight",
+             "approx_weight", approx_weight,
+                "elapsed_s", elapsed.count());
 
     return 0;
 }

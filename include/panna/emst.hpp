@@ -48,6 +48,7 @@ namespace panna {
         std::vector<EdgeTuple> confirmed;
         std::vector<EdgeTuple> unconfirmed;
         float max_weight;
+        size_t distances_computed = 0;
 
     public:
         /**
@@ -185,7 +186,8 @@ namespace panna {
                                                std::make_move_iterator( local_top.begin() ),
                                                std::make_move_iterator( local_top.end() ) );
 
-                    if ( j%50 == 0 ) {
+                    if ( j%50 == 0 )
+                     {
                     #pragma omp critical
                     {
                         edges.insert( edges.end(),
@@ -218,6 +220,17 @@ namespace panna {
                                     new_tree_weight += std::get<0>( edge );
                                 }
                                 tree_weight = new_tree_weight;
+                                // Fill the DSU filter with just the confirmed edgesù
+                                auto partition_point = std::partition_point(
+                                    top.begin(), top.end(), [&]( const auto& e ) {
+                                        return table.fail_probability(
+                                                   std::get<float>( e ), i, j ) < delta;
+                                    } );
+                                filter = DSU( num_data );
+                                for ( auto it = top.begin(); it != partition_point; ++it ) {
+                                    filter.union_sets( std::get<1>( *it ).first, std::get<1>( *it ).second );
+                                }
+
                                 float fp = failure_probability( i, completed_repetitions );
                                 LOG_INFO( "prefix",
                                           i,
@@ -251,6 +264,8 @@ namespace panna {
             }
             // This is just a sanity check to see if dsu works as intended
             is_connected( tree );
+            LOG_INFO("msg", "EMST finished",
+                     "distances_computed", distances_computed);
             return tree_weight;
         }
 
@@ -349,13 +364,13 @@ namespace panna {
             std::vector<std::pair<unsigned int, unsigned int>> tree;
 
             bool found = false;
+            size_t completed_repetitions = 0;
             std::vector<EdgeTuple> edges;
             for ( size_t i_rev = 0; i_rev <= MAX_HASHBITS; i_rev++ ) {
                 size_t i = MAX_HASHBITS - i_rev;
                 if ( found )
                     break;
-#pragma omp parallel
-#pragma omp for nowait
+#pragma omp parallel for schedule(static, 1)
                 for ( size_t j = 0; j < MAX_REPETITIONS; j++ ) {
                     if ( found )
                         continue;
@@ -370,9 +385,8 @@ namespace panna {
                                                std::make_move_iterator( local_top.end() ) );
 
                     // Every x iterations we have a batch, construct the MST from these edges
-                    if ( ( i > 3 && ( ( j + 1 ) == MAX_REPETITIONS ||
-                                      ( j + 1 ) == (size_t)MAX_REPETITIONS / 2 ) ) ||
-                         ( i <= 4 && j % 5 == 0 ) ) {
+                    if ( j%50 == 0 )
+                     {
 #pragma omp critical
                         {
                             edges.insert( edges.end(),
@@ -404,8 +418,13 @@ namespace panna {
                                     auto partition_point = std::partition_point(
                                         top.begin(), top.end(), [&]( const auto& e ) {
                                             return table.fail_probability(
-                                                       std::get<float>( e ), i, j ) < delta;
+                                                       std::get<float>( e ), i, completed_repetitions ) < delta;
                                         } );
+                                    // Fill the DSU filter with just the confirmed edges
+                                    filter = DSU( num_data );
+                                    for ( auto it = top.begin(); it != partition_point; ++it ) {
+                                        filter.union_sets( std::get<1>( *it ).first, std::get<1>( *it ).second );
+                                    }
                                     // The partition point is until we sum the failure probabilities
                                     //  and exceed delta
                                     // float delta_local = delta;
@@ -429,7 +448,7 @@ namespace panna {
                                                           std::distance( partition_point, top.end() ) );
                                     }
                                     LOG_INFO("prefix", i,
-                                             "repetition", j,
+                                             "repetition", completed_repetitions,
                                              "tree_weight", tree_weight,
                                              "bound_weight", bound_weight,
                                              "max_edge_weight", std::get<float>(top.back()),
@@ -459,11 +478,14 @@ namespace panna {
                                 // Lose the unused edges, MST is composable wrt to edge partitioning
                                 edges.clear();
                             }
+                            completed_repetitions+= 50;
                         }
                     }
                 }
                 LOG_INFO("msg", "finished prefix", "prefix", i);}
             is_connected( tree );
+            LOG_INFO("msg", "EMST finished",
+                     "distances_computed", distances_computed);
             return tree_weight;
         }
 
@@ -482,10 +504,10 @@ namespace panna {
             // Find also the top-k nearest neighbors for each node
             for ( size_t i_rev = 0; i_rev <= MAX_HASHBITS; i_rev++ ) {
                 size_t i = MAX_HASHBITS - i_rev;
+                size_t completed_repetitions = 0;
                 if ( found )
                     break;
-#pragma omp parallel
-#pragma omp for nowait
+#pragma omp parallel for schedule(static, 1)
                 for ( size_t j = 0; j < MAX_REPETITIONS; j++ ) {
                     if ( found )
                         continue;
@@ -530,9 +552,8 @@ namespace panna {
                                                std::make_move_iterator( local_top.end() ) );
 
                     // Every x iterations we have a batch, construct the MST from these edges
-                    if ( ( i > 3 && ( ( j + 1 ) == MAX_REPETITIONS ||
-                                      ( j + 1 ) == (size_t)MAX_REPETITIONS / 2 ) ) ||
-                         ( i <= 4 && j % 5 == 0 ) ) {
+                    if ( j%50 == 0 )
+                     {
 #pragma omp critical
                         {   
                             // Merge the local neighbors
@@ -573,7 +594,7 @@ namespace panna {
                                                 std::make_move_iterator(local.end()) );
                                 local.clear();
                             }
-                            // Change the edge weights basen on their reachability
+                            // Change the edge weights based on their reachability
                             for (auto& edge: edges){
                                 std::get<float>( edge ) = std::max( 
                                     std::get<float>( edge ),
@@ -599,7 +620,7 @@ namespace panna {
                                     auto partition_point = std::partition_point(
                                         top.begin(), top.end(), [&]( const auto& e ) {
                                             return table.fail_probability(
-                                                       std::get<float>( e ), i, j ) < delta;
+                                                       std::get<float>( e ), i, completed_repetitions ) < delta;
                                         } );
                                     tree_weight = new_tree_weight;
                                     float bound_weight =
@@ -613,6 +634,11 @@ namespace panna {
                                     if ( partition_point != top.begin() ){
                                         bound_weight += ( std::get<float>( *( partition_point - 1 ) ) *
                                                           std::distance( partition_point, top.end() ) );
+                                    }
+                                    // Fill the pruning DSU
+                                    filter = DSU( num_data );
+                                    for ( auto it = top.begin(); it != partition_point; ++it ) {
+                                        filter.union_sets( std::get<1>( *it ).first, std::get<1>( *it ).second );
                                     }
                                     LOG_INFO("prefix", i,
                                              "repetition", j,
@@ -651,6 +677,7 @@ namespace panna {
                                 edges.clear();
                             }
                         }
+                        completed_repetitions+= 50;
                     }
                 }
                 // Clear the local neighbors
@@ -659,6 +686,7 @@ namespace panna {
                         vec.clear();
                     }
                 }
+    
             }
             
             return { tree, neighbors };
@@ -694,10 +722,12 @@ namespace panna {
         void enumerate_edges( size_t i, size_t j, std::vector<EdgeTuple>& Tu_local ) {
             // Discover edges that share the same prefix at iteration i, j
             std::vector<EdgeTuple> couples;
-            table.search_pairs_filter( j, i, couples, max_weight );
+            size_t computed = table.search_pairs_filter( j, i, couples, max_weight, filter );
             Tu_local.insert( Tu_local.end(), 
                 std::make_move_iterator(couples.begin()),
                 std::make_move_iterator(couples.end()) );
+// #pragma omp atomic
+//             distances_computed += computed;
             return;
         };
 
@@ -836,6 +866,7 @@ namespace panna {
             local_edges.resize( MAX_REPETITIONS );
             dsu_true = DSU( num_data );
             max_weight = std::numeric_limits<float>::infinity();
+            distances_computed = 0;
         }
     }; // closes class
 } // namespace panna
