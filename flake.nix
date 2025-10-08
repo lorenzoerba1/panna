@@ -107,6 +107,7 @@
             python.pkgs.build
             catch2_3
             cereal
+            pandas
             hdf5
             highfive
           ];
@@ -125,6 +126,7 @@
               (ppkgs:
                 with ppkgs; [
                   numpy
+                  pandas
                   h5py
                   panna-python
                   fast-hdbscan
@@ -153,6 +155,11 @@
                 with ps; [
                   venvShellHook
                   numpy
+                  pandas
+                  matplotlib
+                  seaborn
+                  tornado
+                  umap-learn
                   h5py
                   nanobind
                   icecream
