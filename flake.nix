@@ -129,6 +129,10 @@
                   panna-python
                   fast-hdbscan
                   icecream
+                  sigmod-hdbscan.packages.${system}.default
+                  scikit-learn
+                  scipy
+                  matplotlib
                 ]))
           ];
           diskSize = 1024 * 3; # necessary to fit the packages, otherwise the build fails
