@@ -107,7 +107,6 @@
             python.pkgs.build
             catch2_3
             cereal
-            pandas
             hdf5
             highfive
           ];
