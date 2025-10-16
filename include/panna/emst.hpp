@@ -38,15 +38,13 @@ namespace panna {
         std::vector<std::vector<float>> data{};
         uint32_t num_data{ 0 };
         double delta{ 0.01 };
-        const float epsilon{ 0.01 };
+        const float epsilon{ 0.2 };
         DSU dsu_true;
         DSU filter;
         // Sets for the confimed and the unconfirmed edges
         std::vector<EdgeTuple> top;
         std::vector<std::vector<EdgeTuple>> local_confirmed;
         std::vector<std::vector<EdgeTuple>> local_edges;
-        std::vector<EdgeTuple> confirmed;
-        std::vector<EdgeTuple> unconfirmed;
         float max_weight;
         size_t distances_computed = 0;
 
@@ -61,7 +59,7 @@ namespace panna {
          * @param data_in Input data points
          * @param data_dimensionality Dimensionality of the input data
          * @param delta Probability of failure parameter (default: 0.01)
-         * @param epsilon Approximation factor parameter (default: 0.01)
+         * @param epsilon Approximation factor parameter (default: 0.2)
          *
          * @details This constructor initializes an EMST object by:
          * 1. Set up the LSH index table with the distance metric
@@ -74,7 +72,7 @@ namespace panna {
               const size_t repetitions,
               const typename Hasher::Builder builder,
               std::vector<std::vector<float>>& data_in,
-              const double delta_in = 0.1,
+              const double delta_in = 0.01,
               const float epsilon = 0.2 ):
             dimensionality( dimensions ),
             table( Index<Dataset, Hasher, Distance>( dimensions, builder, repetitions ) ),
@@ -83,19 +81,6 @@ namespace panna {
             epsilon( epsilon ),
             dsu_true( DSU( num_data ) ),
             filter( DSU( num_data ) ) {
-            // Find the mean for each dimension and center the data
-// #pragma omp parallel for
-//             for ( size_t dim = 0; dim < dimensions; dim++ ) {
-//                 float mean = 0;
-//                 for ( size_t i = 0; i < num_data; i++ ) {
-//                     mean += data_in[i][dim];
-//                 }
-//                 mean /= num_data;
-//                 for ( size_t i = 0; i < num_data; i++ ) {
-//                     data_in[i][dim] -= mean;
-//                 }
-            // }
-
             // Insert the data
             for ( auto& point : data_in ) {
                 table.insert( point.begin(), point.end() );
@@ -269,92 +254,6 @@ namespace panna {
             return tree_weight;
         }
 
-//         float find_epsilon_tree_boruvka() {
-//             clear(); // Reset DSU and other member variables
-//             std::vector<EdgeTuple> batch_edges;
-//             float tree_weight;
-//             size_t num_components = num_data;
-//             std::vector<EdgeTuple> mst_edges;
-
-
-
-//             while ( num_components > 1 ) {
-//                 DSU dsu(num_data);
-//                 auto changes_made = true;
-//                 size_t iteration = 0;
-//                 tree_weight = 0.0f;
-//                 num_components = num_data;
-//                 size_t prefix_index = MAX_HASHBITS;
-
-//                 // Step 1A: use LSH to find a batch of edges
-// #pragma omp parallel for
-//                 for ( iteration = 0; iteration < MAX_REPETITIONS; iteration++ ) {
-//                     std::vector<EdgeTuple> batch_internal;
-//                     enumerate_edges( prefix_index, iteration, batch_internal );
-//                     // Step 1B: add edges to the cheapest edge list
-// #pragma omp critical
-//                     {
-//                         batch_edges.insert( batch_edges.end(),
-//                             std::make_move_iterator(batch_internal.begin()),
-//                             std::make_move_iterator(batch_internal.end()));
-//                     }
-//                 }
-
-//                 // Fill the cheapest edge structure
-//                 std::vector<EdgeTuple> cheapest_edge(num_data, std::make_tuple(std::numeric_limits<float>::max(), std::make_pair(0, 0)));
-//                 for ( auto& edge : batch_edges ) {
-//                     auto& terminal = std::get<1>(edge).first;
-//                     if ( std::get<0>(edge) < std::get<0>(cheapest_edge[terminal].back()) ) {
-//                         cheapest_edge[terminal]. = edge;
-//                         std::sort(cheapest_edge[terminal].begin(), cheapest_edge[terminal].end());
-//                     }
-//                 }
-
-//                 // Run Boruvka's algorithm
-//                 while (num_components > 1 && changes_made) {
-//                     changes_made = false;
-
-//                     // Step 2: Find the cheapest edge for each component
-//                     std::vector<EdgeTuple> component_cheapest(num_components,
-//                                                             std::make_tuple(std::numeric_limits<float>::max(), std::make_pair(0, 0)));
-//                     for (size_t i = 0; i < num_data; ++i) {
-//                         uint32_t comp = dsu.find(i);
-//                         // Find the cheapest outgoing edge from this terminal's component to another component
-//                         for (const auto& edge : cheapest_edge[i]) {
-//                             if (std::get<0>(edge) < std::get<0>(component_cheapest[comp]) && comp != dsu.find(std::get<1>(edge).second)) {
-//                                 component_cheapest[comp] = edge;
-//                             }
-//                         }
-//                     }
-
-//                     // Step 3: Add the cheapest edges to the MST
-//                     for (const auto& edge : component_cheapest) {
-//                         if (std::get<0>(edge) != std::numeric_limits<float>::max()) {
-//                             uint32_t u = std::get<1>(edge).first;
-//                             uint32_t v = std::get<1>(edge).second;
-                            
-//                             if (dsu.union_sets(u, v)) {
-//                                 mst_edges.push_back(edge);
-//                                 tree_weight += std::get<0>(edge);
-//                                 --num_components;
-//                                 changes_made = true;
-//                             }
-//                         }
-//                     }
-//                     std::cout << "Number of components: " << num_components << std::endl;
-//                 }
-
-//                 batch_edges.clear();
-//                 batch_edges.insert(batch_edges.end(),
-//                                     std::make_move_iterator(mst_edges.begin()),
-//                                     std::make_move_iterator(mst_edges.end()));
-//                 mst_edges.clear();
-//                 prefix_index--;
-//             }
-//             std::cout << "Boruvka completed with " << mst_edges.size() << " edges." << std::endl;
-
-//             return tree_weight; // Return the weight even if not fully connected or confirmed
-//         }
         /// @brief Find the ɛ-EMST using both confirmed and unconfirmed edges
         float find_epsilon_tree() {
             clear();
@@ -415,25 +314,22 @@ namespace panna {
                                     for ( const auto& edge : top ) {
                                         new_tree_weight += std::get<0>( edge );
                                     }
-                                    auto partition_point = std::partition_point(
+
+                                    // Find the edges that satisfy the failure probability
+                                    float delta_local = delta;
+                                    auto partition_point = std::find_if(
                                         top.begin(), top.end(), [&]( const auto& e ) {
-                                            return table.fail_probability(
-                                                       std::get<float>( e ), i, completed_repetitions ) < delta;
+                                            delta_local -= table.fail_probability(
+                                                       std::get<float>( e ), i, j );
+                                            return delta_local <= 0.0f;
                                         } );
+
                                     // Fill the DSU filter with just the confirmed edges
                                     filter = DSU( num_data );
                                     for ( auto it = top.begin(); it != partition_point; ++it ) {
                                         filter.union_sets( std::get<1>( *it ).first, std::get<1>( *it ).second );
                                     }
-                                    // The partition point is until we sum the failure probabilities
-                                    //  and exceed delta
-                                    // float delta_local = delta;
-                                    // auto partition_point = std::find_if(
-                                    //     top.begin(), top.end(), [&]( const auto& e ) {
-                                    //         delta_local -= table.fail_probability(
-                                    //                    std::get<float>( e ), i, j );
-                                    //         return delta_local <= 0;
-                                    //     } );
+                                    // Find the bound on the weight of the tree
                                     tree_weight = new_tree_weight;
                                     float bound_weight =
                                         ( 1 + epsilon ) *
@@ -617,11 +513,15 @@ namespace panna {
                                     for ( const auto& edge : top ) {
                                         new_tree_weight += std::get<0>( edge );
                                     }
-                                    auto partition_point = std::partition_point(
+                                    // Find the edges that satisfy the failure probability
+                                    float delta_local = delta;
+                                    auto partition_point = std::find_if(
                                         top.begin(), top.end(), [&]( const auto& e ) {
-                                            return table.fail_probability(
-                                                       std::get<float>( e ), i, completed_repetitions ) < delta;
+                                            delta_local -= table.fail_probability(
+                                                       std::get<float>( e ), i, j );
+                                            return delta_local <= 0.0f;
                                         } );
+                                        
                                     tree_weight = new_tree_weight;
                                     float bound_weight =
                                         ( 1 + epsilon ) *
@@ -731,28 +631,6 @@ namespace panna {
             return;
         };
 
-        /// @brief Return the bound weight (1+ɛ)(sum over Tc + |Tu|*max(Tu) )
-        /// @param top_copy a vector that contains the edges in the spanning tree
-        /// @return the weight
-        float bound_weight( const std::vector<EdgeTuple>& top_copy, size_t i, size_t j ) {
-            float weight = 0;
-            float max_confirmed = 0;
-            int unconfirmed = 0;
-            auto split_point =
-                std::partition_point( top_copy.begin(), top_copy.end(), [&]( const auto& e ) {
-                    return table.fail_probability( std::get<float>( e ), i, j ) < delta;
-                } );
-            max_confirmed = std::get<float>( *( split_point - 1 ) );
-            unconfirmed = std::distance( split_point, top_copy.end() );
-            weight += std::accumulate(
-                top_copy.begin(), split_point, 0.0f, []( float acc, const EdgeTuple& e ) {
-                    return acc + std::get<float>( e );
-                } );
-
-            weight += max_confirmed * unconfirmed;
-            return weight;
-        }
-
         /// @brief Checks wheter a tree is connected
         /// @param tree the tree that we want to check
         /// @return true if all edge are connected, false otherwise.
@@ -798,7 +676,7 @@ namespace panna {
         /// @param edge_list the current edges in the tree
         /// @return true if an edge has been added to the edge_list and the DSU data structure,
         /// false otherwise
-        bool add_edge( const EdgeTuple& new_edge_input, DSU& dsu, std::vector<EdgeTuple>& edge_list ) {
+        inline bool add_edge( const EdgeTuple& new_edge_input, DSU& dsu, std::vector<EdgeTuple>& edge_list ) {
             // Extract new edge and its weight.
             std::pair<uint32_t, uint32_t> new_edge = std::get<1>( new_edge_input );
 
@@ -867,6 +745,7 @@ namespace panna {
             dsu_true = DSU( num_data );
             max_weight = std::numeric_limits<float>::infinity();
             distances_computed = 0;
+            filter = DSU( num_data );
         }
     }; // closes class
 } // namespace panna
