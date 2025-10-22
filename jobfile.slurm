@@ -2,13 +2,11 @@
 #SBATCH -J panna
 #SBATCH -o output_%j.txt
 #SBATCH -e errors_%j.txt
-#SBATCH -t 01:30:00
-#SBATCH -c 32
-#SBATCH -p allgroups
-#SBATCH --mem 256G
+#SBATCH --partition lovelace
+#SBATCH --mem 0
+#SBATCH --exclusive
 
 cd $WORKING_DIR
 
-export OMP_NUM_THREADS=32
 
-srun singularity run ./panna.sif python/tests/datasets_test.py
+srun ./panna python/tests/datasets_test.py
