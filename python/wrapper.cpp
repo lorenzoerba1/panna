@@ -9,6 +9,7 @@
 #include "panna/lsh/crosspolytope.hpp"
 #include "panna/lsh/euclidean.hpp"
 #include "panna/lsh/simhash.hpp"
+#include "panna/baselines/toc_emst.hpp"
 #include "panna/trieindex.hpp"
 #include "panna/emst.hpp"
 #include "panna/logging.hpp"
@@ -288,10 +289,63 @@ struct EMST_exposed {
     }
 };
 
+nb::tuple emst_theory_of_computing( nb::ndarray<float, nb::c_contig>& data_in, nb::kwargs kwargs ) {
+    float delta = 0.1;
+    float gamma = 1.0;
+
+    if ( kwargs.contains( "delta" ) ) {
+        delta = nb::cast<float>( kwargs["delta"] );
+    }
+    if ( kwargs.contains( "gamma" ) ) {
+        gamma = nb::cast<float>( kwargs["gamma"] );
+    }
+
+    size_t nrows = data_in.shape( 0 );
+    size_t dimensionality = data_in.shape( 1 );
+    panna::NormedPoints dataset( dimensionality );
+    float* data = data_in.data();
+    for ( size_t row = 0; row < nrows; row++ ) {
+        float* begin = data + row * dimensionality;
+        float* end = data + ( row + 1 ) * dimensionality;
+        expect( end - begin == static_cast<ptrdiff_t>( dimensionality ) );
+        dataset.push_back( begin, end );
+    }
+    LOG_INFO("nrows", nrows, "dimensionality", dimensionality);
+
+    const size_t K = 3; // using a larger value entails using way too many repetitions in the last iterations
+    using Distance = panna::EuclideanDistance;
+    using Hasher = panna::E2LSH<K, panna::NormedPoints>;
+    Hasher::Builder builder( 0.0, dimensionality );
+
+    auto res =
+        panna::baselines::emst_theory_of_computing<panna::NormedPoints, Hasher::Builder, Distance>(
+            dataset, gamma, delta, builder );
+    auto tree = res.second;
+
+    size_t tree_size = tree.size();
+    float* weights = new float[tree_size];
+    uint32_t* ids = new uint32_t[tree_size * 2];
+    for ( size_t i = 0; i < tree_size; i++ ) {
+        weights[i] = std::get<0>( tree[i] );
+        ids[i * 2] = std::get<1>( tree[i] );
+        ids[i * 2 + 1] = std::get<2>( tree[i] );
+    }
+
+    nb::capsule weights_owner( weights, []( void* p ) noexcept { delete[] (float*)p; } );
+    nb::capsule ids_owner( ids, []( void* p ) noexcept { delete[] (uint32_t*)p; } );
+
+    return nb::make_tuple(
+        nb::ndarray<nb::numpy, float, nb::ndim<1>>(weights, {tree_size}, weights_owner),
+        nb::ndarray<nb::numpy, uint32_t, nb::ndim<2>>(ids, {tree_size, 2}, ids_owner)
+    );
+}
+
 NB_MODULE( _panna_impl, m ) {
     m.def( "set_seed",
            &panna::seed_global_rng,
            "Set the seed of the global random number generato used by the panna module." );
+    m.def( "emst_theory_of_computing",
+           &emst_theory_of_computing ),
     nb::class_<TrieIndex>( m, "TrieIndex" )
         .def( nb::init<size_t, std::string, nb::kwargs>() )
         .def( "insert", &TrieIndex::insert )

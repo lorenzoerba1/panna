@@ -174,6 +174,10 @@ namespace panna {
         size_t size() const {
             return chunks.size() / chunks_per_point;
         }
+
+        size_t get_dimensions() const {
+            return dimensions;
+        }
     };
 
     struct NormedPointHandle {
@@ -257,6 +261,10 @@ namespace panna {
 
         size_t size() const {
             return squared_norms.size();
+        }
+        
+        size_t get_dimensions() const {
+            return dimensions;
         }
     };
 
@@ -372,4 +380,20 @@ namespace panna {
             return starts.size() - 1;
         }
     };
+
+    template<typename Distance, typename Dataset>
+    float approximate_diameter(Dataset & dataset) {
+        size_t root = 0;
+
+        float maxdist = 0.0;
+        for(size_t i=0; i<dataset.size(); i++) {
+            float d = Distance::compute(dataset[root], dataset[i]);
+            if (d > maxdist) {
+                maxdist = d;
+            }
+        }
+        
+        return maxdist * 2.0;
+    }
+    
 } // namespace panna

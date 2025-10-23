@@ -113,7 +113,9 @@ namespace panna {
         }
 
         void fit(Dataset& points) {
-            expect(quantization_width == 0.0);
+            if (quantization_width != 0.0) {
+                return;
+            }
 
             Dataset random(dimensions);
             for (size_t i = 0; i < 1000; i++) {
