@@ -155,7 +155,7 @@ namespace panna {
         friend std::ostream& operator<<( std::ostream& os, const SymbolLshValue<Symbol, K>& hash ) {
             os << "#";
             for ( size_t i = 0; i < K; i++ ) {
-                os << std::hex << +hash.hashes[i] ;
+                os << std::hex << +hash.hashes[i];
                 // os << std::hex << static_cast<int64_t>( hash.hashes[i] );
                 if ( i < K - 1 ) {
                     os << "_";

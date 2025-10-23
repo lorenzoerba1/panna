@@ -1,35 +1,172 @@
+# TODO: reintroduce the dbg macro somehow
 {
-  description = "PUFFINN - Parameterless and Universal Fast FInding of Nearest Neighbors";
+  description = "PANNA: Playground for Approximate Nearest Neighbor Algorithms";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-  inputs.hl.url = "github:pamburus/hl";
+  inputs.hl = {
+    url = "github:pamburus/hl";
+    inputs.nixpkgs.follows = "nixpkgs";
+  };
+  inputs.flake-utils = {
+    url = "github:numtide/flake-utils";
+  };
+  inputs.sigmod-hdbscan = {
+    url = "github:FrancescoMonaco/hdbscan";
+    inputs.nixpkgs.follows = "nixpkgs";
+  };
 
   outputs = {
     self,
     nixpkgs,
     hl,
-  }: let
-    supportedSystems = ["x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin"];
-    forEachSupportedSystem = f:
-      nixpkgs.lib.genAttrs supportedSystems (system:
-        f {
-          pkgs = import nixpkgs {inherit system;};
-          hlbin = hl.packages.${system}.default;
-        });
-  in {
-    devShells = forEachSupportedSystem ({
-      pkgs,
-      hlbin,
-    }: {
-      default = (pkgs.mkShell.override {stdenv = pkgs.clangStdenv;}) {
-        venvDir = ".venv";
+    flake-utils,
+    sigmod-hdbscan,
+  }:
+    flake-utils.lib.eachDefaultSystem (
+      system: let
+        pkgs = import nixpkgs {inherit system;};
+        hl-bin = hl.packages.${system}.default;
+        # get a python build with optimizations enabled, following
+        # this suggestion: https://discourse.nixos.org/t/why-is-the-nix-compiled-python-slower/18717/9
+        python = pkgs.python312;
+        # .override {
+        #   enableOptimizations = true;
+        #   reproducibleBuild = false;
+        #   self = python;
+        # };
 
-        packages = with pkgs;
-          [
-            clang-tools
-            clang-analyzer
+        fast-hdbscan = python.pkgs.buildPythonPackage rec {
+          pname = "fast_hdbscan";
+          version = "0.2.2";
+          src = python.pkgs.fetchPypi {
+            inherit pname version;
+            hash = "sha256-6/2iCMhdM4FBzGyKa5XJ8vHqg9O5mC+YZLJdc7B9nMg=";
+          };
+          # do not run tests
+          doCheck = false;
+          # specific to buildPythonPackage, see its reference
+          pyproject = true;
+          dependencies = with python.pkgs; [
+            numba
+            numpy
+            scikit-learn
+          ];
+          build-system = with python.pkgs; [
+            setuptools
+            wheel
+          ];
+        };
+
+        mlpack = pkgs.stdenv.mkDerivation rec {
+          name = "mlpack";
+          version = "4.6.2";
+          src = pkgs.fetchurl {
+            url = "https://www.mlpack.org/files/mlpack-${version}.tar.gz";
+            hash = "sha256-L+dy2jg6k1ZFztB6B7UZQsoXjTgSnfO/aFiQvDwXUs8=";
+          };
+          installPhase = ''
+            mkdir -p $out/include
+            cp -r src/* $out/include
+          '';
+        };
+
+        ensmallen = pkgs.stdenv.mkDerivation rec {
+          name = "ensmallen";
+          version = "3.10.0";
+          src = pkgs.fetchurl {
+            url = "https://ensmallen.org/files/ensmallen-${version}.tar.gz";
+            hash = "sha256-JI4gNoVveqj6s0ygL6Onmyya8g9TsdJuPek50VDcuzo=";
+          };
+          installPhase = ''
+            mkdir -p $out/include
+            cp -r include/* $out/include
+          '';
+        };
+
+        panna-python = python.pkgs.buildPythonPackage {
+          pname = "panna";
+          version = "0.0.1";
+          pyproject = true;
+          src = ./.;
+
+          # as stated here, one should disable the cmake setup:
+          # https://discourse.nixos.org/t/building-python-package-with-scikit-build-core-and-cmake-dependencies-die-python/69665/2
+          dontUseCmakeConfigure = true;
+          dontUseCmakeBuild = true;
+          dontUseCmakeInstall = true;
+
+          build-system = with python.pkgs; [
+            scikit-build-core
+            nanobind
+          ];
+          dependencies = with python.pkgs; [
+            numpy
+            h5py
+          ];
+          buildInputs = with pkgs; [
+            python.pkgs.build
+            catch2_3
+            cereal
+            hdf5
+            highfive
+          ];
+          nativeBuildInputs = with pkgs; [
+            cmake
+            git
+            ninja
+          ];
+        };
+
+        container = pkgs.singularity-tools.buildImage {
+          name = "panna";
+          runScript = "#!${pkgs.stdenv.shell}\npython $@";
+          contents = [
+            (python.withPackages
+              (ppkgs:
+                with ppkgs; [
+                  numpy
+                  pandas
+                  h5py
+                  panna-python
+                  fast-hdbscan
+                  icecream
+                  sigmod-hdbscan.packages.${system}.default
+                  scikit-learn
+                  scipy
+                  matplotlib
+                ]))
+          ];
+          diskSize = 1024 * 3; # necessary to fit the packages, otherwise the build fails
+        };
+      in {
+        packages.default = panna-python;
+        packages.container = container;
+        devShells.default = (pkgs.mkShell.override {stdenv = pkgs.clangStdenv;}) {
+          venvDir = ".venv";
+
+          packages = with pkgs; [
+            gcc
             lldb
-            python312
+            clang-tools
+            (
+              python.withPackages
+              (ps:
+                with ps; [
+                  venvShellHook
+                  numpy
+                  pandas
+                  matplotlib
+                  seaborn
+                  tornado
+                  umap-learn
+                  h5py
+                  nanobind
+                  icecream
+                  scikit-build-core
+                  sigmod-hdbscan.packages.${system}.default
+                ])
+            )
+            hdf5
             sqlite-interactive
             cmake
             just
@@ -41,19 +178,18 @@
             valgrind
             highfive
             samply
-          ]
-          ++ (with pkgs.python312Packages; [
-            venvShellHook
-            numpy
-            h5py
-            nanobind
-            icecream
-            scikit-build-core
-          ])
-          ++ [hlbin];
+            boost
+            cereal
+            catch2_3
+            fast-hdbscan
+            ensmallen
+            mlpack
+            armadillo
+            hl-bin
+          ];
 
-        NIX_ENFORCE_NO_NATIVE = false;
-      };
-    });
-  };
+          NIX_ENFORCE_NO_NATIVE = false;
+        };
+      }
+    );
 }

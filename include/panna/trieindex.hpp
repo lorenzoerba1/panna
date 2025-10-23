@@ -5,13 +5,14 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <queue>
 #include <stdexcept>
 #include <type_traits>
 
 #include "cereal/archives/binary.hpp"
-#include "cereal/types/optional.hpp"
-#include "dbg.h"
+#include "panna/kdtree.hpp"
+#include "panna/logging.hpp"
 #include "panna/lsh/predicates.hpp"
 #include "panna/prefixmap.hpp"
 
@@ -237,7 +238,9 @@ namespace panna {
 
                     // check stopping condition
                     if ( output.size() == k ) {
-                        float topdist = output.front().first; // ! We should check on the biggest element but the vector is a heap so it should be the first
+                        float topdist =
+                            output.front().first; // ! We should check on the biggest element but
+                                                  // the vector is a heap so it should be the first
                         float fp = failure_probability(
                             *hasher, topdist, concat, rep + 1, lsh_maps.size() );
                         if ( fp <= delta ) {
@@ -248,6 +251,122 @@ namespace panna {
                 }
             }
             g_collisions += collisions;
+        }
+
+        // Function to return all colliding couples in a given repetition and concatenation
+        size_t
+        search_pairs_filter( size_t repetition,
+                             size_t concatenations,
+                             std::vector<std::tuple<float, std::pair<uint32_t, uint32_t>>>& output,
+                             float weight_filter,
+                             DSU& dsu_true ) {
+            expect( hasher );
+            size_t counter = 0;
+            std::vector<std::tuple<uint32_t, uint32_t, float>> scratch;
+            scratch.reserve( 1 << 16 );
+
+            PairPrefixMapCursorNew<typename Hasher::Value> cursor =
+                lsh_maps[repetition].create_pair_cursor_new(
+                    concatenations,
+                    ( concatenations < hasher->get_concatenations() )
+                        ? std::optional( concatenations + 1 )
+                        : std::nullopt );
+
+            while ( true ) {
+                cursor.fill_pairs_buffer( scratch );
+                if ( scratch.size() == 0 ) {
+                    // no new pairs
+                    break;
+                }
+                LOG_DEBUG( "repetition",
+                           repetition,
+                           "prefix",
+                           concatenations,
+                           "num_new_pairs",
+                           scratch.size() );
+                for ( size_t i = 0; i < scratch.size(); i++ ) {
+                    uint32_t a_idx = std::get<0>( scratch[i] );
+                    uint32_t b_idx = std::get<1>( scratch[i] );
+                    if (b_idx < a_idx) {
+                        // ensure that a_idx is always smaller
+                        uint32_t tmp = b_idx;
+                        b_idx = a_idx;
+                        a_idx = tmp;
+                    }
+                    PointHandle a = dataset[std::get<0>( scratch[i] )];
+                    PointHandle b = dataset[std::get<1>( scratch[i] )];
+                    if ( dsu_true.is_connected( a_idx, b_idx ) ) {
+                        continue;
+                    }
+                    float distance = Distance::compute( a, b );
+                    counter++;
+                    if ( distance > weight_filter ) {
+                        continue;
+                    }
+                    output.emplace_back( std::sqrt( distance ), std::make_pair( a_idx, b_idx ) );
+                }
+            }
+            return counter;
+        }
+
+        // Function to return all colliding couples in a given repetition and concatenation
+        void search_pairs( size_t repetition,
+                           size_t concatenations,
+                           std::vector<std::tuple<float, std::pair<uint32_t, uint32_t>>>& output ) {
+            expect( hasher );
+            // Setup
+            std::vector<std::pair<const uint32_t*, const uint32_t*>> scratch( 262144 ); // 65536);
+            // TO DO: Find a way to create the cursors once and for all, maybe you also have to
+            // store them
+            PairPrefixMapCursor<typename Hasher::Value> cursor =
+                lsh_maps[repetition].create_pair_cursor();
+            bool keep_going = true;
+            if ( concatenations != hasher->get_concatenations() ) {
+                cursor.shorten_prefix( concatenations );
+            }
+            while ( keep_going ) {
+                size_t cursor_collisions = 0;
+                std::tie( cursor_collisions, keep_going ) = cursor.next( scratch );
+                size_t current_size = output.size();
+
+                // Fill the output vector and then parallel compute the distances
+                for ( size_t num = 0; num < cursor_collisions; num++ ) {
+                    output.emplace_back(
+                        std::numeric_limits<float>::infinity(),
+                        std::make_pair( *scratch[num].first,
+                                        *scratch[num].second ) ); // We put a mock value?
+                }
+
+#pragma omp parallel for
+                for ( size_t num = 0; num < cursor_collisions; num++ ) {
+                    uint32_t x_p, y_p;
+                    std::tie( x_p, y_p ) = std::get<1>( output[current_size + num] );
+                    PointHandle x = dataset[x_p];
+                    PointHandle y = dataset[y_p];
+                    float dist = Distance::compute( y, x );
+                    // If the pairs are already in the list we just have to access them so no race
+                    // conditions
+                    std::get<float>( output[current_size + num] ) = dist;
+                }
+            }
+
+            std::sort( output.begin(), output.end() );
+            // std::cout << std::get<float>(*output.begin()) << " " <<
+            // std::get<float>(*(output.end()-1)) << " "; std::cout <<
+            // std::get<1>(*output.begin()).first <<" "<< std::get<1>(*output.begin()).second << " "
+            // << std::get<1>(*(output.end() - 1)).first << " " << std::get<1>(*(output.end() -
+            // 1)).second << std::endl;
+        } // End search couples
+
+        float fail_probability( float dist, size_t concat, size_t rep ) {
+            return failure_probability( *hasher, dist, concat, rep + 1, lsh_maps.size() );
+        }
+
+        // FIXME: I don't think this belongs here, form an API standpoint
+        float get_distance( size_t a, size_t b ) {
+            PointHandle x = dataset[a];
+            PointHandle y = dataset[b];
+            return Distance::compute( x, y );
         }
     };
 } // namespace panna

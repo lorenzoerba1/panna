@@ -49,7 +49,7 @@ namespace panna {
 
                 size_t collisions = 0;
 
-                for ( size_t i = 0; i < num_repetitions; i++ ) {
+                for ( size_t z = 0; z < num_repetitions; z++ ) {
                     // length = dimensions
                     // x = (1, 0, ..., 0)
                     // y = (alpha, (1-alpha^2)^(1/2), ..., 0)

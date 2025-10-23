@@ -4,13 +4,14 @@
 #include <nanobind/stl/string.h>
 #include <sstream>
 
-#include "dbg.h"
 #include "panna/data.hpp"
 #include "panna/distance.hpp"
 #include "panna/lsh/crosspolytope.hpp"
 #include "panna/lsh/euclidean.hpp"
 #include "panna/lsh/simhash.hpp"
 #include "panna/trieindex.hpp"
+#include "panna/emst.hpp"
+#include "panna/logging.hpp"
 
 namespace nb = nanobind;
 
@@ -154,6 +155,139 @@ struct TrieIndex {
     }
 };
 
+struct EMST_exposed {
+    using EMST_t = panna::EMST<panna::NormedPoints, panna::E2LSH<12, panna::NormedPoints>, panna::EuclideanDistance>;
+    std::unique_ptr<EMST_t> inner;
+
+    // Constructor to be called from Python. It takes a NumPy array and optional keyword arguments.
+    EMST_exposed(const nb::ndarray<float, nb::c_contig>& data_in, nb::kwargs kwargs) {
+
+        size_t num_points = data_in.shape(0);
+        size_t dimensions = data_in.shape(1);
+
+        // Set default parameters, which can be overridden by kwargs from Python
+        size_t repetitions = 500;
+        double delta = 0.1;
+        float epsilon = 0.2;
+
+        if (kwargs.contains("repetitions")) {
+            repetitions = nb::cast<size_t>(kwargs["repetitions"]);
+        }
+        if (kwargs.contains("delta")) {
+            delta = nb::cast<double>(kwargs["delta"]);
+        }
+        if (kwargs.contains("epsilon")) {
+            epsilon = nb::cast<float>(kwargs["epsilon"]);
+        }
+
+        // Take ownership of the input data
+        std::vector<std::vector<float>> data_cpp(num_points, std::vector<float>(dimensions));
+        for (size_t i = 0; i < num_points; i++) {
+            for (size_t j = 0; j < dimensions; j++) {
+                data_cpp[i][j] = data_in.data()[i * dimensions + j];
+            }
+        }
+
+
+
+        using Hasher = panna::E2LSH<12, panna::NormedPoints>;
+        Hasher::Builder builder(0.0, dimensions);
+
+        inner = std::make_unique<EMST_t>(dimensions, repetitions, builder, data_cpp, delta, epsilon);
+    }
+
+    float find_exact_mst() {
+        return inner->find_tree();
+    }
+
+    float find_epsilon_mst() {
+        return inner->find_epsilon_tree();
+    }
+
+    // Method to find the MST for the reachability and return results as NumPy arrays
+    nb::tuple find_mst_dbscan(unsigned int k) {
+        // Call the underlying C++ method
+        auto result_pair = inner->find_tree_dbscan(k);
+
+        // 1. MST Edges
+        auto& tree_edges_vec = result_pair.first;
+        size_t num_edges = tree_edges_vec.size();
+
+        // Create a vector on the heap that will be owned by NumPy
+        auto tree_vec_ptr = std::make_unique<std::vector<float>>(num_edges * 3);
+
+        for (size_t i = 0; i < num_edges; ++i) {
+            (*tree_vec_ptr)[i * 3 + 0] = std::get<0>(tree_edges_vec[i]);
+            (*tree_vec_ptr)[i * 3 + 1] = std::get<1>(tree_edges_vec[i]);
+            (*tree_vec_ptr)[i * 3 + 2] = std::get<2>(tree_edges_vec[i]);
+        }
+
+        nb::capsule tree_owner(tree_vec_ptr.get(), [](void *p) noexcept {
+            delete static_cast<std::vector<float>*>(p);
+        });
+        
+        nb::ndarray<float, nb::numpy> tree_array(
+            tree_vec_ptr.release()->data(), 
+            {num_edges, 3},
+            tree_owner 
+        );
+        LOG_INFO("msg", "Created tree array", "num_edges", num_edges);
+
+        // 2. Core Distances
+        auto& neighbor_results = result_pair.second;
+        size_t num_points = neighbor_results.size();
+
+        auto core_vec_ptr = std::make_unique<std::vector<float>>(num_points);
+        for (size_t i = 0; i < num_points; ++i) {
+            if (!neighbor_results[i].empty()) {
+                (*core_vec_ptr)[i] = neighbor_results[i].front().first;
+            } else {
+                (*core_vec_ptr)[i] = std::numeric_limits<float>::infinity();
+            }
+        }
+
+        nb::capsule core_owner(core_vec_ptr.get(), [](void *p) noexcept {
+            delete static_cast<std::vector<float>*>(p);
+        });
+
+        LOG_INFO("msg", "Created core array", "num_points", num_points);
+
+        nb::ndarray<float, nb::numpy, nb::ndim<1>> core_array(
+            core_vec_ptr.release()->data(),
+            {num_points},
+            core_owner
+        );
+
+
+        // 3. Neighbors
+        size_t num_neighbors_per_point = k + 1;
+        auto neighbors_vec_ptr = std::make_unique<std::vector<uint32_t>>(num_points * num_neighbors_per_point);
+        
+        for (size_t i = 0; i < num_points; ++i) {
+            for (size_t j = 0; j < num_neighbors_per_point; ++j) {
+                if (j < neighbor_results[i].size()) {
+                    (*neighbors_vec_ptr)[i * num_neighbors_per_point + j] = neighbor_results[i][j].second;
+                } else {
+                    (*neighbors_vec_ptr)[i * num_neighbors_per_point + j] = i;
+                }
+            }
+        }
+
+        nb::capsule neighbors_owner(neighbors_vec_ptr.get(), [](void *p) noexcept {
+            delete static_cast<std::vector<uint32_t>*>(p);
+        });
+
+        nb::ndarray<uint32_t, nb::numpy, nb::ndim<2>> neighbors_array(
+            neighbors_vec_ptr.release()->data(),
+            {num_points, num_neighbors_per_point},
+            neighbors_owner
+        );
+        LOG_INFO("msg", "Created neighbors array", "num_points", num_points, "num_neighbors_per_point", num_neighbors_per_point);
+        // Return as a python tuple
+        return nb::make_tuple(tree_array, core_array, neighbors_array);
+    }
+};
+
 NB_MODULE( _panna_impl, m ) {
     m.def( "set_seed",
            &panna::seed_global_rng,
@@ -174,4 +308,16 @@ NB_MODULE( _panna_impl, m ) {
                     << " family=" << self->inner->describe_family() << ")";
             return sstream.str();
         } );
+
+    nb::class_<EMST_exposed>( m, "EMST")
+        .def(nb::init<const nb::ndarray<float, nb::c_contig>&, nb::kwargs>(),
+             "Constructs the EMST index from a NumPy array of data points.")
+        // Bind the find_mst method
+        .def("find_mst_dbscan", &EMST_exposed::find_mst_dbscan, nb::arg("k") = 5,
+            "Find the minimum spanning tree (MST) and the k-NNs for each node.")
+            .def("find_exact_mst", &EMST_exposed::find_exact_mst,
+                 "Find the exact minimum spanning tree (MST) for the dataset.")
+            .def("find_epsilon_mst", &EMST_exposed::find_epsilon_mst,
+                 "Find the 1+epsilon approximate minimum spanning tree (MST) for the dataset.");
+
 }
