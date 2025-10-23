@@ -33,3 +33,5 @@ mare
 recall
 scalability
 tests
+/dist
+*.pyc

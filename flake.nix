@@ -148,11 +148,12 @@
             gcc
             lldb
             clang-tools
+            python.pkgs.venvShellHook
             (
               python.withPackages
               (ps:
                 with ps; [
-                  venvShellHook
+                  build
                   numpy
                   pandas
                   matplotlib
