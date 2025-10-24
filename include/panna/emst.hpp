@@ -175,14 +175,12 @@ namespace panna {
                      {
                     #pragma omp critical
                     {
+                        completed_repetitions+= 50;
                         edges.insert( edges.end(),
                                       std::make_move_iterator( top.begin() ),
                                       std::make_move_iterator( top.end() ) );
-                        // edges.insert( edges.end(),
-                        //               std::make_move_iterator( local_top.begin() ),
-                        //               std::make_move_iterator( local_top.end() ) );
 
-                        for ( size_t local_index = 0; local_index < j + 1; local_index++ ) {
+                        for ( size_t local_index = 0; local_index < MAX_REPETITIONS; local_index++ ) {
                             auto& local = local_confirmed[local_index];
                             edges.insert( edges.end(),
                                 std::make_move_iterator(local.begin()),
@@ -192,7 +190,7 @@ namespace panna {
 
                         top.clear();
 
-                        if ( edges.size() > num_data - 1 ) {
+                        if ( edges.size() >= num_data - 1 ) {
                             dsu_true = DSU( num_data );
                             std::sort( edges.begin(), edges.end() );
                             kruskal( dsu_true, edges, top );
@@ -212,7 +210,7 @@ namespace panna {
                                                    std::get<float>( e ), i, j ) < delta;
                                     } );
                                 filter = DSU( num_data );
-                                for ( auto it = top.begin(); it != partition_point; ++it ) {
+                                for ( auto it = top.begin(); it != top.end(); ++it ) {
                                     filter.union_sets( std::get<1>( *it ).first, std::get<1>( *it ).second );
                                 }
 
@@ -240,8 +238,6 @@ namespace panna {
                             // Lose the unused edges, MST is composable wrt to edge partitioning
                             edges.clear();
                         }
-                        completed_repetitions+= 50;
-                        //completed_repetitions++;
                     }
                 }
             }
@@ -263,10 +259,10 @@ namespace panna {
             std::vector<std::pair<unsigned int, unsigned int>> tree;
 
             bool found = false;
-            size_t completed_repetitions = 0;
             std::vector<EdgeTuple> edges;
             for ( size_t i_rev = 0; i_rev <= MAX_HASHBITS; i_rev++ ) {
                 size_t i = MAX_HASHBITS - i_rev;
+                size_t completed_repetitions = 0;
                 if ( found )
                     break;
 #pragma omp parallel for schedule(static, 1)
@@ -317,11 +313,16 @@ namespace panna {
 
                                     // Find the edges that satisfy the failure probability
                                     float delta_local = delta;
-                                    auto partition_point = std::find_if(
+                                    // auto partition_point = std::find_if(
+                                    //     top.begin(), top.end(), [&]( const auto& e ) {
+                                    //         delta_local -= table.fail_probability(
+                                    //                    std::get<float>( e ), i, j );
+                                    //         return delta_local <= 0.0f;
+                                    //     } );
+                                    auto partition_point = std::partition_point(
                                         top.begin(), top.end(), [&]( const auto& e ) {
-                                            delta_local -= table.fail_probability(
-                                                       std::get<float>( e ), i, j );
-                                            return delta_local <= 0.0f;
+                                            return table.fail_probability(
+                                                       std::get<float>( e ), i, j ) < delta;
                                         } );
 
                                     // Fill the DSU filter with just the confirmed edges
@@ -358,17 +359,17 @@ namespace panna {
                                         }
                                     }
                                     // If the weight hasn't changed epsilon*old_weight
-                                    else if ( i <= 5 && std::abs( old_weight - tree_weight ) / old_weight < epsilon ) {
-                                        LOG_INFO("msg", "Tree weight converged",
-                                                 "old_weight", old_weight,
-                                                 "tree_weight", tree_weight,
-                                                 "relative_change", std::abs( old_weight - tree_weight ) / old_weight);
-                                        found = true;
-                                        // Fill the tree
-                                        for ( const auto& edge : top ) {
-                                            tree.push_back( std::get<1>( edge ) );
-                                        }
-                                    }
+                                    // else if ( i <= 5 && std::abs( old_weight - tree_weight ) / old_weight < epsilon ) {
+                                    //     LOG_INFO("msg", "Tree weight converged",
+                                    //              "old_weight", old_weight,
+                                    //              "tree_weight", tree_weight,
+                                    //              "relative_change", std::abs( old_weight - tree_weight ) / old_weight);
+                                    //     found = true;
+                                    //     // Fill the tree
+                                    //     for ( const auto& edge : top ) {
+                                    //         tree.push_back( std::get<1>( edge ) );
+                                    //     }
+                                    // }
                                     old_weight = tree_weight;
                                 }
                                 // Lose the unused edges, MST is composable wrt to edge partitioning

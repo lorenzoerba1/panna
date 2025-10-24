@@ -27,7 +27,7 @@ if __name__ == "__main__":
     df = df[df["Algorithm"] != "Exact"]
     deltas = sorted(df["delta"].unique())
 
-    fig, axs = plt.subplots(figsize=(6, 3), ncols=len(deltas)+1, sharey=True)
+    fig, axs = plt.subplots(figsize=(6, 3), ncols=len(deltas)+1, sharey=True, layout="constrained")
     palette = sns.color_palette("muted")
     algorithms = df["Algorithm"].unique()
     color_map = dict(zip(algorithms, palette))
@@ -51,6 +51,9 @@ if __name__ == "__main__":
         )        
         sns.despine()
         axs[i].spines["left"].set_bounds(df["Relative Error"].min(), df["Relative Error"].max())
+        axs[i].set_xlabel("")
+        axs[i].set_ylabel("")
+        axs[i].set_title(r"$\delta$ = " + f"{delta}")
 
         # Change the names of the legend
     new_names = [
@@ -70,6 +73,9 @@ if __name__ == "__main__":
 
     axs[-1].axis("off")
     axs[-1].legend(handles, labels, loc="center", frameon=False, title="Algorithm")
+    fig.supxlabel("Dataset")
+    fig.supylabel("Mean Average Relative Error")
+    
 
         
     plt.show()

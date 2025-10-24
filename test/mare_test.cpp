@@ -47,7 +47,7 @@ int main()  {
                     std::vector<std::vector<float>> points =
                         H5Easy::load<std::vector<std::vector<float>>>(file, "/train");
                     if (points.size() > 10000)
-                        points.resize(10000); // Limit to 1000 points for testing
+                        points.resize(5000); // Limit to 1000 points for testing
 
                     EMST<Point, Hasher, Distance> tree(dimensions[index], 500, builder, points, prob, ep);
                     float weight;
