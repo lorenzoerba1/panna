@@ -17,7 +17,7 @@ int main() {
     const size_t conc = 12;
     // const size_t dimensions = 20;
     const size_t rep = 500;
-    const size_t n = 10000;
+    const size_t n = 1000;
     using Point = NormedPoints;         // UnitNormPoints or NormedPoints
     using Distance = EuclideanDistanceNoSqrt; // EuclideanDistance or AngularDistance or CosineDistance
     using Hasher = E2LSH<conc, Point>;
@@ -27,21 +27,21 @@ int main() {
 
     // std::vector<std::vector<float>> points;
     // for ( size_t i = 0; i < n; i++ ) {
-    //     std::vector<float> point = sample_random_normal_vector( 20 );
+    //     std::vector<float> point = sample_random_normal_vector( 400 );
     //     points.push_back( point );
     // }
     // H5Easy::File file( "datasets/fashion-mnist-784-euclidean.hdf5", H5Easy::File::ReadOnly );
     // H5Easy::File file( "datasets/glove-100-angular.hdf5", H5Easy::File::ReadOnly );
-     H5Easy::File file( "datasets/nytimes-256-angular.hdf5", H5Easy::File::ReadOnly );
+    // H5Easy::File file( "datasets/nytimes-256-angular.hdf5", H5Easy::File::ReadOnly );
     // H5Easy::File file( "datasets/simplewiki-openai-3072-normalized.hdf5", H5Easy::File::ReadOnly );
-    // H5Easy::File file( "datasets/gist-960-euclidean.hdf5", H5Easy::File::ReadOnly );
+    H5Easy::File file( "datasets/gist-960-euclidean.hdf5", H5Easy::File::ReadOnly );
     // H5Easy::File file( "datasets/deep-image-96-angular.hdf5", H5Easy::File::ReadOnly );
     // H5Easy::File file( "datasets/sift-128-euclidean.hdf5", H5Easy::File::ReadOnly );
     // H5Easy::File file( "datasets/deep-image-96-angular.hdf5", H5Easy::File::ReadOnly );
 
     std::vector<std::vector<float>> points =
         H5Easy::load<std::vector<std::vector<float>>>( file, "/train" );
-    points.resize( n );
+    // points.resize( n );
 
     size_t dimensions = points[0].size();
     E2LSHBuilder<conc, NormedPoints> builder( dimensions );
@@ -69,14 +69,14 @@ int main() {
 
     // // Approximate with predictions
     start = std::chrono::high_resolution_clock::now();
-    for (size_t iter= 0; iter< 3 ; iter++) {
-    float approx_weight = tree.find_epsilon_tree();
+    // for (size_t iter= 0; iter< 3 ; iter++) {
+    // float approx_weight = tree.find_epsilon_tree();
     
-    end = std::chrono::high_resolution_clock::now();
-    elapsed = ( end - start );
-    LOG_INFO("msg", "Computed approximate with predictions weight",
-             "approx_weight", approx_weight,
-                "elapsed_s", elapsed.count());
-    }
+    // end = std::chrono::high_resolution_clock::now();
+    // elapsed = ( end - start );
+    // LOG_INFO("msg", "Computed approximate with predictions weight",
+    //          "approx_weight", approx_weight,
+    //             "elapsed_s", elapsed.count());
+    // }
     return 0;
 }

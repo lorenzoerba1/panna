@@ -11,9 +11,7 @@ namespace panna {
         /// @brief Create a Union Find data structure
         /// @param n number of elements
         DSU( uint32_t n ): parent( n ), rank( n, 0 ) {
-            for ( uint32_t i = 0; i < n; i++ ) {
-                parent[i] = i;
-            }
+            std::iota( parent.begin(), parent.end(), 0 );
         }
 
         /// @brief Return the parent of the set containing x

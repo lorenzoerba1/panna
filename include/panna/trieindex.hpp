@@ -293,6 +293,7 @@ namespace panna {
                         b_idx = a_idx;
                         a_idx = tmp;
                     }
+
                     PointHandle a = dataset[std::get<0>( scratch[i] )];
                     PointHandle b = dataset[std::get<1>( scratch[i] )];
                     if ( dsu_true.is_connected( a_idx, b_idx ) ) {
