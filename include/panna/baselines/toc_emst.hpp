@@ -45,14 +45,33 @@ namespace panna::baselines {
                 hasher = builder.build( repetitions );
             }
 
-            std::vector<THashValue> hashes;
 
+#pragma omp parallel
+        {
+            std::vector<std::map<THashValue, std::vector<uint32_t>>> local_buckets( repetitions );
+
+#pragma omp for nowait
             for ( size_t i = 0; i < dataset.size(); i++ ) {
+                std::vector<THashValue> hashes;
                 hasher->hash( dataset[i], hashes );
                 for ( size_t rep = 0; rep < buckets.size(); rep++ ) {
-                    buckets[rep][hashes[rep]].push_back( i );
+                    local_buckets[rep][hashes[rep]].push_back( i );
                 }
             }
+#pragma omp critical
+            {
+                for ( size_t rep = 0; rep < buckets.size(); rep++ ) {
+                    for ( auto& [key, vals] : local_buckets[rep] ) {
+                        auto& bucket = buckets[rep][key];
+                        bucket.insert( bucket.end(),
+                                       std::make_move_iterator( vals.begin() ),
+                                       std::make_move_iterator( vals.end() ) );
+                    }
+                }
+                
+            }
+        }
+
         }
 
         std::optional<std::pair<size_t, float>> near_neighbor( typename Dataset::PointHandle query,
