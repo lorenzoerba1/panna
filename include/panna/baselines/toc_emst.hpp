@@ -31,8 +31,7 @@ namespace panna::baselines {
         // How to build hash functions
         typename Hasher::Builder builder;
 
-        // How to hash the points. Initialized upon the first call to "rebuild"
-        std::optional<Hasher> hasher;
+        Hasher hasher;
 
     public:
         NearNbr( Dataset& dataset, typename Hasher::Builder builder, size_t repetitions ):
@@ -40,17 +39,30 @@ namespace panna::baselines {
             repetitions( repetitions ),
             dataset( dataset ),
             buckets( repetitions ) {
-            if ( !hasher.has_value() ) {
-                builder.fit( dataset );
-                hasher = builder.build( repetitions );
+            builder.fit( dataset );
+            hasher = builder.build( repetitions );
+
+            size_t n_threads = omp_get_max_threads();
+            std::vector<THashValue> hashes;
+            std::vector<std::vector<std::vector<std::pair<THashValue, uint32_t>>>> tl_hashes(n_threads);
+            for (size_t tid=0; tid<n_threads; tid++) {
+                tl_hashes[tid].resize(buckets.size());
             }
 
-            std::vector<THashValue> hashes;
-
+            #pragma omp parallel for private(hashes)
             for ( size_t i = 0; i < dataset.size(); i++ ) {
-                hasher->hash( dataset[i], hashes );
+                auto tid = omp_get_thread_num();
+                hasher.hash( dataset[i], hashes );
                 for ( size_t rep = 0; rep < buckets.size(); rep++ ) {
-                    buckets[rep][hashes[rep]].push_back( i );
+                    tl_hashes[tid][rep].emplace_back(hashes[rep], i);
+                }
+            }
+
+            for (auto hashes : tl_hashes) {
+                for ( size_t rep = 0; rep < buckets.size(); rep++ ) {
+                    for (auto pair : hashes[rep]) {
+                        buckets[rep][pair.first].push_back(pair.second);
+                    }
                 }
             }
         }
@@ -62,7 +74,7 @@ namespace panna::baselines {
             const size_t collisions_limit = 3 * repetitions;
 
             std::vector<THashValue> hashes;
-            hasher->hash( query, hashes );
+            hasher.hash( query, hashes );
 
             for ( size_t rep = 0; rep < buckets.size(); rep++ ) {
                 if ( collisions >= collisions_limit ) {
@@ -75,14 +87,14 @@ namespace panna::baselines {
                         if ( d <= range ) {
                             return std::optional( std::make_pair( id, d ) );
                         }
+                        collisions++;
                     }
-                    collisions++;
                 }
             }
 
             return std::nullopt;
         }
-    }; // namespace panna::baselines
+    };
 
     template <typename Dataset, typename HasherBuilder, typename Distance>
     static std::vector<std::tuple<float, uint32_t, uint32_t>> approximate_cc(
