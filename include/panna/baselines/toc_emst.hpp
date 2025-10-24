@@ -39,29 +39,31 @@ namespace panna::baselines {
             repetitions( repetitions ),
             dataset( dataset ),
             buckets( repetitions ) {
+
             builder.fit( dataset );
             hasher = builder.build( repetitions );
 
             size_t n_threads = omp_get_max_threads();
             std::vector<THashValue> hashes;
-            std::vector<std::vector<std::vector<std::pair<THashValue, uint32_t>>>> tl_hashes(n_threads);
-            for (size_t tid=0; tid<n_threads; tid++) {
-                tl_hashes[tid].resize(buckets.size());
+            std::vector<std::vector<std::vector<std::pair<THashValue, uint32_t>>>> tl_hashes(
+                n_threads );
+            for ( size_t tid = 0; tid < n_threads; tid++ ) {
+                tl_hashes[tid].resize( buckets.size() );
             }
 
-            #pragma omp parallel for private(hashes)
+#pragma omp parallel for private( hashes )
             for ( size_t i = 0; i < dataset.size(); i++ ) {
                 auto tid = omp_get_thread_num();
                 hasher.hash( dataset[i], hashes );
                 for ( size_t rep = 0; rep < buckets.size(); rep++ ) {
-                    tl_hashes[tid][rep].emplace_back(hashes[rep], i);
+                    tl_hashes[tid][rep].emplace_back( hashes[rep], i );
                 }
             }
 
-            for (auto hashes : tl_hashes) {
+            for ( auto hashes : tl_hashes ) {
                 for ( size_t rep = 0; rep < buckets.size(); rep++ ) {
-                    for (auto pair : hashes[rep]) {
-                        buckets[rep][pair.first].push_back(pair.second);
+                    for ( auto pair : hashes[rep] ) {
+                        buckets[rep][pair.first].push_back( pair.second );
                     }
                 }
             }
