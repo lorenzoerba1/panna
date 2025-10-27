@@ -419,6 +419,7 @@ namespace panna {
                                     }
 
                                     // Find the edges that satisfy the failure probability
+                                    float delta_local = delta;
                                     // auto partition_point = std::find_if(
                                     //     top.begin(), top.end(), [&]( const auto& e ) {
                                     //         delta_local -= table.fail_probability(
