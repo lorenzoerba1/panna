@@ -15,6 +15,9 @@ if __name__ == "__main__":
     # Drop the last row
     df = df[:-1]
     df = df[1:]
+    # The mu is the sum of all counts until the :-2
+    mu = df["count"][:-2].sum()
+    print(f"Mu: {mu}")
     # For the rugplot we have to replicate the weights according to their counts
     expanded_weights = np.repeat(df["weight"], df["count"])
     expanded_df = pd.DataFrame({"weight": expanded_weights})
@@ -28,6 +31,7 @@ if __name__ == "__main__":
     axs.set_xlabel("Edge Weight")
     axs.set_ylabel("Count")
     sns.despine(left=True, bottom=True)
+    plt.suptitle("Histogram of Edges found with no filter on GloVe Dataset")
     #axs.set_xscale("log")
     
     plt.show()

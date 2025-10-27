@@ -32,15 +32,15 @@ int main()  {
         float probs[2] = {0.1, 0.2};
         std::vector<float> weigths; 
         using Point = NormedPoints; // UnitNormPoints or NormedPoints
-        using Distance = EuclideanDistanceNoSqrt; // EuclideanDistance or AngularDistance or CosineDistance
-        using Hasher = E2LSH<conc, Point>;
+        using Distance = EuclideanDistance; // EuclideanDistance or AngularDistance or CosineDistance
+        using Hasher = E2LSH<conc, Point, Distance>;
         // using Hasher = CrossPolytope<conc, Point, Distance, rotations>;
         std::ofstream outfile("weight_results.csv", std::ios_base::app);
 
         for (const auto& prob: probs) {
             for (const auto& ep: eps) {
                 for (size_t i = 0; i < 3; i++) {
-                    E2LSHBuilder<conc, NormedPoints> builder(dimensions[index]);
+                    E2LSHBuilder<conc, NormedPoints, Distance> builder(dimensions[index]);
                     // CrossPolytopeBuilder<conc, Point, Distance, rotations> builder( dimensions[index] );
 
                     H5Easy::File file(name, H5Easy::File::ReadOnly);

@@ -23,12 +23,12 @@ if __name__ == "__main__":
          "sift-128-euclidean.hdf5",
          "deep-image-96-angular.hdf5",
     ]
-    path_prefix = Path(__file__).resolve().parents[2]
+    path_prefix = Path(__file__).resolve().parents[1]
 
     dataset_folder = os.path.join(path_prefix, "datasets")
     results_folder = os.path.join(path_prefix, "results")
-    
-    with open(os.path.join(results_folder, "toc_weight_results.csv"), "a+") as f_out:
+
+    with open("toc_weight_results.csv", "a+") as f_out:
         for path in paths:
             with h5py.File(os.path.join(dataset_folder, path), "r") as f:
                 data = np.array(f["train"]).astype(np.float32)[:5000]

@@ -322,6 +322,12 @@ namespace panna {
                                     return table.fail_probability(
                                                 std::get<float>( e ), i, j ) < delta;
                                 } );
+                            // filter = DSU( num_data );
+                            // for ( auto it = top.begin(); it != partition_point; ++it ) {
+                            //     if ( table.fail_probability( std::get<float>( *it ), i, j ) < delta ) {
+                            //         filter.union_sets( std::get<1>( *it ).first, std::get<1>( *it ).second );
+                            //     }
+                            // }
                             
 
                             float fp = failure_probability( i, completed_repetitions );

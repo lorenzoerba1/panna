@@ -20,14 +20,14 @@ int main () {
     const size_t rep = 500;
     const std::vector<size_t> lenghts = {10000, 100000, 1000000};
     using Point = NormedPoints; // UnitNormPoints or NormedPoints
-    using Distance = EuclideanDistanceNoSqrt; // EuclideanDistance or AngularDistance or CosineDistance
-    using Hasher = E2LSH<conc, Point>;
+    using Distance = EuclideanDistance; // EuclideanDistance or AngularDistance or CosineDistance
+    using Hasher = E2LSH<conc, Point, Distance>;
     //using Hasher = CrossPolytope<conc, Point, Distance, rotations>;
     std::ofstream outfile("results/weight_results.csv", std::ios_base::app);
 
     for (const auto& n : lenghts){
         for (const auto& dimension: dimensions) {
-        E2LSHBuilder<conc, NormedPoints> builder ( dimension );
+        E2LSHBuilder<conc, NormedPoints, Distance> builder ( dimension );
 
         std::vector<std::vector<float>> points;
         for ( size_t i = 0; i < n; i++ ) {

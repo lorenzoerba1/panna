@@ -36,13 +36,13 @@ int main()  {
         size_t reps[2] = { 300, 500 };
         std::vector<float> weigths; 
         using Point = NormedPoints; // UnitNormPoints or NormedPoints
-        using Distance = EuclideanDistanceNoSqrt; // EuclideanDistance or AngularDistance or CosineDistance
-        using Hasher = E2LSH<conc, Point>;
+        using Distance = EuclideanDistance; // EuclideanDistance or AngularDistance or CosineDistance
+        using Hasher = E2LSH<conc, Point, Distance>;
         // using Hasher = CrossPolytope<conc, Point, Distance, rotations>;
 
         for (const auto& rep: reps) {
             for (size_t i = 0; i < 3; i++) {
-                E2LSHBuilder<conc, NormedPoints> builder(dimensions[index]);
+                E2LSHBuilder<conc, NormedPoints, Distance> builder(dimensions[index]);
                 // CrossPolytopeBuilder<conc, Point, Distance, rotations> builder( dimensions[index] );
 
                 H5Easy::File file(name, H5Easy::File::ReadOnly);
