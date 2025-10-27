@@ -21,13 +21,13 @@ int main () {
     const std::vector<size_t> lenghts = {10000, 100000, 1000000};
     using Point = NormedPoints; // UnitNormPoints or NormedPoints
     using Distance = EuclideanDistanceNoSqrt; // EuclideanDistance or AngularDistance or CosineDistance
-    using Hasher = E2LSH<conc, Point>;
+    using Hasher = E2LSH<conc, Point, Distance>;
     //using Hasher = CrossPolytope<conc, Point, Distance, rotations>;
     std::ofstream outfile("results/weight_results.csv", std::ios_base::app);
 
     for (const auto& n : lenghts){
         for (const auto& dimension: dimensions) {
-        E2LSHBuilder<conc, NormedPoints> builder ( dimension );
+        E2LSHBuilder<conc, NormedPoints, Distance> builder ( dimension );
 
         std::vector<std::vector<float>> points;
         for ( size_t i = 0; i < n; i++ ) {
@@ -36,7 +36,8 @@ int main () {
         }
 
         // Exact computation
-        EMST<Point, Hasher, Distance> tree( dimension, rep, builder, points, 0.1 );
+        EMST<Point, Hasher, Distance> tree( dimension, rep, builder, points, 0.0 );
+        EMST<Point, Hasher, Distance> approx_tree( dimension, rep, builder, points, 0.1 );
         // auto start = std::chrono::high_resolution_clock::now();
         // float weight = tree.exact_tree();
         // auto end = std::chrono::high_resolution_clock::now();
@@ -53,7 +54,7 @@ int main () {
 
             // Approximate with Kruskal+-
             start = std::chrono::high_resolution_clock::now();
-            weight = tree.find_epsilon_tree();
+            std::tie( weight, std::ignore ) = tree.find_tree();
             end = std::chrono::high_resolution_clock::now();
             outfile << "K+ ɛ 0.1, "<< n << "," << dimension << "," << weight << "," << std::chrono::duration<double>(end - start).count() << std::endl;
         }

@@ -33,14 +33,14 @@ int main()  {
         std::vector<float> weigths; 
         using Point = NormedPoints; // UnitNormPoints or NormedPoints
         using Distance = EuclideanDistanceNoSqrt; // EuclideanDistance or AngularDistance or CosineDistance
-        using Hasher = E2LSH<conc, Point>;
+        using Hasher = E2LSH<conc, Point, Distance>;
         // using Hasher = CrossPolytope<conc, Point, Distance, rotations>;
         std::ofstream outfile("weight_results.csv", std::ios_base::app);
 
         for (const auto& prob: probs) {
             for (const auto& ep: eps) {
                 for (size_t i = 0; i < 3; i++) {
-                    E2LSHBuilder<conc, NormedPoints> builder(dimensions[index]);
+                    E2LSHBuilder<conc, NormedPoints, Distance> builder(dimensions[index]);
                     // CrossPolytopeBuilder<conc, Point, Distance, rotations> builder( dimensions[index] );
 
                     H5Easy::File file(name, H5Easy::File::ReadOnly);
@@ -49,7 +49,8 @@ int main()  {
                     if (points.size() > 10000)
                         points.resize(5000); // Limit to 1000 points for testing
 
-                    EMST<Point, Hasher, Distance> tree(dimensions[index], 500, builder, points, prob, ep);
+                    EMST<Point, Hasher, Distance> tree(dimensions[index], 500, builder, points, prob, 0);
+                    EMST<Point, Hasher, Distance> tree_approx(dimensions[index], 500, builder, points, prob, ep);
                     float weight;
                     double duration;
 
@@ -61,7 +62,7 @@ int main()  {
 
 
                     time = std::chrono::high_resolution_clock::now();
-                    weight = tree.find_epsilon_tree();
+                    std::tie(weight, std::ignore )= tree_approx.find_tree();
                     duration = std::chrono::duration<double>( std::chrono::high_resolution_clock::now() - time ).count();
                     outfile <<"K± e" << ep << ", " << points.size() << ", " << name << ", " << weight << ", "<< duration << ", " << prob << std::endl;
                     // Push the writes to file

@@ -491,7 +491,7 @@ namespace panna {
                                     auto partition_point = std::find_if(
                                         top.begin(), top.end(), [&]( const auto& e ) {
                                             delta_local -= table.fail_probability(
-                                                       std::get<float>( e ), i, j );
+                                                        e.weight , i, j );
                                             return delta_local <= 0.0f;
                                         } );
                                         
