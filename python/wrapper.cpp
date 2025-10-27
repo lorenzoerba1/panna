@@ -198,7 +198,7 @@ struct EMST_exposed {
     }
 
     float find_exact_mst() {
-        return inner->find_tree();
+        return inner->find_tree().first;
     }
 
     float find_epsilon_mst() {

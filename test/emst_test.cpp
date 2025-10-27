@@ -17,10 +17,11 @@ int main() {
     seed_global_rng(
         365 ); // std::chrono::high_resolution_clock::now().time_since_epoch().count() );
     // Parameters
-    const size_t conc = 3;
+    const size_t conc_toc = 3;
+    const size_t conc = 12;
     // const size_t dimensions = 20;
     const size_t rep = 500;
-    const size_t n = 1000;
+    const size_t n = 10000;
     using Point = NormedPoints;         // UnitNormPoints or NormedPoints
     using Distance = EuclideanDistance; // EuclideanDistance or AngularDistance or CosineDistance
     using Hasher = E2LSH<conc, Point>;
@@ -51,29 +52,32 @@ int main() {
     EMST<Point, Hasher, Distance> tree( dimensions, rep, builder, points, 0.01, 0.2 );
 
     // Exact computation
-    auto start_exact = std::chrono::high_resolution_clock::now();
-    float weight_exact = tree.exact_tree();
-    auto end_exact = std::chrono::high_resolution_clock::now();
-    auto elapsed_exact_s = std::chrono::duration<double>( end_exact - start_exact ).count();
-    LOG_INFO( "msg",
-              "Computed exact weight",
-              "exact_weight",
-              weight_exact,
-              "elapsed_s",
-              elapsed_exact_s );
+    // auto start_exact = std::chrono::high_resolution_clock::now();
+    // float weight_exact = tree.exact_tree();
+    // auto end_exact = std::chrono::high_resolution_clock::now();
+    // auto elapsed_exact_s = std::chrono::duration<double>( end_exact - start_exact ).count();
+    // LOG_INFO( "msg",
+    //           "Computed exact weight",
+    //           "exact_weight",
+    //           weight_exact,
+    //           "elapsed_s",
+    //           elapsed_exact_s );
     // Exact with predictions
-    // auto start = std::chrono::high_resolution_clock::now();
+    auto start = std::chrono::high_resolution_clock::now();
     // // for (size_t iter= 0; iter< 3 ; iter++) {
     // //     EMST<NormedPoints, Hasher, EuclideanDistance> tree( dimensions, rep, builder, points
     // );
 
-    // float weight = tree.find_tree();
-    // auto end = std::chrono::high_resolution_clock::now();
-    // std::chrono::duration<double> elapsed = ( end - start );
-    // LOG_INFO("msg", "Computed exact with predictions weight",
-    //          "exact_weight", weight,
-    //          //"weight-difference", weight - weight_exact,
-    //          "elapsed_s", elapsed.count());
+    const auto& [weight, emst_exact] = tree.find_tree();
+    auto end = std::chrono::high_resolution_clock::now();
+    auto elapsed = std::chrono::duration<double>( end - start ).count();
+    LOG_INFO("msg", "Computed exact with predictions weight",
+             "exact_weight", weight,
+             //"weight-difference", weight - weight_exact,
+             "elapsed_s", elapsed);
+    
+    tree.find_tree_hist(emst_exact);
+    exit(0);
 
     // // // Approximate with predictions
     // start = std::chrono::high_resolution_clock::now();
@@ -87,17 +91,18 @@ int main() {
     //             "elapsed_s", elapsed.count());
     // }
 
-    expect(conc <= 4); // more than 4 concatenations is too much in practice!
+    expect(conc_toc <= 4); // more than 4 concatenations is too much in practice!
     NormedPoints dataset( dimensions );
     for ( auto& p : points ) {
         dataset.push_back( p.begin(), p.end() );
     }
     float fp = 0.1;
     float gamma = 0.2;
+    E2LSHBuilder<conc_toc, NormedPoints> builder_toc( dimensions );
     auto start_toc = std::chrono::high_resolution_clock::now();
     auto res = panna::baselines::emst_theory_of_computing<NormedPoints,
-                                                          E2LSHBuilder<conc, NormedPoints>,
-                                                          Distance>( dataset, gamma, fp, builder );
+                                                          E2LSHBuilder<conc_toc, NormedPoints>,
+                                                          Distance>( dataset, gamma, fp, builder_toc );
     auto end_toc = std::chrono::high_resolution_clock::now();
     auto elapsed_toc_s = std::chrono::duration<double>( end_toc - start_toc ).count();
     float weight_toc = res.first;
@@ -106,10 +111,10 @@ int main() {
               "toc-emst-weight",
               weight_toc,
               "ratio-toc",
-              weight_toc / weight_exact,
+              weight_toc / weight,//_exact,
               "elapsed_s",
               elapsed_toc_s,
               "time_ratio",
-              elapsed_toc_s / elapsed_exact_s );
+              elapsed_toc_s / elapsed );
     return 0;
 }

@@ -54,7 +54,7 @@ int main()  {
                     double duration;
 
                     auto time = std::chrono::high_resolution_clock::now();
-                    weight = tree.find_tree();
+                    std::tie(weight, std::ignore) = tree.find_tree();
                     duration = std::chrono::duration<double>( std::chrono::high_resolution_clock::now() - time ).count();
                     outfile <<"K+" << ", " << points.size() << ", " << name << ", " << weight << ", "<< duration << ", " << prob << std::endl;
                     

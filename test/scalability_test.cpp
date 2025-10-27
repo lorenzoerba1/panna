@@ -47,7 +47,7 @@ int main () {
             float weight;
             // // Exact with Kruskal+
             start = std::chrono::high_resolution_clock::now();
-            weight = tree.find_tree();
+            std::tie(weight, std::ignore) = tree.find_tree();
             end = std::chrono::high_resolution_clock::now();
             outfile << "K+, "<< n << "," << dimension << "," << weight << "," << std::chrono::duration<double>(end - start).count() << std::endl;
 

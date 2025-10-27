@@ -53,7 +53,7 @@ int main()  {
 
                 EMST<Point, Hasher, Distance> tree(dimensions[index], rep, builder, points);
 
-                float weight = tree.find_tree();
+                const auto& [weight, _] = tree.find_tree();
                 weigths.push_back(weight);
             }
             float recall = 0.0;

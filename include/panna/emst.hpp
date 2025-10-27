@@ -141,7 +141,7 @@ namespace panna {
         }
 
         /// @brief Find the Minimum Spanning Tree using only confirmed edges
-        float find_tree() {
+        std::pair<float, std::vector<std::pair<unsigned int, unsigned int>>> find_tree() {
             clear();
             float tree_weight = 0;
             std::vector<std::pair<unsigned int, unsigned int>> tree;
@@ -230,6 +230,7 @@ namespace panna {
                                 if ( fp < delta ) {
                                     found = true;
                                     // Fill the tree
+                                    tree.clear();
                                     for ( const auto& edge : top ) {
                                         tree.push_back( std::get<1>( edge ) );
                                     }
@@ -247,8 +248,126 @@ namespace panna {
             is_connected( tree );
             LOG_INFO("msg", "EMST finished",
                      "distances_computed", distances_computed);
-            return tree_weight;
+            return { tree_weight, tree };
         }
+
+        std::vector<std::pair<float, unsigned int>> find_tree_hist(std::vector<std::pair<unsigned int, unsigned int>> tree) {
+            clear();
+            float tree_weight = 0;
+            std::vector<std::pair<float, unsigned int>> hist;
+            hist.push_back( std::make_pair( 0.0f, 0 ) );
+            for ( const auto& edge : tree ) {
+                float weight = std::sqrt(table.get_distance( edge.first, edge.second ));
+                //top.push_back( std::make_tuple( weight, edge ) );
+                hist.push_back( std::make_pair( weight, 0 ) );
+            }
+            hist.push_back( std::make_pair( std::numeric_limits<float>::max(), 0 ) );
+
+            bool found = false;
+            std::vector<EdgeTuple> edges;
+            for ( size_t i_rev = 0; i_rev <= MAX_HASHBITS; i_rev++ ) {
+                size_t i = MAX_HASHBITS - i_rev;
+                if ( found ) {
+                    break;
+                }
+                size_t completed_repetitions = 0;
+
+                #pragma omp parallel for schedule(static, 1)
+                for ( size_t j = 0; j < MAX_REPETITIONS; j++ ) {
+                    if ( found ) {
+                        continue;
+                    }
+                    DSU local_dsu( num_data );
+                    std::vector<EdgeTuple> local_top, local_Tu;
+                    enumerate_edges( i, j, local_Tu );
+                    
+                    std::sort(local_Tu.begin(), local_Tu.end());
+
+                    local_confirmed[j].insert( local_confirmed[j].end(),
+                                               std::make_move_iterator( local_Tu.begin() ),
+                                               std::make_move_iterator( local_Tu.end() ) );
+
+                    if ( j%50 == 0 )
+                    {
+                    #pragma omp critical
+                    {
+                        completed_repetitions+= 50;
+
+                        for ( size_t local_index = 0; local_index < MAX_REPETITIONS; local_index++ ) {
+                            auto& local = local_confirmed[local_index];
+
+                            // For each edge in local, find where it is placed between the distances of the histogram and increment its count
+                            for ( const auto& edge : local ) {
+                                float weight = std::get<0>( edge );
+                                for ( size_t h = 0; h < hist.size() - 1; h++ ) {
+                                    if ( weight >= hist[h].first && weight < hist[h + 1].first ) {
+                                        hist[h].second += 1;
+                                        break;
+                                    }
+                                }
+
+                            }
+                            edges.insert( edges.end(),
+                                std::make_move_iterator(local.begin()),
+                                std::make_move_iterator(local.end()));
+                            local.clear();
+                        }
+                        std::sort( edges.begin(), edges.end() );
+                        edges.erase( std::unique( edges.begin(), edges.end() ), edges.end() );
+                        top.clear();
+                        dsu_true = DSU( num_data );
+                        kruskal( dsu_true, edges, top );
+
+                        LOG_INFO( "prefix", i, "repetition", completed_repetitions, "tree_size", top.size() );
+                        if ( top.size() == num_data - 1 ) {
+                            float new_tree_weight = 0;
+                            max_weight = std::pow( std::get<float>( top.back() ), 2 );
+                            for ( const auto& edge : top ) {
+                                new_tree_weight += std::get<0>( edge );
+                            }
+                            tree_weight = new_tree_weight;
+                            // Fill the DSU filter with just the confirmed edgesù
+                            auto partition_point = std::partition_point(
+                                top.begin(), top.end(), [&]( const auto& e ) {
+                                    return table.fail_probability(
+                                                std::get<float>( e ), i, j ) < delta;
+                                } );
+                            
+
+                            float fp = failure_probability( i, completed_repetitions );
+                            LOG_INFO( "prefix",
+                                        i,
+                                        "repetition",
+                                        completed_repetitions,
+                                        "tree_weight",
+                                        tree_weight,
+                                        "failure_probability",
+                                        fp,
+                                        "max_edge_weight",
+                                        std::get<float>( top.back() ),
+                                        "mean_edge_weight",
+                                        tree_weight / ( num_data - 1 ) );
+                            if ( fp < delta ) {
+                                found = true;
+                            }   
+                        }
+                        
+                    }
+                }
+            }
+                LOG_INFO( "msg", "finished prefix", "prefix", i );
+            }
+            LOG_INFO("msg", "EMST finished",
+                     "distances_computed", distances_computed);
+            // Write the histogram to a file
+            std::ofstream hist_file("histogram.csv");
+            hist_file << "weight,count\n";
+            for (const auto& [weight, count] : hist) {
+                hist_file << weight << "," << count << "\n";
+            }
+            return hist;
+        }
+
 
         /// @brief Find the ɛ-EMST using both confirmed and unconfirmed edges
         float find_epsilon_tree() {
@@ -312,7 +431,7 @@ namespace panna {
                                     }
 
                                     // Find the edges that satisfy the failure probability
-                                    float delta_local = delta;
+                                    float delta_local = delta/n;
                                     // auto partition_point = std::find_if(
                                     //     top.begin(), top.end(), [&]( const auto& e ) {
                                     //         delta_local -= table.fail_probability(
