@@ -117,30 +117,36 @@
           ];
         };
 
+        # the Python interpreter with all the packages we need
+        python-interpreter =
+          python.withPackages
+          (ppkgs:
+            with ppkgs; [
+              numpy
+              pandas
+              h5py
+              panna-python
+              fast-hdbscan
+              icecream
+              sigmod-hdbscan.packages.${system}.default
+              scikit-learn
+              scipy
+              matplotlib
+            ]);
+
         container = pkgs.singularity-tools.buildImage {
           name = "panna";
           runScript = "#!${pkgs.stdenv.shell}\npython $@";
           contents = [
-            (python.withPackages
-              (ppkgs:
-                with ppkgs; [
-                  numpy
-                  pandas
-                  h5py
-                  panna-python
-                  fast-hdbscan
-                  icecream
-                  sigmod-hdbscan.packages.${system}.default
-                  scikit-learn
-                  scipy
-                  matplotlib
-                ]))
+            python-interpreter
           ];
           diskSize = 1024 * 3; # necessary to fit the packages, otherwise the build fails
         };
       in {
         packages.default = panna-python;
         packages.container = container;
+        packages.python = python-interpreter;
+
         devShells.default = (pkgs.mkShell.override {stdenv = pkgs.clangStdenv;}) {
           venvDir = ".venv";
 
