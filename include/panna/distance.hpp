@@ -70,6 +70,10 @@ namespace panna {
             float dot = panna::dot_product( a, b );
             return std::sqrt( a.squared_norm() + b.squared_norm() - 2 * dot );
         }
+
+        static float to_euclidean(float distance) {
+            return distance;
+        }
     };
 
     // Convenience struct to compute squared Euclidean distance without the square root
@@ -85,6 +89,10 @@ namespace panna {
         static float compute( Point a, Point b ) {
             float dot = panna::dot_product( a, b );
             return  a.squared_norm() + b.squared_norm() - 2 * dot;
+        }
+
+        static float to_euclidean(float distance) {
+            return std::sqrt(distance);
         }
     };
 

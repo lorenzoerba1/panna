@@ -139,7 +139,7 @@ namespace panna {
 
     // simple static tests on the hash data type, checked at compile time
     static_assert( sizeof( BitwiseLshValue<24> ) == 4, "BitwiseLshValue must be 4 bytes" );
-    static_assert( std::is_pod<BitwiseLshValue<24>>(), "BitwiseLshValue must be Plain Old Data" );
+    static_assert( std::is_standard_layout<BitwiseLshValue<24>>(), "BitwiseLshValue must be standard layout" );
     static_assert( std::is_trivially_copyable<BitwiseLshValue<24>>(),
                    "BitwiseLshValue must be trivially copiable" );
     static_assert( std::is_trivial<BitwiseLshValue<24>>(), "BitwiseLshValue must be trivial" );
@@ -243,13 +243,13 @@ namespace panna {
 
     static_assert( sizeof( BytewiseLshValue<8> ) == 8,
                    "BytewiseLshValue must use exactly K bytes" );
-    static_assert( std::is_pod<BytewiseLshValue<8>>(), "BytewiseLshValue must be Plain Old Data" );
+    static_assert( std::is_standard_layout<BytewiseLshValue<8>>(), "BytewiseLshValue must be Plain Old Data" );
     static_assert( std::is_trivially_copyable<BytewiseLshValue<8>>(),
                    "BytewiseLshValue must be trivially copiable" );
     static_assert( std::is_trivial<BytewiseLshValue<8>>(), "BytewiseLshValue must be trivial" );
 
     static_assert( sizeof( ShortLshValue<4> ) == 8, "ShortLshValue must use exactly K bytes" );
-    static_assert( std::is_pod<ShortLshValue<4>>(), "ShortLshValue must be Plain Old Data" );
+    static_assert( std::is_standard_layout<ShortLshValue<4>>(), "ShortLshValue must be Plain Old Data" );
     static_assert( std::is_trivially_copyable<ShortLshValue<4>>(),
                    "ShortLshValue must be trivially copiable" );
     static_assert( std::is_trivial<ShortLshValue<4>>(), "ShortLshValue must be trivial" );

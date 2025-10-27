@@ -130,7 +130,7 @@ struct TrieIndex {
                                        "`crosspolytope` or `simhash`" );
             }
         } else if ( distance == "euclidean" ) {
-            using Builder = panna::E2LSHBuilder<8, panna::NormedPoints>;
+            using Builder = panna::E2LSHBuilder<8, panna::NormedPoints, panna::EuclideanDistance>;
             Builder builder( 0.0, dimensions );
             panna::Index<panna::NormedPoints, Builder::Output, panna::EuclideanDistance> index(
                 dimensions, builder, repetitions );
@@ -157,7 +157,7 @@ struct TrieIndex {
 };
 
 struct EMST_exposed {
-    using EMST_t = panna::EMST<panna::NormedPoints, panna::E2LSH<12, panna::NormedPoints>, panna::EuclideanDistance>;
+    using EMST_t = panna::EMST<panna::NormedPoints, panna::E2LSH<12, panna::NormedPoints, panna::EuclideanDistance>, panna::EuclideanDistance>;
     std::unique_ptr<EMST_t> inner;
 
     // Constructor to be called from Python. It takes a NumPy array and optional keyword arguments.
@@ -189,20 +189,14 @@ struct EMST_exposed {
             }
         }
 
-
-
-        using Hasher = panna::E2LSH<12, panna::NormedPoints>;
+        using Hasher = panna::E2LSH<12, panna::NormedPoints, panna::EuclideanDistance>;
         Hasher::Builder builder(0.0, dimensions);
 
         inner = std::make_unique<EMST_t>(dimensions, repetitions, builder, data_cpp, delta, epsilon);
     }
 
-    float find_exact_mst() {
+    float find_mst() {
         return inner->find_tree().first;
-    }
-
-    float find_epsilon_mst() {
-        return inner->find_epsilon_tree();
     }
 
     // Method to find the MST for the reachability and return results as NumPy arrays
@@ -314,7 +308,7 @@ nb::tuple emst_theory_of_computing( nb::ndarray<float, nb::c_contig>& data_in, n
 
     const size_t K = 3; // using a larger value entails using way too many repetitions in the last iterations
     using Distance = panna::EuclideanDistance;
-    using Hasher = panna::E2LSH<K, panna::NormedPoints>;
+    using Hasher = panna::E2LSH<K, panna::NormedPoints, Distance>;
     Hasher::Builder builder( 0.0, dimensionality );
 
     auto res =
@@ -369,9 +363,7 @@ NB_MODULE( _panna_impl, m ) {
         // Bind the find_mst method
         .def("find_mst_dbscan", &EMST_exposed::find_mst_dbscan, nb::arg("k") = 5,
             "Find the minimum spanning tree (MST) and the k-NNs for each node.")
-            .def("find_exact_mst", &EMST_exposed::find_exact_mst,
-                 "Find the exact minimum spanning tree (MST) for the dataset.")
-            .def("find_epsilon_mst", &EMST_exposed::find_epsilon_mst,
-                 "Find the 1+epsilon approximate minimum spanning tree (MST) for the dataset.");
+            .def("find_mst", &EMST_exposed::find_mst,
+                 "Find the minimum spanning tree (MST) for the dataset.");
 
 }
