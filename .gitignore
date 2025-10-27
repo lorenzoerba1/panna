@@ -32,6 +32,6 @@ emst
 mare
 recall
 scalability
-tests
+.venv/
 /dist
 *.pyc
