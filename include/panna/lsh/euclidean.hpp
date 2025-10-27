@@ -18,15 +18,15 @@ namespace panna {
         return std::erfc( -x / std::sqrt( 2 ) ) / 2;
     }
 
-    template <uint8_t K, typename Dataset>
+    template <uint8_t K, typename Dataset, typename Distance>
     class E2LSHBuilder;
 
-    template <uint8_t K, typename Dataset>
+    template <uint8_t K, typename Dataset, typename Distance>
     class E2LSH {
     public:
         //! The datatype of the output
         using Value = BytewiseLshValue<K>;
-        using Builder = E2LSHBuilder<K, Dataset>;
+        using Builder = E2LSHBuilder<K, Dataset, Distance>;
 
     private:
         float quantization_width;
@@ -82,6 +82,7 @@ namespace panna {
         }
 
         float collision_probability( float distance ) const {
+            distance = Distance::to_euclidean(distance); // This gives the chance of applying the square root
             float r = quantization_width;
             return 1.0 - 2.0 * normal_cdf( -r / distance ) -
                    ( 2.0 / ( std::sqrt( M_PI * 2.0 ) * ( r / distance ) ) ) *
@@ -89,13 +90,13 @@ namespace panna {
         }
     };
 
-    template <uint8_t K, typename Dataset>
+    template <uint8_t K, typename Dataset, typename Distance>
     class E2LSHBuilder {
         float quantization_width = 0.0;
         size_t dimensions = 0;
 
     public:
-        using Output = E2LSH<K, Dataset>;
+        using Output = E2LSH<K, Dataset, Distance>;
 
         E2LSHBuilder() {
         }
@@ -213,7 +214,7 @@ namespace panna {
 
         Output build( size_t repetitions ) const {
             expect( quantization_width > 0 );
-            return E2LSH<K, Dataset>( quantization_width, dimensions, repetitions );
+            return E2LSH<K, Dataset, Distance>( quantization_width, dimensions, repetitions );
         }
 
         std::string describe() const {

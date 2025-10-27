@@ -24,7 +24,7 @@ int main() {
     const size_t n = 10000;
     using Point = NormedPoints;         // UnitNormPoints or NormedPoints
     using Distance = EuclideanDistance; // EuclideanDistance or AngularDistance or CosineDistance
-    using Hasher = E2LSH<conc, Point>;
+    using Hasher = E2LSH<conc, Point, Distance>;
     // using Hasher = CrossPolytope<conc, Point, Distance, rotations>;
 
     // CrossPolytopeBuilder<conc, Point, Distance, rotations> builder( dimensions );
@@ -48,7 +48,7 @@ int main() {
     points.resize( n );
 
     size_t dimensions = points[0].size();
-    E2LSHBuilder<conc, NormedPoints> builder( dimensions );
+    E2LSHBuilder<conc, NormedPoints, Distance> builder( dimensions );
     EMST<Point, Hasher, Distance> tree( dimensions, rep, builder, points, 0.01, 0.2 );
 
     // Exact computation
@@ -98,10 +98,10 @@ int main() {
     }
     float fp = 0.1;
     float gamma = 0.2;
-    E2LSHBuilder<conc_toc, NormedPoints> builder_toc( dimensions );
+    E2LSHBuilder<conc_toc, NormedPoints, Distance> builder_toc( dimensions );
     auto start_toc = std::chrono::high_resolution_clock::now();
     auto res = panna::baselines::emst_theory_of_computing<NormedPoints,
-                                                          E2LSHBuilder<conc_toc, NormedPoints>,
+                                                          E2LSHBuilder<conc_toc, NormedPoints, Distance>,
                                                           Distance>( dataset, gamma, fp, builder_toc );
     auto end_toc = std::chrono::high_resolution_clock::now();
     auto elapsed_toc_s = std::chrono::duration<double>( end_toc - start_toc ).count();

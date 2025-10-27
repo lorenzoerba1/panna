@@ -257,7 +257,7 @@ namespace panna {
             std::vector<std::pair<float, unsigned int>> hist;
             hist.push_back( std::make_pair( 0.0f, 0 ) );
             for ( const auto& edge : tree ) {
-                float weight = std::sqrt(table.get_distance( edge.first, edge.second ));
+                float weight = table.get_distance( edge.first, edge.second );
                 //top.push_back( std::make_tuple( weight, edge ) );
                 hist.push_back( std::make_pair( weight, 0 ) );
             }
@@ -431,7 +431,7 @@ namespace panna {
                                     }
 
                                     // Find the edges that satisfy the failure probability
-                                    float delta_local = delta/n;
+                                    float delta_local = delta;
                                     // auto partition_point = std::find_if(
                                     //     top.begin(), top.end(), [&]( const auto& e ) {
                                     //         delta_local -= table.fail_probability(
