@@ -36,7 +36,7 @@ int main()  {
         size_t reps[2] = { 300, 500 };
         std::vector<float> weigths; 
         using Point = NormedPoints; // UnitNormPoints or NormedPoints
-        using Distance = EuclideanDistance; // EuclideanDistance or AngularDistance or CosineDistance
+        using Distance = EuclideanDistanceNoSqrt; // EuclideanDistance or AngularDistance or CosineDistance
         using Hasher = E2LSH<conc, Point, Distance>;
         // using Hasher = CrossPolytope<conc, Point, Distance, rotations>;
 

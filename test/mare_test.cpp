@@ -49,7 +49,8 @@ int main()  {
                     if (points.size() > 10000)
                         points.resize(5000); // Limit to 1000 points for testing
 
-                    EMST<Point, Hasher, Distance> tree(dimensions[index], 500, builder, points, prob, ep);
+                    EMST<Point, Hasher, Distance> tree(dimensions[index], 500, builder, points, prob, 0);
+                    EMST<Point, Hasher, Distance> tree_approx(dimensions[index], 500, builder, points, prob, ep);
                     float weight;
                     double duration;
 
@@ -61,7 +62,7 @@ int main()  {
 
 
                     time = std::chrono::high_resolution_clock::now();
-                    weight = tree.find_epsilon_tree();
+                    std::tie(weight, std::ignore )= tree_approx.find_tree();
                     duration = std::chrono::duration<double>( std::chrono::high_resolution_clock::now() - time ).count();
                     outfile <<"K± e" << ep << ", " << points.size() << ", " << name << ", " << weight << ", "<< duration << ", " << prob << std::endl;
                     // Push the writes to file
