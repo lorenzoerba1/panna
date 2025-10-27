@@ -12,30 +12,21 @@ using EdgeTuple = std::tuple<float, std::pair<uint32_t, uint32_t>>;
 
 namespace panna {
 
-    // @brief Computes the binomial coefficient,
-    //        adapted from
-    //        https://stackoverflow.com/questions/55421835/c-binomial-coefficient-is-too-slow
-    // @param n number of elements
-    // @param k number of elements to choose
-    // @return the binomial coefficient C(n, k)
-    static double binomial_coefficient( const double n, const double k ) {
-        double aSolutions = 0, oldSolutions = n - k + 1;
-
-        for ( double i = 1; i < k; ++i ) {
-            aSolutions = oldSolutions * ( n - k + 1 + i ) / ( i + 1 );
-            oldSolutions = aSolutions;
-        }
-        return aSolutions;
-    }
+    struct StoppingConditionInfo {
+        const float total_weight;
+        const float confirmed_weight;
+        const float heaviest_confirmed_edge;
+        const size_t edges_to_confirm;
+        const size_t confirmed_edges;
+    };
 
     template <typename Dataset, typename Hasher, typename Distance>
     class EMST {
         // Object variables
         uint32_t dimensionality;
-        size_t MAX_REPETITIONS;
+        size_t MAX_REPETITIONS; // TODO: make lowercase, as upper case usually denotes constants
         uint32_t MAX_HASHBITS;
         Index<Dataset, Hasher, Distance> table;
-        std::vector<std::vector<float>> data{};
         uint32_t num_data{ 0 };
         double delta{ 0.01 };
         const float epsilon{ 0.2 };
@@ -76,8 +67,7 @@ namespace panna {
               const float epsilon = 0.2 ):
             dimensionality( dimensions ),
             table( Index<Dataset, Hasher, Distance>( dimensions, builder, repetitions ) ),
-            data( data_in ),
-            num_data( ( data ).size() ),
+            num_data( data_in.size() ),
             epsilon( epsilon ),
             dsu_true( DSU( num_data ) ),
             filter( DSU( num_data ) ) {
@@ -112,7 +102,7 @@ namespace panna {
             clear();
             // Compute all the distances
             //  We can pre-allocate all the memory, and avoid the critical region
-            std::vector<EdgeTuple> all_edges( binomial_coefficient( num_data, 2 ) );
+            std::vector<EdgeTuple> all_edges( ( num_data - 1 ) * num_data / 2 );
 #pragma omp parallel for collapse (2)
             for ( size_t i = 0; i < num_data; i++ ) {
                 for ( size_t j = i + 1; j < num_data; j++ ) {
@@ -163,95 +153,95 @@ namespace panna {
                     DSU local_dsu( num_data );
                     std::vector<EdgeTuple> local_top, local_Tu;
                     enumerate_edges( i, j, local_Tu );
-                    
-                    std::sort(local_Tu.begin(), local_Tu.end());
+
+                    std::sort( local_Tu.begin(), local_Tu.end() );
                     kruskal( local_dsu, local_Tu, local_top );
 
                     local_confirmed[j].insert( local_confirmed[j].end(),
                                                std::make_move_iterator( local_top.begin() ),
                                                std::make_move_iterator( local_top.end() ) );
 
-                    if ( j%50 == 0 )
-                     {
-                    #pragma omp critical
+                    // FIXME: make the batch size a parameter
+#pragma omp critical
                     {
-                        completed_repetitions+= 50;
-                        edges.insert( edges.end(),
-                                      std::make_move_iterator( top.begin() ),
-                                      std::make_move_iterator( top.end() ) );
-
-                        for ( size_t local_index = 0; local_index < MAX_REPETITIONS; local_index++ ) {
-                            auto& local = local_confirmed[local_index];
+                        completed_repetitions++;
+                        if ( completed_repetitions % 50 == 0 ||
+                             completed_repetitions >= MAX_REPETITIONS ) {
                             edges.insert( edges.end(),
-                                std::make_move_iterator(local.begin()),
-                                std::make_move_iterator(local.end()));
-                            local.clear();
-                        }
+                                          std::make_move_iterator( top.begin() ),
+                                          std::make_move_iterator( top.end() ) );
 
-                        top.clear();
+                            for ( size_t local_index = 0; local_index < MAX_REPETITIONS;
+                                  local_index++ ) {
+                                auto& local = local_confirmed[local_index];
+                                edges.insert( edges.end(),
+                                              std::make_move_iterator( local.begin() ),
+                                              std::make_move_iterator( local.end() ) );
+                                local.clear();
+                            }
 
-                        if ( edges.size() >= num_data - 1 ) {
-                            dsu_true = DSU( num_data );
-                            std::sort( edges.begin(), edges.end() );
-                            kruskal( dsu_true, edges, top );
+                            top.clear();
 
-                            LOG_INFO( "prefix", i, "repetition", completed_repetitions, "tree_size", top.size() );
-                            if ( top.size() == num_data - 1 ) {
-                                float new_tree_weight = 0;
-                                max_weight = std::pow( std::get<float>( top.back() ), 2 );
-                                for ( const auto& edge : top ) {
-                                    new_tree_weight += std::get<0>( edge );
-                                }
-                                tree_weight = new_tree_weight;
-                                // Fill the DSU filter with just the confirmed edgesù
-                                auto partition_point = std::partition_point(
-                                    top.begin(), top.end(), [&]( const auto& e ) {
-                                        return table.fail_probability(
-                                                   std::get<float>( e ), i, j ) < delta;
-                                    } );
-                                filter = DSU( num_data );
-                                for ( auto it = top.begin(); it != top.end(); ++it ) {
-                                    filter.union_sets( std::get<1>( *it ).first, std::get<1>( *it ).second );
-                                }
+                            if ( edges.size() >= num_data - 1 ) {
+                                dsu_true = DSU( num_data );
+                                std::sort( edges.begin(), edges.end() );
+                                kruskal( dsu_true, edges, top );
+                                // clang-format off
+                                LOG_INFO( "prefix", i,
+                                          "repetition", completed_repetitions,
+                                          "tree_size", top.size() );
+                                // clang-format on
+                                if ( top.size() == num_data - 1 ) {
+                                    StoppingConditionInfo stop =
+                                        stopping_condition( i, completed_repetitions );
+                                    float weight_lower_bound =
+                                        stop.confirmed_weight +
+                                        stop.edges_to_confirm * stop.heaviest_confirmed_edge;
+                                    bool should_stop =
+                                        stop.total_weight <= ( 1 + epsilon ) * weight_lower_bound;
+                                    // clang-format off
+                                    LOG_INFO( "stop.total_weight", stop.total_weight,
+                                              "stop.confirmed_weight", stop.confirmed_weight,
+                                              "stop.heaviest_confirmed_edge", stop.heaviest_confirmed_edge,
+                                              "stop.edges_to_confirm", stop.edges_to_confirm,
+                                              "weight_lower_bound", weight_lower_bound,
+                                              "should_stop", should_stop );
+                                    // clang-format on
 
-                                float fp = failure_probability( i, completed_repetitions );
-                                LOG_INFO( "prefix",
-                                          i,
-                                          "repetition",
-                                          completed_repetitions,
-                                          "tree_weight",
-                                          tree_weight,
-                                          "failure_probability",
-                                          fp,
-                                          "max_edge_weight",
-                                          std::get<float>( top.back() ),
-                                          "mean_edge_weight",
-                                          tree_weight / ( num_data - 1 ) );
-                                if ( fp < delta ) {
-                                    found = true;
-                                    // Fill the tree
-                                    tree.clear();
-                                    for ( const auto& edge : top ) {
-                                        tree.push_back( std::get<1>( edge ) );
+                                    // stop if we are done
+                                    if ( should_stop ) {
+                                        found = true;
+                                        tree_weight = stop.total_weight;
+                                        // Fill the tree
+                                        tree.clear();
+                                        for ( const auto& edge : top ) {
+                                            tree.push_back( std::get<1>( edge ) );
+                                        }
+                                    }
+                                    // Fill the DSU filter with just the confirmed edges
+                                    filter = DSU( num_data );
+                                    for ( size_t idx = 0; idx < stop.confirmed_edges; idx++ ) {
+                                        auto edge = top[idx];
+                                        filter.union_sets( std::get<1>( edge ).first,
+                                                           std::get<1>( edge ).second );
                                     }
                                 }
+                                // Lose the unused edges, MST is composable wrt to edge partitioning
+                                edges.clear();
                             }
-                            // Lose the unused edges, MST is composable wrt to edge partitioning
-                            edges.clear();
                         }
                     }
                 }
-            }
                 LOG_INFO( "msg", "finished prefix", "prefix", i );
             }
             // This is just a sanity check to see if dsu works as intended
             is_connected( tree );
-            LOG_INFO("msg", "EMST finished",
-                     "distances_computed", distances_computed);
+            LOG_INFO( "msg", "EMST finished", "distances_computed", distances_computed );
             return { tree_weight, tree };
         }
 
-        std::vector<std::pair<float, unsigned int>> find_tree_hist(std::vector<std::pair<unsigned int, unsigned int>> tree) {
+        std::vector<std::pair<float, unsigned int>>
+        find_tree_hist( std::vector<std::pair<unsigned int, unsigned int>> tree ) {
             clear();
             float tree_weight = 0;
             std::vector<std::pair<float, unsigned int>> hist;
@@ -368,13 +358,11 @@ namespace panna {
             return hist;
         }
 
-
         /// @brief Find the ɛ-EMST using both confirmed and unconfirmed edges
         float find_epsilon_tree() {
             clear();
             // dirty_start(local_confirmed[0]);
             float tree_weight = 0;
-            float old_weight = std::numeric_limits<float>::infinity();
             std::vector<std::pair<unsigned int, unsigned int>> tree;
 
             bool found = false;
@@ -431,7 +419,6 @@ namespace panna {
                                     }
 
                                     // Find the edges that satisfy the failure probability
-                                    float delta_local = delta;
                                     // auto partition_point = std::find_if(
                                     //     top.begin(), top.end(), [&]( const auto& e ) {
                                     //         delta_local -= table.fail_probability(
@@ -489,7 +476,6 @@ namespace panna {
                                     //         tree.push_back( std::get<1>( edge ) );
                                     //     }
                                     // }
-                                    old_weight = tree_weight;
                                 }
                                 // Lose the unused edges, MST is composable wrt to edge partitioning
                                 edges.clear();
@@ -505,6 +491,7 @@ namespace panna {
             return tree_weight;
         }
 
+        // TODO: maybe this should also be factored in the find_tree code?
         std::pair<
         std::vector<std::tuple<float, float, float>>,
         std::vector< std::vector< std::pair<float, unsigned int>>> > find_tree_dbscan( size_t k=5 ) {
@@ -714,7 +701,7 @@ namespace panna {
 
 
         float mean_weight() {
-            size_t edges_to_pick = std::min<size_t>( binomial_coefficient( num_data, 2 ), 10000 );
+            size_t edges_to_pick = std::min<size_t>( ( num_data - 1 ) * num_data / 2, 10000 );
             // Pick edges_to_pick random couples of nodes and compute the mean weight
             float mean = 0;
             for ( size_t i = 0; i < edges_to_pick; i++ ) {
@@ -742,7 +729,7 @@ namespace panna {
         void enumerate_edges( size_t i, size_t j, std::vector<EdgeTuple>& Tu_local ) {
             // Discover edges that share the same prefix at iteration i, j
             std::vector<EdgeTuple> couples;
-            size_t computed = table.search_pairs_filter( j, i, couples, max_weight, filter );
+            table.search_pairs_filter( j, i, couples, max_weight, filter );
             Tu_local.insert( Tu_local.end(), 
                 std::make_move_iterator(couples.begin()),
                 std::make_move_iterator(couples.end()) );
@@ -836,7 +823,7 @@ namespace panna {
         /// @brief Compute an upper bound to the failure probability of the stored spanning tree
         /// @param i current concatenation in the hash index
         /// @param j current repetition in the hash index
-        /// @return failure probability of the minimum spanning tree
+        /// @return the failure probability of the minimum spanning tree,
         float failure_probability( size_t i, size_t j ) {
             float loose_upper_bound =
                 ( num_data - 1 ) * table.fail_probability( std::get<0>( top.back() ), i, j );
@@ -849,6 +836,41 @@ namespace panna {
                       "loose-upper-bound", loose_upper_bound,
                       "union-bound", prob );
             return prob;
+        }
+
+        /// @brief Compute an upper bound to the failure probability of the stored spanning tree
+        ///
+        /// Returns the total weight of the confirmed edges as well, along with the index of the last
+        /// confirmed edges
+        /// 
+        /// @param i current concatenation in the hash index
+        /// @param j current repetition in the hash index
+        /// @return a tuple containing the failure probability of the minimum spanning tree,
+        /// the total weight of the confirmed edges, and the index of the last confirmed edge
+        StoppingConditionInfo stopping_condition( size_t i, size_t j ) {
+            float prob = 0.0f;
+            float weight = 0.0f;
+            size_t idx = 0;
+            while (prob < delta && idx < top.size()) {
+                float w = std::get<float>( top[idx] );
+                prob += table.fail_probability( w, i, j );
+                weight += w;
+                idx += 1;
+            }
+            size_t edges_to_confirm = top.size() - idx;
+
+            float total_weight = weight;
+            for (size_t jj=idx; jj<top.size(); jj++) {
+                float w = std::get<float>( top[jj] );
+                total_weight += w;
+            }
+
+            return StoppingConditionInfo{ .total_weight = total_weight,
+                                          .confirmed_weight = weight,
+                                          .heaviest_confirmed_edge =
+                                              ( idx > 0 ) ? std::get<0>( top[idx - 1] ) : 0.0f,
+                                          .edges_to_confirm = edges_to_confirm,
+                                          .confirmed_edges = idx };
         }
 
         /// @brief Clear the data structures from previous runs

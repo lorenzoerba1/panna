@@ -189,20 +189,14 @@ struct EMST_exposed {
             }
         }
 
-
-
         using Hasher = panna::E2LSH<12, panna::NormedPoints, panna::EuclideanDistance>;
         Hasher::Builder builder(0.0, dimensions);
 
         inner = std::make_unique<EMST_t>(dimensions, repetitions, builder, data_cpp, delta, epsilon);
     }
 
-    float find_exact_mst() {
+    float find_mst() {
         return inner->find_tree().first;
-    }
-
-    float find_epsilon_mst() {
-        return inner->find_epsilon_tree();
     }
 
     // Method to find the MST for the reachability and return results as NumPy arrays
@@ -369,9 +363,7 @@ NB_MODULE( _panna_impl, m ) {
         // Bind the find_mst method
         .def("find_mst_dbscan", &EMST_exposed::find_mst_dbscan, nb::arg("k") = 5,
             "Find the minimum spanning tree (MST) and the k-NNs for each node.")
-            .def("find_exact_mst", &EMST_exposed::find_exact_mst,
-                 "Find the exact minimum spanning tree (MST) for the dataset.")
-            .def("find_epsilon_mst", &EMST_exposed::find_epsilon_mst,
-                 "Find the 1+epsilon approximate minimum spanning tree (MST) for the dataset.");
+            .def("find_mst", &EMST_exposed::find_mst,
+                 "Find the minimum spanning tree (MST) for the dataset.");
 
 }
