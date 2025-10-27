@@ -257,7 +257,7 @@ namespace panna {
         size_t
         search_pairs_filter( size_t repetition,
                              size_t concatenations,
-                             std::vector<std::tuple<float, std::pair<uint32_t, uint32_t>>>& output,
+                             std::vector<Edge>& output,
                              float weight_filter,
                              DSU& dsu_true ) {
             expect( hasher );
@@ -304,7 +304,7 @@ namespace panna {
                     if ( distance > weight_filter ) {
                         continue;
                     }
-                    output.emplace_back(  distance , std::make_pair( a_idx, b_idx ) );
+                    output.emplace_back( distance, a_idx, b_idx );
                 }
             }
             return counter;

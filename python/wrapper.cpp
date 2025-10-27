@@ -212,9 +212,9 @@ struct EMST_exposed {
         auto tree_vec_ptr = std::make_unique<std::vector<float>>(num_edges * 3);
 
         for (size_t i = 0; i < num_edges; ++i) {
-            (*tree_vec_ptr)[i * 3 + 0] = std::get<0>(tree_edges_vec[i]);
-            (*tree_vec_ptr)[i * 3 + 1] = std::get<1>(tree_edges_vec[i]);
-            (*tree_vec_ptr)[i * 3 + 2] = std::get<2>(tree_edges_vec[i]);
+            (*tree_vec_ptr)[i * 3 + 0] = tree_edges_vec[i].weight;
+            (*tree_vec_ptr)[i * 3 + 1] = tree_edges_vec[i].a;
+            (*tree_vec_ptr)[i * 3 + 2] = tree_edges_vec[i].b;
         }
 
         nb::capsule tree_owner(tree_vec_ptr.get(), [](void *p) noexcept {

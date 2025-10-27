@@ -396,4 +396,18 @@ namespace panna {
         return maxdist * 2.0;
     }
     
+    struct Edge {
+        float weight;
+        uint32_t a;
+        uint32_t b;
+
+        friend constexpr inline bool operator<( Edge l, Edge r ) {
+            return std::tie(l.weight, l.a, l.b) < std::tie(r.weight, r.a, r.b);
+        }
+
+        friend constexpr inline bool operator==( Edge l, Edge r ) {
+            return std::tie(l.weight, l.a, l.b) == std::tie(r.weight, r.a, r.b);
+        }
+    };
+
 } // namespace panna
