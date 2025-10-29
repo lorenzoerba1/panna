@@ -37,6 +37,7 @@ if __name__ == "__main__":
                     for gamma in gammas:
                         start_time = perf_counter()
                         weight = panna.emst_theory_of_computing(data, delta=delta, gamma=gamma)
+                        weight = np.sum(weight[0])
                         end_time = perf_counter()
                         elapsed_time = end_time - start_time
                         # We have to write                     

@@ -5,82 +5,161 @@ import matplotlib as mpl
 import seaborn as sns
 import os
 from pathlib import Path
+from matplotlib.gridspec import GridSpec
 
 if __name__ == "__main__":
     mpl.use("WebAgg")
-    # Read the CSV file
-    filepath_prefix = Path(__file__).resolve().parents[2]
-    filepath = os.path.join(filepath_prefix, "results/dimensionality_scalability.csv")
-    df = pd.read_csv(filepath)
     sns.set_theme(palette="muted", style="white")
-    
 
-    # Create a line plot for the scalability of HDBSCAN
-    fig, ax = plt.subplots(figsize=(10, 6))
-    sns.lineplot(data=df, x="D", y="Time (s)", hue="Algorithm", marker="o", ax=ax)
+    # Filepaths
+    filepath_prefix = Path(__file__).resolve().parents[2]
+    filepath_dim = os.path.join(filepath_prefix, "results/dimensionality_scalability.csv")
+    filepath_len = os.path.join(filepath_prefix, "results/length_scalability.csv")
 
-    # Set the title and labels
-    ax.set_title("Dimensionality Scalability")
-    ax.set_xlabel("Number of Dimensions (D)")
-    ax.set_ylabel("Time (s)")
-    ax.set_yscale("log")  # Use logarithmic scale for better visibility of time differences
-    ax.set_xscale("log")  # Use logarithmic scale for dimensions
-    sns.despine()
-    # Apply Tufte style, axis lines only between the lowest and highest values Time (s) where algorithm is K+ or K+ ɛ 5.0
-    ax.spines["left"].set_bounds(df[df["Algorithm"].isin(["K+", "K+ ɛ 5.0"])]["Time (s)"].min(), df[df["Algorithm"].isin(["K+", "K+ ɛ 5.0"])]["Time (s)"].max())
-    ax.spines["bottom"].set_bounds(df["D"].min(), df["D"].max())
-    # Add a grid and legend
-    ax.legend()
-    # Save the plot as a PNG file
-    plt.show()
-    plt.savefig("results/dimensionality_scalability_plot.png", dpi=300)
+    # Color mapping 
+    color_mapping = {
+        "mlpack-Boruvka": "tab:orange",
+        "K+": "tab:green",
+        "K+ ɛ 0.1": "tab:red",
+        "K+ 1 thread": "tab:purple",
+        "Tutte-Boruvka": "tab:brown",
+        "Wang-GFK": "tab:pink",
+        "ToC-Kr": "tab:blue",
+        "K+ ɛ 5.0": "tab:cyan",
+    }
 
-    # Open the length scalability CSV file
-    filepath = os.path.join(filepath_prefix, "results/length_scalability.csv")
-    df_length = pd.read_csv(filepath)
-    # Get the unique dimensions
-    dimensions = sorted(df_length["D"].unique())
-    # Now plot the data
-    # Create a line plot for the scalability, to avoid a spaghetti plot, let's use a plot for each dimension of the data
-    fig, axs = plt.subplots(
-        figsize=(10, 6),
-        nrows=len(dimensions)//2,
-        ncols=2,
-        constrained_layout=True,
-        sharey=True,
-        # sharex=True,
+    # DIMENSIONALITY SCALABILITY PLOT
+    df = pd.read_csv(filepath_dim)
+
+    # Create a figure with an extra column for the legend
+    fig = plt.figure(figsize=(11, 6))
+    gs = GridSpec(1, 2, width_ratios=[6, 1], figure=fig)
+    ax = fig.add_subplot(gs[0, 0])
+    ax_leg = fig.add_subplot(gs[0, 1])
+    ax_leg.axis("off")
+
+    sns.lineplot(
+        data=df,
+        x="D",
+        y="Time (s)",
+        hue="Algorithm",
+        marker="o",
+        ax=ax,
+        palette=color_mapping,
+        legend=True,
     )
-    colors = dict(zip(df_length["Algorithm"].unique(), sns.color_palette(n_colors=len(df_length["Algorithm"].unique()))))
+
+    plt.suptitle("Dimensionality Scalability")
+    plt.xlabel("Number of Dimensions (D)")
+    plt.ylabel("Time (s)")
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    sns.despine()
+
+    # Tufte-style axis bounds
+    ax.spines["left"].set_bounds(
+        df[df["Algorithm"].isin(["K+", "K+ ɛ 5.0"])]["Time (s)"].min(),
+        df[df["Algorithm"].isin(["K+", "K+ ɛ 5.0"])]["Time (s)"].max(),
+    )
+    ax.spines["bottom"].set_bounds(df["D"].min(), df["D"].max())
+
+    # Create legend in the lateral subplot
+    handles, labels = ax.get_legend_handles_labels()
+    # Deactivate the legend in the main plot
+    ax.legend_.remove()
+    ax_leg.legend(
+        handles,
+        labels,
+        loc="center left",
+        frameon=False,
+        fontsize=9,
+        title="Algorithm",
+    )
+
+    plt.tight_layout()
+    plt.show()
+    fig.savefig("results/dimensionality_scalability_plot.png", dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+    # LENGTH SCALABILITY PLOT
+    df_length = pd.read_csv(filepath_len)
+    dimensions = sorted(df_length["D"].unique())
+    timeout = 28800  # 8 hours
+
+    nrows = len(dimensions) // 2 + len(dimensions) % 2
+
+    # Create grid with lateral legend column
+    fig = plt.figure(figsize=(12, 6))
+    gs = GridSpec(nrows, 3, width_ratios=[1, 1, 0.3], figure=fig)
+    axs = []
     for i, dim in enumerate(dimensions):
+        ax = fig.add_subplot(gs[i // 2, i % 2])
+        axs.append(ax)
         subset = df_length[df_length["D"] == dim]
+
         sns.lineplot(
-            data=subset, x="n", y="Time (s)", hue="Algorithm", marker="o", ax=axs[i//2, i%2], errorbar=None, palette=colors, legend=True if i == 0 else False
+            data=subset,
+            x="n",
+            y="Time (s)",
+            hue="Algorithm",
+            marker="o",
+            ax=ax,
+            errorbar=None,
+            palette=color_mapping,
+            legend=False if i > 0 else True,
         )
-        
-            # There arèsome algorithms that have missing data since they timed out, we will plot the data we have and a dotted line that goes up to the timeout value, 8 hours = 28800 seconds
-        timeout = 28800
+
+        # Timeout dotted lines, add a cross at the timeout point
         for alg in subset["Algorithm"].unique():
             alg_data = subset[subset["Algorithm"] == alg]
             max_n = alg_data["n"].max()
             if max_n < 10**7 and alg_data["Time (s)"].max() < timeout:
-                axs[i//2, i%2].plot([max_n, max_n * 10], [alg_data["Time (s)"].max(), timeout], linestyle="dotted", color=colors[alg])
-                
-    
-        # Deactivate the name of the axis
-        axs[i//2, i%2].set_ylabel("")
-        axs[i//2, i%2].set_xlabel("")
-        axs[i//2, i%2].set_title(f"D = {dim}")
-        axs[i//2, i%2].set_xscale("log")
-        axs[i//2, i%2].set_yscale("log")
-        sns.despine()
-        axs[i//2, i%2].spines["left"].set_bounds(subset[subset["Algorithm"].isin(["K+", "K+ ɛ 5.0"])]["Time (s)"].min(), subset[subset["Algorithm"].isin(["K+", "K+ ɛ 5.0"])]["Time (s)"].max())
-        axs[i//2, i%2].spines["bottom"].set_bounds(subset["n"].min(), subset["n"].max())
+                ax.plot(
+                    [max_n, max_n * 10],
+                    [alg_data["Time (s)"].max(), timeout],
+                    linestyle="dotted",
+                    color=color_mapping.get(alg, "gray"),
+                )
+                ax.plot(
+                    max_n * 10,
+                    timeout,
+                    marker="P",
+                    color=color_mapping.get(alg, "gray"),
+                )
 
-    # Set common labels
+        ax.set_title(f"D = {dim}")
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        sns.despine(ax=ax)
+        ax.set_ylabel("")
+        ax.set_xlabel("")
+        ax.spines["left"].set_bounds(
+            subset[subset["Algorithm"].isin(["K+", "K+ ɛ 5.0"])]["Time (s)"].min(),
+            subset[subset["Algorithm"].isin(["K+", "K+ ɛ 5.0"])]["Time (s)"].max(),
+        )
+        ax.spines["bottom"].set_bounds(subset["n"].min(), subset["n"].max())
+
+    # Common labels
     fig.supylabel("Time (s)")
     fig.supxlabel("Number of Points (n)")
-    plt.suptitle("Length Scalability by Dimension")
-    # Add a single legend for all subplots
-    # Set the title and labels
+    fig.suptitle("Length Scalability by Dimension")
+
+    # Legend subplot
+    ax_leg = fig.add_subplot(gs[:, 2])
+    ax_leg.axis("off")
+    handles, labels = axs[0].get_legend_handles_labels()
+    # Deactivate the legend in the main plot
+    axs[0].legend_.remove()
+    ax_leg.legend(
+        handles,
+        labels,
+        loc="center left",
+        frameon=False,
+        fontsize=9,
+        title="Algorithm",
+    )
+
+    plt.tight_layout()
     plt.show()
-    plt.savefig("results/length_scalability_plot.png", dpi=600)
+    fig.savefig("results/length_scalability_plot.png", dpi=600, bbox_inches="tight")
+    plt.close(fig)

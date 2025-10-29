@@ -11,16 +11,17 @@ from sklearn.metrics import (
 )
 import matplotlib.pyplot as plt
 import matplotlib
-import seaborn as sns
-import umap
+#import seaborn as sns
+#import umap
 from time import perf_counter
 import sys
 import os
 from pathlib import Path
+import zipfile
 #from mlpack import emst
 
 sys.path.append(os.path.join(Path(__file__).resolve().parents[2]))
-import _panna_impl as panna
+import panna
 #from keras.datasets import fashion_mnist
 
 
@@ -33,11 +34,19 @@ def unpickle(file):
 
 
 if __name__ == "__main__":
-    matplotlib.use("WebAgg")
+   # matplotlib.use("WebAgg")
     # Open and read the dataset
-    with h5py.File(
-        "/home/monaco/span/panna/datasets/fashion-mnist-784-euclidean.hdf5", "r"
-    ) as f:
+    with zipfile.ZipFile("datasets/PAMAP2_Dataset.zip", 'r') as zip_ref:
+        arr = []
+        for i in range(1, 10):
+            zfn = f"PAMAP2_Dataset/Protocol/subject10{i}.dat"
+            zf = zip_ref.open(zfn)
+            for line in zf:
+                line = line.decode()
+                l = list(map(float, line.strip().split()))
+                arr.append(l[1:])  # Exclude the first column (timestamp)
+        test_data = np.nan_to_num(np.array(arr))
+        print("Data shape:", test_data.shape)
        # test_data = pd.read_csv("datasets/ethylene_CO.txt", delim_whitespace=True)
         # print(test_data.head(), test_data.shape)
         # test_data = test_data.to_numpy()
@@ -47,22 +56,22 @@ if __name__ == "__main__":
         # true_labels = true_labels[:5000]
         #     print("Data shape:", data.shape)
 
-        test_data, true_labels = data.load_wine(return_X_y=True)
+        #test_data, true_labels = np.load("datasets/9_census.npz")['X'], np.load("datasets/9_census.npz")['y']
         # Cluster with both our version and the classic one
         # 1. Fast HDBSCAN
-        start_time = perf_counter()
-        proc = fast_hdbscan.HDBSCAN(
-            min_samples=15,
-            cluster_selection_method="eom",
-            min_cluster_size=50,
-            max_cluster_size=500,
-            plus=False,
-        )
-        y = proc.fit_predict(test_data)
-        end_time = perf_counter()
-        elapsed_time = end_time - start_time
+        # start_time = perf_counter()
+        # proc = fast_hdbscan.HDBSCAN(
+        #     min_samples=15,
+        #     cluster_selection_method="eom",
+        #     min_cluster_size=50,
+        #     max_cluster_size=500,
+        #     plus=False,
+        # )
+        # y = proc.fit_predict(test_data)
+        # end_time = perf_counter()
+        # elapsed_time = end_time - start_time
 
-        print("Elapsed time for Fast HDBSCAN:", elapsed_time, "seconds")
+        # print("Elapsed time for Fast HDBSCAN:", elapsed_time, "seconds")
 
         # 2. K+ HDBSCAN
         start_time = perf_counter()
@@ -78,59 +87,59 @@ if __name__ == "__main__":
         elapsed_time = end_time - start_time
         print("Elapsed time for K+ HDBSCAN:", elapsed_time, "seconds")
 
-        # If the dimensionality is greater than 2, reduce it to 2D using UMAP for visualization, otherwise use the data as is
-        fig, ax = plt.subplots(1, 2, figsize=(12, 5))
-        plt.suptitle("HDBSCAN vs K+ HDBSCAN")
-        plt.subplot(1, 2, 1)
-        if test_data.shape[1] > 5:
-            # Plot the clusters
-            mapper = umap.UMAP().fit(test_data[:2000])
-            reduced_data = mapper.transform(test_data[:2000])
-            # Map labels to markers
-            sns.scatterplot(
-                x=reduced_data[:, 0],
-                y=reduced_data[:, 1],
-                hue=y[:2000],
-                style=y[:2000],
-                palette="tab10",
-                s=20,
-                alpha=0.7,
-            )
-        else:
-            sns.scatterplot(
-                x=test_data[:, 0],
-                y=test_data[:, 1],
-                hue=y,
-                style=y,
-                palette="tab10",
-                s=20,
-                alpha=0.7,
-            )
-        plt.title("HDBSCAN")
-        plt.subplot(1, 2, 2)
-        if test_data.shape[1] > 5:
-            # Map labels to markers
-            sns.scatterplot(
-                x=reduced_data[:, 0],
-                y=reduced_data[:, 1],
-                hue=y2[:2000],
-                style=y2[:2000],
-                palette="tab10",
-                s=20,
-                alpha=0.7,
-            )
-        else:
-            sns.scatterplot(
-                x=test_data[:, 0],
-                y=test_data[:, 1],
-                hue=y2,
-                style=y2,
-                palette="tab10",
-                s=20,
-                alpha=0.7,
-            )
-        plt.title("K+ HDBSCAN")
-        plt.show()
+        # # If the dimensionality is greater than 2, reduce it to 2D using UMAP for visualization, otherwise use the data as is
+        # fig, ax = plt.subplots(1, 2, figsize=(12, 5))
+        # plt.suptitle("HDBSCAN vs K+ HDBSCAN")
+        # plt.subplot(1, 2, 1)
+        # if test_data.shape[1] > 5:
+        #     # Plot the clusters
+        #     mapper = umap.UMAP().fit(test_data[:2000])
+        #     reduced_data = mapper.transform(test_data[:2000])
+        #     # Map labels to markers
+        #     sns.scatterplot(
+        #         x=reduced_data[:, 0],
+        #         y=reduced_data[:, 1],
+        #         hue=y[:2000],
+        #         style=y[:2000],
+        #         palette="tab10",
+        #         s=20,
+        #         alpha=0.7,
+        #     )
+        # else:
+        #     sns.scatterplot(
+        #         x=test_data[:, 0],
+        #         y=test_data[:, 1],
+        #         hue=y,
+        #         style=y,
+        #         palette="tab10",
+        #         s=20,
+        #         alpha=0.7,
+        #     )
+        # plt.title("HDBSCAN")
+        # plt.subplot(1, 2, 2)
+        # if test_data.shape[1] > 5:
+        #     # Map labels to markers
+        #     sns.scatterplot(
+        #         x=reduced_data[:, 0],
+        #         y=reduced_data[:, 1],
+        #         hue=y2[:2000],
+        #         style=y2[:2000],
+        #         palette="tab10",
+        #         s=20,
+        #         alpha=0.7,
+        #     )
+        # else:
+        #     sns.scatterplot(
+        #         x=test_data[:, 0],
+        #         y=test_data[:, 1],
+        #         hue=y2,
+        #         style=y2,
+        #         palette="tab10",
+        #         s=20,
+        #         alpha=0.7,
+        #     )
+        # plt.title("K+ HDBSCAN")
+        # plt.show()
 
         # Compute silhouette score for both approaches, we drop -1 labels (noise)
         if len(set(y)) > 1 and len(set(y2)) > 1:
@@ -150,9 +159,9 @@ if __name__ == "__main__":
             print("AMI K+ :", ami2)
 
         # Compute the MST with mlpack for comparison
-        start_time = perf_counter()
-        mst_input = pd.DataFrame(test_data)
-        mst = emst(input_=mst_input, verbose=True)
-        end_time = perf_counter()
-        elapsed_time = end_time - start_time
-        print("Elapsed time for MST (mlpack):", elapsed_time, "seconds")
+        # start_time = perf_counter()
+        # mst_input = pd.DataFrame(test_data)
+        # mst = emst(input_=mst_input, verbose=True)
+        # end_time = perf_counter()
+        # elapsed_time = end_time - start_time
+        # print("Elapsed time for MST (mlpack):", elapsed_time, "seconds")

@@ -29,7 +29,7 @@ int main()  {
         const uint8_t rotations = 3;
         const size_t dimensions[4] = { 784, 100, 256, 960 };
         float eps[6] = { 0.2, 0.5, 1.0, 5.0, 10.0, 20.0 };
-        float probs[2] = {0.1, 0.2};
+        float probs[2] = {0.01, 0.05};//0.1, 0.2};
         std::vector<float> weigths; 
         using Point = NormedPoints; // UnitNormPoints or NormedPoints
         using Distance = EuclideanDistance; // EuclideanDistance or AngularDistance or CosineDistance

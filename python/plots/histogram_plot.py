@@ -10,7 +10,7 @@ if __name__ == "__main__":
     mpl.use("WebAgg")
     # Read the CSV file
     filepath_prefix = Path(__file__).resolve().parents[2]
-    filepath = os.path.join(filepath_prefix, "histogram.csv")
+    filepath = os.path.join(filepath_prefix, "histogram_glove.csv")
     df = pd.read_csv(filepath)
     # Drop the last row
     df = df[:-1]

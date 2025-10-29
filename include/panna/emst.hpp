@@ -239,13 +239,13 @@ namespace panna {
         }
 
         std::vector<std::pair<float, unsigned int>>
-        find_tree_hist( std::vector<std::pair<unsigned int, unsigned int>> tree ) {
+        find_tree_hist( std::vector<Edge> tree ) {
             clear();
             float tree_weight = 0;
             std::vector<std::pair<float, unsigned int>> hist;
             hist.push_back( std::make_pair( 0.0f, 0 ) );
             for ( const auto& edge : tree ) {
-                float weight = table.get_distance( edge.first, edge.second );
+                float weight = edge.weight;
                 //top.push_back( std::make_tuple( weight, edge ) );
                 hist.push_back( std::make_pair( weight, 0 ) );
             }
