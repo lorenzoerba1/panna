@@ -14,13 +14,17 @@ import panna
 
 if __name__ == "__main__":
     paths = [
-        "fashion-mnist-784-euclidean.hdf5",
-        #  "glove-100-angular.hdf5",
-         "nytimes-256-angular.hdf5",
+        # "fashion-mnist-784-euclidean.hdf5",
+        #   "glove-100-angular.hdf5",
+        #  "nytimes-256-angular.hdf5",
          "gist-960-euclidean.hdf5",
-         "simplewiki-openai-3072-normalized.hdf5",
-         "sift-128-euclidean.hdf5",
-         "deep-image-96-angular.hdf5",
+        #  "simplewiki-openai-3072-normalized.hdf5",
+        #  "sift-128-euclidean.hdf5",
+        #  "deep-image-96-angular.hdf5",
+        # "ethylene_CO.txt",
+        # "HT_Sensor_dataset.dat",
+        # "imagenet-align-640-normalized.hdf5",
+        # "landmark-nomic-768-normalized.hdf5",
     ]
     path_prefix = Path(__file__).resolve().parents[1]
 
@@ -29,20 +33,39 @@ if __name__ == "__main__":
     
     with open(os.path.join(results_folder, "scalability_results.csv"), "a+") as f_out:
         for path in paths:
-            with h5py.File(os.path.join(dataset_folder, path), "r") as f:
-                data = np.array(f["train"]).astype(np.float32)
-                
-                emst = panna.EMST(data, delta= 0.01, epsilon=0.2)
+            if path.endswith(".hdf5"):
+                with h5py.File(os.path.join(dataset_folder, path), "r") as f:
+                    data = np.array(f["train"]).astype(np.float32)
+                    
+                    emst = panna.EMST(data, delta= 0.01, epsilon=0)
+                    start_time = perf_counter()
+                    emst.find_mst()
+                    end_time = perf_counter()
+                    elapsed_time = end_time - start_time
+                    f_out.write(f"K+, {data.shape[0]}, {path}, 0, {elapsed_time}\n")
+                    
+                    emst = panna.EMST(data, delta= 0.01, epsilon=0.2)
+                    start_time = perf_counter()
+                    emst.find_mst()
+                    end_time = perf_counter()
+                    elapsed_time = end_time - start_time
+                    f_out.write(f"K± e0.2, {data.shape[0]}, {path}, 0, {elapsed_time}\n")
+                    f_out.flush()
+            elif path.endswith(".dat") or path.endswith(".txt"):
+                data = pd.read_csv(os.path.join(dataset_folder, path), delim_whitespace=True)
+                data = data.to_numpy().astype(np.float32)
+                data = np.nan_to_num(data)                
+                emst = panna.EMST(data, delta= 0.01, epsilon=0)
                 start_time = perf_counter()
-                emst.find_exact_mst()
+                emst.find_mst()
                 end_time = perf_counter()
                 elapsed_time = end_time - start_time
                 f_out.write(f"K+, {data.shape[0]}, {path}, 0, {elapsed_time}\n")
                 
-                # emst = panna.EMST(data, delta= 0.01, epsilon=0.2)
-                # start_time = perf_counter()
-                # emst.find_epsilon_mst()
-                # end_time = perf_counter()
-                # elapsed_time = end_time - start_time
-                # f_out.write(f"K± e0.2, {data.shape[0]}, {path}, 0, {elapsed_time}\n")
+                emst = panna.EMST(data, delta= 0.01, epsilon=0.2)
+                start_time = perf_counter()
+                emst.find_mst()
+                end_time = perf_counter()
+                elapsed_time = end_time - start_time
+                f_out.write(f"K± e0.2, {data.shape[0]}, {path}, 0, {elapsed_time}\n")
                 f_out.flush()

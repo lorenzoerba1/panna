@@ -10,7 +10,7 @@ if __name__ == "__main__":
     mpl.use("WebAgg")
     # Read the CSV file
     filepath_prefix = Path(__file__).resolve().parents[2]
-    filepath = os.path.join(filepath_prefix, "histogram_glove.csv")
+    filepath = os.path.join(filepath_prefix, "histogram_nytimes.csv")
     df = pd.read_csv(filepath)
     # Drop the last row
     df = df[:-1]
@@ -31,7 +31,7 @@ if __name__ == "__main__":
     axs.set_xlabel("Edge Weight")
     axs.set_ylabel("Count")
     sns.despine(left=True, bottom=True)
-    plt.suptitle("Histogram of Edges found with no filter on GloVe Dataset")
+    plt.suptitle("Histogram of Edges found with no filter on fashion Dataset")
     #axs.set_xscale("log")
     
     plt.show()
