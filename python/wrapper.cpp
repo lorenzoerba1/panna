@@ -3,6 +3,7 @@
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/string.h>
 #include <sstream>
+#include <vector>
 
 #include "panna/data.hpp"
 #include "panna/distance.hpp"
@@ -156,6 +157,24 @@ struct TrieIndex {
     }
 };
 
+nb::tuple tree_to_pytuple(std::vector<panna::Edge> & tree) {
+    size_t tree_size = tree.size();
+    float* weights = new float[tree_size];
+    uint32_t* ids = new uint32_t[tree_size * 2];
+    for ( size_t i = 0; i < tree_size; i++ ) {
+        weights[i] = tree[i].weight;
+        ids[i * 2] = tree[i].a;
+        ids[i * 2 + 1] = tree[i].b;
+    }
+
+    nb::capsule weights_owner( weights, []( void* p ) noexcept { delete[] (float*)p; } );
+    nb::capsule ids_owner( ids, []( void* p ) noexcept { delete[] (uint32_t*)p; } );
+
+    return nb::make_tuple(
+        nb::ndarray<nb::numpy, float, nb::ndim<1>>( weights, { tree_size }, weights_owner ),
+        nb::ndarray<nb::numpy, uint32_t, nb::ndim<2>>( ids, { tree_size, 2 }, ids_owner ) );
+}
+
 struct EMST_exposed {
     using EMST_t = panna::EMST<panna::NormedPoints, panna::E2LSH<12, panna::NormedPoints, panna::EuclideanDistance>, panna::EuclideanDistance>;
     std::unique_ptr<EMST_t> inner;
@@ -195,8 +214,13 @@ struct EMST_exposed {
         inner = std::make_unique<EMST_t>(dimensions, repetitions, builder, data_cpp, delta, epsilon);
     }
 
-    float find_mst() {
-        return inner->find_tree().first;
+    // float find_mst() {
+    //     return inner->find_tree().first;
+    // }
+
+    nb::tuple find_mst() {
+        auto tree = inner->find_tree().second;
+        return tree_to_pytuple( tree );
     }
 
     // Method to find the MST for the reachability and return results as NumPy arrays
@@ -334,12 +358,47 @@ nb::tuple emst_theory_of_computing( nb::ndarray<float, nb::c_contig>& data_in, n
     );
 }
 
+nb::ndarray<float, nb::numpy, nb::ndim<1>>
+distance_histogram( nb::ndarray<float, nb::c_contig>& data_in,
+                    nb::ndarray<float, nb::c_contig, nb::ndim<1>>& bin_bounds,
+                    size_t sample_size ) {
+    size_t nrows = data_in.shape( 0 );
+    size_t dimensionality = data_in.shape( 1 );
+    panna::NormedPoints dataset( dimensionality );
+    float* data = data_in.data();
+    for ( size_t row = 0; row < nrows; row++ ) {
+        float* begin = data + row * dimensionality;
+        float* end = data + ( row + 1 ) * dimensionality;
+        expect( end - begin == static_cast<ptrdiff_t>( dimensionality ) );
+        dataset.push_back( begin, end );
+    }
+
+    std::vector<float> bounds;
+    for ( size_t i = 0; i < bin_bounds.size(); i++ ) {
+        bounds.push_back( bin_bounds( i ) );
+    }
+
+    // TODO: make the distance configurable
+    std::vector<float> counts_vec =
+        panna::distance_histogram<panna::EuclideanDistance>( dataset, bounds, sample_size );
+    float* counts = new float[counts_vec.size()];
+    for ( size_t i = 0; i < counts_vec.size(); i++ ) {
+        counts[i] = counts_vec[i];
+    }
+    nb::capsule counts_owner( counts, []( void* p ) noexcept { delete[] (float*)p; } );
+
+    return nb::ndarray<float, nb::numpy, nb::ndim<1>>(
+        counts, { counts_vec.size() }, counts_owner );
+}
+
 NB_MODULE( _panna_impl, m ) {
     m.def( "set_seed",
            &panna::seed_global_rng,
            "Set the seed of the global random number generato used by the panna module." );
     m.def( "emst_theory_of_computing",
            &emst_theory_of_computing ),
+    m.def( "distance_histogram",
+           &distance_histogram ),
     nb::class_<TrieIndex>( m, "TrieIndex" )
         .def( nb::init<size_t, std::string, nb::kwargs>() )
         .def( "insert", &TrieIndex::insert )

@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "panna/expect.hpp"
+#include "panna/logging.hpp"
 #include "panna/rand.hpp"
 
 namespace panna {
@@ -395,7 +396,34 @@ namespace panna {
         
         return maxdist * 2.0;
     }
-    
+
+    template <typename Distance, typename Dataset>
+    std::vector<float> distance_histogram( const Dataset& dataset,
+                                           const std::vector<float>& bin_bounds,
+                                           size_t sample_size ) {
+        const size_t n = dataset.size();
+        const size_t num_pairs = n * ( n - 1 ) / 2;
+        const float sampling_factor = ( (float)num_pairs ) / sample_size;
+        auto& rng = get_global_rng();
+        std::uniform_int_distribution<size_t> random_id( 0, n - 1 );
+        std::vector<float> counts( bin_bounds.size() + 1 );
+        for ( size_t sample = 0; sample < sample_size; sample++ ) {
+            const size_t a = random_id( rng );
+            const size_t b = random_id( rng );
+            const float dist = Distance::compute( dataset[a], dataset[b] );
+            const auto pp = std::partition_point(
+                bin_bounds.cbegin(), bin_bounds.cend(), [&]( float d ) { return d <= dist; } );
+            const size_t i = std::distance( bin_bounds.cbegin(), pp );
+            counts[i] += 1;
+        }
+
+        for ( size_t i = 0; i < counts.size(); i++ ) {
+            counts[i] *= sampling_factor;
+        }
+
+        return counts;
+    }
+
     struct Edge {
         float weight;
         uint32_t a;
