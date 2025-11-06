@@ -391,6 +391,24 @@ distance_histogram( nb::ndarray<float, nb::c_contig>& data_in,
         counts, { counts_vec.size() }, counts_owner );
 }
 
+float
+approximate_diameter( nb::ndarray<float, nb::c_contig>& data_in ) {
+    size_t nrows = data_in.shape( 0 );
+    size_t dimensionality = data_in.shape( 1 );
+    panna::NormedPoints dataset( dimensionality );
+    float* data = data_in.data();
+    for ( size_t row = 0; row < nrows; row++ ) {
+        float* begin = data + row * dimensionality;
+        float* end = data + ( row + 1 ) * dimensionality;
+        expect( end - begin == static_cast<ptrdiff_t>( dimensionality ) );
+        dataset.push_back( begin, end );
+    }
+
+    float diam = 
+        panna::approximate_diameter<panna::EuclideanDistance>( dataset );
+    return diam;
+}
+
 NB_MODULE( _panna_impl, m ) {
     m.def( "set_seed",
            &panna::seed_global_rng,
@@ -399,6 +417,8 @@ NB_MODULE( _panna_impl, m ) {
            &emst_theory_of_computing ),
     m.def( "distance_histogram",
            &distance_histogram ),
+    m.def( "approximate_diameter",
+           &approximate_diameter ),
     nb::class_<TrieIndex>( m, "TrieIndex" )
         .def( nb::init<size_t, std::string, nb::kwargs>() )
         .def( "insert", &TrieIndex::insert )
