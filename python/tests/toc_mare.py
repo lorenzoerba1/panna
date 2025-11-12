@@ -11,7 +11,7 @@ sys.path.append(os.path.join(Path(__file__).resolve().parents[2]))
 import panna
 
 if __name__ == "__main__":
-    panna.set_seed(1989)
+    panna.set_seed(345)
     deltas = [0.1, 0.2]
     gammas = [0.2, 0.5, 1.0]
     paths = [
@@ -19,9 +19,9 @@ if __name__ == "__main__":
          "glove-100-angular.hdf5",
          "nytimes-256-angular.hdf5",
          "gist-960-euclidean.hdf5",
-         "simplewiki-openai-3072-normalized.hdf5",
-         "sift-128-euclidean.hdf5",
-         "deep-image-96-angular.hdf5",
+        #  "simplewiki-openai-3072-normalized.hdf5",
+        #  "sift-128-euclidean.hdf5",
+        #  "deep-image-96-angular.hdf5",
     ]
     path_prefix = Path(__file__).resolve().parents[1]
 

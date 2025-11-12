@@ -11,36 +11,78 @@ from sklearn.metrics import (
 from scipy.cluster.hierarchy import fcluster
 
 from time import perf_counter
+import zipfile
+from sklearn.decomposition import PCA
 import sys
 import os
 sys.path.append(os.path.join(Path(__file__).resolve().parents[2]))
 
+def open_pamap(path):
+    data = None
+    with zipfile.ZipFile(os.path.join(dataset_folder, path), 'r') as zip_ref:
+        arr = []
+        for i in range(1,10):
+            zfn = f"PAMAP2_Dataset/Protocol/subject10{i}.dat"
+            zf = zip_ref.open(zfn)
+            for line in zf:
+                line = line.decode()
+                l = list(map(float, line.strip().split()))
+                # remove timestamp
+                arr.append(l[1:])
+        X = np.nan_to_num(np.array(arr)) # many NaNs in data, replace them with 0.
+        data = PCA(n_components=4).fit_transform(X) # PCA of first four components
+    return data
+
 if __name__ == "__main__":
-    # Test on basic datasets
-    wine_data, wine_labels = data_loader.load_wine(return_X_y=True)
-    iris_data, iris_labels = data_loader.load_iris(return_X_y=True)
-    diabetes_data, diabetes_labels = data_loader.load_diabetes(return_X_y=True)
-    datasets = [
-        (wine_data, wine_labels, "Wine"),
-        (iris_data, iris_labels, "Iris"),
-        (diabetes_data, diabetes_labels, "Diabetes"),
+    paths = [
+        #  "fashion-mnist-784-euclidean.hdf5",
+        #    "glove-100-angular.hdf5",
+        #   "nytimes-256-angular.hdf5",
+        #  "gist-960-euclidean.hdf5",
+        #   "simplewiki-openai-3072-normalized.hdf5",
+        #   "sift-128-euclidean.hdf5",
+        #   "deep-image-96-angular.hdf5",
+         "ethylene_CO.txt",
+         "HT_Sensor_dataset.dat",
+        # "imagenet-align-640-normalized.hdf5",
+        # "landmark-nomic-768-normalized.hdf5",
+        # "9_census.npz",
+        "PAMAP2_Dataset.zip",
     ]
+    path_prefix = Path(__file__).resolve().parents[1]
+
+    dataset_folder = os.path.join(path_prefix, "datasets")
+    results_folder = os.path.join(path_prefix, "results")
     
-    # with open("results/hdbscan_sigmod_results.csv", "a+") as f_out:
-    #     for data, true_labels, name in datasets:
-    data = pd.read_csv("datasets/ethylene_CO.txt", delim_whitespace=True)
-    start = perf_counter()
-    clusterer = pyhdbscan.HDBSCAN(data, minPts=10)
-    # labels = fcluster(clusterer, 1.0)
-    elapsed_time = perf_counter() - start
-    
-    # ami = adjusted_mutual_info_score(true_labels, labels)
-    # ari = adjusted_rand_score(true_labels, labels)
-    
-    #print(f"Dataset: {name}")
-    print(f"Time taken: {elapsed_time:.4f} seconds")
-            # print(f"Adjusted Mutual Info Score: {ami:.4f}")
-            # print(f"Adjusted Rand Index: {ari:.4f}")
-            # f_out.write(f"{name}, {data.shape[0]}, {elapsed_time}, {ami}, {ari}\n")
-            # f_out.flush()
+    with open(os.path.join(results_folder, "hdbscan_results_pyhdbscan.csv"), "a+") as f_out:
+        for path in paths:
+            if path.endswith(".hdf5"):
+                with h5py.File(os.path.join(dataset_folder, path), "r") as f:
+                    data = np.array(f["train"]).astype(np.float32)
+                    start = perf_counter()
+                    clusterer = pyhdbscan.HDBSCAN(data, minPts=10)
+                    elapsed_time = perf_counter() - start
+                    f_out.write(f"Wang-HDBSCAN, {data.shape[0]}, {path}, 0, {elapsed_time}\n")
+            elif path.endswith(".dat") or path.endswith(".txt"):
+                data = pd.read_csv(os.path.join(dataset_folder, path), delim_whitespace=True)
+                data = data.to_numpy().astype(np.float32)
+                data = np.nan_to_num(data)                
+                start = perf_counter()
+                clusterer = pyhdbscan.HDBSCAN(data, minPts=10)
+                elapsed_time = perf_counter() - start
+                f_out.write(f"Wang-HDBSCAN, {data.shape[0]}, {path}, 0, {elapsed_time}\n")
+            elif path.endswith(".npz"):
+                loaded = np.load(os.path.join(dataset_folder, path))
+                data = loaded["X"].astype(np.float32)
+                start = perf_counter()
+                clusterer = pyhdbscan.HDBSCAN(data, minPts=10)
+                elapsed_time = perf_counter() - start
+                f_out.write(f"Wang-HDBSCAN, {data.shape[0]}, {path}, 0, {elapsed_time}\n")
+            elif path.endswith(".zip"):
+                data = open_pamap(path)
+                start = perf_counter()
+                clusterer = pyhdbscan.HDBSCAN(data, minPts=10)
+                elapsed_time = perf_counter() - start
+                f_out.write(f"Wang-HDBSCAN, {data.shape[0]}, {path}, 0, {elapsed_time}\n")
+
     
