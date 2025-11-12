@@ -20,24 +20,26 @@ DATASETS_URLS=(
 )
 
 # Create download directory
-echo "Setting up $DOWNLOAD_DIR directory..."
-mkdir -p "$DOWNLOAD_DIR"
+if [ ! -d "$DOWNLOAD_DIR" ]; then
+    echo "Setting up $DOWNLOAD_DIR directory..."
+    mkdir -p "$DOWNLOAD_DIR"
+fi
+
 
 # Download the datasets
 echo "Starting dataset downloads..."
 for url in "${DATASETS_URLS[@]}"
 do
-    # Use awk to safely extract the filename from the URL, handling potential query parameters
-    filename=$(basename "${url%%?*}")
+filename="${url##*/}"
     
-    # Handle the specific Hugging Face URLs which sometimes need a cleaner name
-    if [[ "$url" == *"huggingface.co"* ]]; then
-        # This logic attempts to clean up names like "landmark-nomic-768-normalized.hdf5"
-        filename=$(echo "$url" | grep -oP '(?<=/)[^/]+?\.hdf5')
+    # Handle the specific Hugging Face URLs to remove query parameters like ?download=true
+    if [[ "$filename" == *'?'* ]]; then
+        # Remove the query part (everything from the '?' onwards)
+        filename="${filename%%\?*}"
     fi
-    
+
     if [ -z "$filename" ]; then
-        echo "Warning: Could not determine filename for URL: $url. Skipping."
+        echo "ERROR: Could not determine filename for URL: $url. Skipping."
         continue
     fi
 
