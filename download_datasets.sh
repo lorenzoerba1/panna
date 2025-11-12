@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- Configuration ---
-DOWNLOAD_DIR="datasets2"
+DOWNLOAD_DIR="datasets"
 DATASETS_URLS=(
     "https://huggingface.co/datasets/vector-index-bench/vibe/blob/main/landmark-nomic-768-normalized.hdf5?download=true"
     "https://huggingface.co/datasets/vector-index-bench/vibe/resolve/main/imagenet-clip-512-normalized.hdf5?download=true"
