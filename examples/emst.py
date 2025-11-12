@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 from sklearn.datasets import make_blobs
+from icecream import ic
 
 
 class UnionFind:
@@ -70,8 +71,21 @@ def compute_mu(tree, epsilon, diameter):
     return len(tree)
 
 
-n = 200
-epsilon = 5
+def compute_flexibility(tree, epsilon, diameter):
+    total_cost = sum([e[0] for e in tree])
+    cost = 0
+    for i, (w, _, _) in enumerate(tree):
+        remaining = len(tree) - i
+        ic(remaining)
+        cost += w
+        if ic(cost) + ic(remaining * diameter) <= ic((1+epsilon) * total_cost):
+            return remaining
+    return 0
+
+
+
+n = 100
+epsilon = 1
 gen = np.random.default_rng(1234)
 # data = gen.uniform(0, 10, size=(n, 2))
 data, _ = make_blobs(n, cluster_std=0.5, centers=20, random_state=1234)
@@ -81,31 +95,38 @@ data, _ = make_blobs(n, cluster_std=0.5, centers=20, random_state=1234)
 # directions /= np.linalg.norm(directions, axis=1)[:, np.newaxis]
 # data = directions * radii[:, np.newaxis]
 
-
 height = 3
 fig, axs = plt.subplots(1, 2, figsize=(height*4, height), width_ratios=(1, 4))
 
 tree, edges, diameter = compute_emst(data)
 print(diameter)
-mu = compute_mu(tree, epsilon, diameter)
-print(mu)
+flexibility = compute_flexibility(tree, epsilon, diameter)
+print(flexibility)
 
 for i, (w, parent, child) in enumerate(tree):
+    is_arbitrary = i >= len(tree) - flexibility
     axs[0].plot(
         [data[parent, 0], data[child, 0]],
         [data[parent, 1], data[child, 1]],
-        c="black",
-        alpha=0.5,
+        c="tab:red" if is_arbitrary else "tab:blue",
+        # alpha=0.5,
     )
-    axs[1].plot([i, i], [0, w], c="tab:blue" if i <= mu else "lightgray")
+    axs[1].plot([i, i], [0, w], c="tab:red" if is_arbitrary else "tab:blue")
 
-# axs[1].axvline(mu)
-axs[1].add_patch(
-    Rectangle((mu, tree[mu][0]), len(tree) - mu, diameter - tree[mu][0], color="tab:orange")
-)
-axs[1].set_ylim(0, diameter *1.01)
+# axs[1].axvline(flexibility)
+# padding = 0
+# axs[1].add_patch(
+#     Rectangle(
+#         (len(tree) - flexibility - padding, 0),
+#         (flexibility-1) + padding,
+#         diameter,
+#         color="tab:orange",
+#     )
+# )
+# axs[1].set_ylim(0, diameter * 1.01)
+axs[1].axis("off")
 
-axs[0].scatter(data[:, 0], data[:, 1], s=10, c="black")
+axs[0].scatter(data[:, 0], data[:, 1], s=5, c="black", zorder=100)
 axs[0].axis("off")
 plt.tight_layout()
-plt.savefig("examples/mu-epsilon-example.png")
+plt.savefig("examples/flexibility-example.png")
