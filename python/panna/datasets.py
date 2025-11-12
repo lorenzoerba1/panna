@@ -18,9 +18,15 @@ DATASETS_DIR = Path(os.environ.get("PANNA_DATA_DIR", "datasets"))
 
 
 def _download(url, destination: Path):
+    import certifi
+    import ssl
     if not destination.is_file():
         logging.info(f"downloading {url} to {destination}")
-        urllib.request.urlretrieve(url, destination)
+        context = ssl.create_default_context(cafile=certifi.where())
+        with urllib.request.urlopen(url, context=context) as response:
+            with open(destination, "wb") as out_file:
+                out_file.write(response.read())
+        # urllib.request.urlretrieve(url, destination, context=context)
 
 
 def _load_hdf5(path: Path):
@@ -63,17 +69,17 @@ def _load_census(path: Path):
 
 _DATASETS_INFO = {
     "landmark-nomic-768-normalized": (
-        "https://huggingface.co/datasets/vector-index-bench/vibe/blob/main/landmark-nomic-768-normalized.hdf5",
+        "https://huggingface.co/datasets/vector-index-bench/vibe/resolve/main/landmark-nomic-768-normalized.hdf5?download=true",
         _load_hdf5,
         "euclidean",
     ),
     "imagenet-clip-512-normalized": (
-        "https://huggingface.co/datasets/vector-index-bench/vibe/resolve/main/imagenet-clip-512-normalized.hdf5",
+        "https://huggingface.co/datasets/vector-index-bench/vibe/resolve/main/imagenet-clip-512-normalized.hdf5?download=true",
         _load_hdf5,
         "euclidean",
     ),
     "simplewiki-openai-3072-normalized": (
-        "https://huggingface.co/datasets/vector-index-bench/vibe/resolve/main/simplewiki-openai-3072-normalized.hdf5",
+        "https://huggingface.co/datasets/vector-index-bench/vibe/resolve/main/simplewiki-openai-3072-normalized.hdf5?download=true",
         _load_hdf5,
         "euclidean",
     ),
@@ -157,3 +163,6 @@ def load(name: str, pca_dimensions=None, center_mean=False, load_queries=False):
         return distance, train
 
 
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    load("landmark-nomic-768-normalized")
