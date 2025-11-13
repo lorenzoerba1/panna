@@ -398,44 +398,51 @@ namespace panna {
         return maxdist * 2.0;
     }
 
-    template <typename Distance, typename Dataset>
-    std::vector<float> distance_histogram( const Dataset& dataset,
-                                           const std::vector<float>& bin_bounds,
-                                           size_t sample_size ) {
+        template <typename Distance, typename Dataset>
+    std::pair<std::vector<float>, std::vector<float>> distance_histogram( const Dataset& dataset,
+                                                                          size_t n_bins,
+                                                                          float min_distance,
+                                                                          float max_distance,
+                                                                          size_t sample_size ) {
         const size_t n = dataset.size();
         const size_t num_pairs = n * ( n - 1 ) / 2;
         const float sampling_factor = ( (float)num_pairs ) / sample_size;
         std::uniform_int_distribution<size_t> random_id( 0, n - 1 );
-        std::vector<float> counts( bin_bounds.size() + 1 );
+        std::vector<float> counts( n_bins );
 
-        #pragma omp parallel
+        const double width = ( max_distance - min_distance ) / static_cast<double>( n_bins );
+        std::vector<float> bounds( n_bins + 1 );
+        for ( std::size_t i = 0; i <= n_bins; ++i ) {
+            bounds[i] = min_distance + i * width;
+        }
+
+#pragma omp parallel
         {
-            static std::mt19937_64 rng(omp_get_thread_num());
-            std::vector<float> counts_private( bin_bounds.size() + 1 );
-            #pragma omp for
+            static std::mt19937_64 rng( omp_get_thread_num() );
+            std::vector<float> counts_private( n_bins );
+#pragma omp for
             for ( size_t sample = 0; sample < sample_size; sample++ ) {
                 const size_t a = random_id( rng );
                 const size_t b = random_id( rng );
                 const float dist = Distance::compute( dataset[a], dataset[b] );
-                const auto pp = std::partition_point(
-                    bin_bounds.cbegin(), bin_bounds.cend(), [&]( float d ) { return d <= dist; } );
-                const size_t i = std::distance( bin_bounds.cbegin(), pp );
-                counts_private[i] += 1;
+                if ( dist < min_distance || dist > max_distance ) {
+                    // ignore out of bounds, the caller does not care about them
+                    continue;
+                }
+                const size_t i =
+                    static_cast<size_t>( std::floor( ( dist - min_distance ) / width ) );
+                counts_private[i] += sampling_factor;
             }
-            
-            #pragma omp critical
+
+#pragma omp critical
             {
-                for (size_t i=0; i<counts_private.size(); i++) {
+                for ( size_t i = 0; i < counts_private.size(); i++ ) {
                     counts[i] += counts_private[i];
                 }
             }
         }
 
-        for ( size_t i = 0; i < counts.size(); i++ ) {
-            counts[i] *= sampling_factor;
-        }
-
-        return counts;
+        return {counts, bounds};
     }
 
     struct Edge {

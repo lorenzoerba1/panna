@@ -358,9 +358,13 @@ nb::tuple emst_theory_of_computing( nb::ndarray<float, nb::c_contig>& data_in, n
     );
 }
 
-nb::ndarray<float, nb::numpy, nb::ndim<1>>
+// nb::ndarray<float, nb::numpy, nb::ndim<1>>
+nb::tuple
 distance_histogram( nb::ndarray<float, nb::c_contig>& data_in,
-                    nb::ndarray<float, nb::c_contig, nb::ndim<1>>& bin_bounds,
+                    // nb::ndarray<float, nb::c_contig, nb::ndim<1>>& bin_bounds,
+                    size_t n_bins,
+                    float min_distance,
+                    float max_distance,
                     size_t sample_size ) {
     size_t nrows = data_in.shape( 0 );
     size_t dimensionality = data_in.shape( 1 );
@@ -373,22 +377,29 @@ distance_histogram( nb::ndarray<float, nb::c_contig>& data_in,
         dataset.push_back( begin, end );
     }
 
-    std::vector<float> bounds;
-    for ( size_t i = 0; i < bin_bounds.size(); i++ ) {
-        bounds.push_back( bin_bounds( i ) );
-    }
-
     // TODO: make the distance configurable
-    std::vector<float> counts_vec =
-        panna::distance_histogram<panna::EuclideanDistance>( dataset, bounds, sample_size );
+    std::vector<float> counts_vec;
+    std::vector<float> bounds_vec;
+    std::tie( counts_vec, bounds_vec ) = panna::distance_histogram<panna::EuclideanDistance>(
+        dataset, n_bins, min_distance, max_distance, sample_size );
+
     float* counts = new float[counts_vec.size()];
     for ( size_t i = 0; i < counts_vec.size(); i++ ) {
         counts[i] = counts_vec[i];
     }
     nb::capsule counts_owner( counts, []( void* p ) noexcept { delete[] (float*)p; } );
-
-    return nb::ndarray<float, nb::numpy, nb::ndim<1>>(
+    const auto counts_numpy = nb::ndarray<float, nb::numpy, nb::ndim<1>>(
         counts, { counts_vec.size() }, counts_owner );
+
+    float* bounds = new float[bounds_vec.size()];
+    for ( size_t i = 0; i < bounds_vec.size(); i++ ) {
+        bounds[i] = bounds_vec[i];
+    }
+    nb::capsule bounds_owner( bounds, []( void* p ) noexcept { delete[] (float*)p; } );
+    const auto bounds_numpy = nb::ndarray<float, nb::numpy, nb::ndim<1>>(
+        bounds, { bounds_vec.size() }, bounds_owner );
+
+    return nb::make_tuple(counts_numpy, bounds_numpy);
 }
 
 float
