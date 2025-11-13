@@ -5,6 +5,7 @@ import joblib
 from icecream import ic
 import csv
 import logging
+import matplotlib.pyplot as plt
 
 
 MEM = joblib.Memory(".cache")
@@ -19,7 +20,8 @@ def compute_flexibility(tree, epsilon, diameter):
         lower_bound = remaining * w
         upper_bound = remaining * diameter
         # if cost + remaining * diameter <= (1 + epsilon) * total_cost:
-        if upper_bound - lower_bound <= epsilon * (cost + lower_bound):
+        # if upper_bound - lower_bound <= epsilon * (cost + lower_bound):
+        if upper_bound <= epsilon * cost:
             return remaining
     return 0
 
@@ -32,16 +34,19 @@ def compute_edge_mass(weights, counts, threshold):
 
 
 @MEM.cache
-def compute_histogram(
+def compute_cumulative_distance_distribution(
     data, min_distance, max_distance, num_buckets=10000, sample_fraction=0.01
 ):
     n = data.shape[0]
     num_pairs = n * (n - 1) // 2
     bounds = np.linspace(min_distance, max_distance, num=num_buckets)
-    samples = min(10e9, int(num_pairs * sample_fraction))
+    step = bounds[1] - bounds[0]
+    ic(min_distance, step)
+    samples = int(min(10e9, num_pairs * sample_fraction))
     ic(samples)
     counts = panna.distance_histogram(data, bounds, samples)
     counts = np.cumsum(counts)
+    bounds = np.concat((bounds, [bounds[-1] + step]))
     return bounds, counts
 
 
@@ -69,13 +74,16 @@ for dataset in datasets:
     weights, edges = cached_emst(data)
     weights = np.sort(weights)
     diameter = panna.approximate_diameter(data)
-    bounds, counts = compute_histogram(data, weights[0], diameter)
-    ic(counts.shape, bounds.shape)
+    bounds, counts = compute_cumulative_distance_distribution(data, weights[0], diameter)
 
+    plt.figure()
+    plt.plot(bounds, counts)
     with open(outfile, "a") as fp:
         out = csv.writer(fp)
         for epsilon in [0, 0.01, 0.1]:
             flexibility = compute_flexibility(weights, epsilon, diameter)
-            ic(flexibility)
             mass = compute_edge_mass(bounds, counts, weights[-flexibility - 1])
+            plt.axhline(mass, linestyle="dotted")
+            plt.annotate(f"ε={epsilon}", (0, mass))
             out.writerow((dataset, epsilon, flexibility, mass, num_pairs, mass/num_pairs))
+    plt.savefig(f"examples/cumdist-{dataset}.png", dpi=300)
