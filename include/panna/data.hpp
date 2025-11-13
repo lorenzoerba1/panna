@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstring>
+#include <omp.h>
 #include <random>
 #include <stdexcept>
 #include <vector>
@@ -404,17 +405,30 @@ namespace panna {
         const size_t n = dataset.size();
         const size_t num_pairs = n * ( n - 1 ) / 2;
         const float sampling_factor = ( (float)num_pairs ) / sample_size;
-        auto& rng = get_global_rng();
         std::uniform_int_distribution<size_t> random_id( 0, n - 1 );
         std::vector<float> counts( bin_bounds.size() + 1 );
-        for ( size_t sample = 0; sample < sample_size; sample++ ) {
-            const size_t a = random_id( rng );
-            const size_t b = random_id( rng );
-            const float dist = Distance::compute( dataset[a], dataset[b] );
-            const auto pp = std::partition_point(
-                bin_bounds.cbegin(), bin_bounds.cend(), [&]( float d ) { return d <= dist; } );
-            const size_t i = std::distance( bin_bounds.cbegin(), pp );
-            counts[i] += 1;
+
+        #pragma omp parallel
+        {
+            static std::mt19937_64 rng(omp_get_thread_num());
+            std::vector<float> counts_private( bin_bounds.size() + 1 );
+            #pragma omp for
+            for ( size_t sample = 0; sample < sample_size; sample++ ) {
+                const size_t a = random_id( rng );
+                const size_t b = random_id( rng );
+                const float dist = Distance::compute( dataset[a], dataset[b] );
+                const auto pp = std::partition_point(
+                    bin_bounds.cbegin(), bin_bounds.cend(), [&]( float d ) { return d <= dist; } );
+                const size_t i = std::distance( bin_bounds.cbegin(), pp );
+                counts_private[i] += 1;
+            }
+            
+            #pragma omp critical
+            {
+                for (size_t i=0; i<counts_private.size(); i++) {
+                    counts[i] += counts_private[i];
+                }
+            }
         }
 
         for ( size_t i = 0; i < counts.size(); i++ ) {
