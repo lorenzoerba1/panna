@@ -37,6 +37,7 @@ namespace panna {
         std::vector<std::vector<Edge>> local_edges;
         float max_weight;
         size_t distances_computed = 0;
+        size_t num_collisions = 0;
 
     public:
         /**
@@ -234,7 +235,7 @@ namespace panna {
             }
             // This is just a sanity check to see if dsu works as intended
             is_connected( tree );
-            LOG_INFO( "msg", "EMST finished", "distances_computed", distances_computed );
+            LOG_INFO( "msg", "EMST finished", "distances_computed", distances_computed, "num_collisions", num_collisions );
             return { tree_weight, tree };
         }
 
@@ -596,12 +597,16 @@ namespace panna {
         void enumerate_edges( size_t i, size_t j, std::vector<Edge>& Tu_local ) {
             // Discover edges that share the same prefix at iteration i, j
             std::vector<Edge> couples;
-            table.search_pairs_filter( j, i, couples, max_weight, filter );
-            Tu_local.insert( Tu_local.end(), 
-                std::make_move_iterator(couples.begin()),
-                std::make_move_iterator(couples.end()) );
-// #pragma omp atomic
-//             distances_computed += computed;
+            size_t cnt_dist, cnt_collisions;
+            std::tie( cnt_dist, cnt_collisions ) =
+                table.search_pairs_filter( j, i, couples, max_weight, filter );
+            Tu_local.insert( Tu_local.end(),
+                             std::make_move_iterator( couples.begin() ),
+                             std::make_move_iterator( couples.end() ) );
+#pragma omp atomic
+            distances_computed += cnt_dist;
+#pragma omp atomic
+            num_collisions += cnt_collisions;
             return;
         };
 
