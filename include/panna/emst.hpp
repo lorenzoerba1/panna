@@ -97,7 +97,7 @@ namespace panna {
 
         /// @brief Computes the exact MST with Kruskal's algorithm in a naive way
         /// @return weight of the exact MST
-        float exact_tree() {
+        std::pair<float, std::vector<Edge>> exact_tree() {
             // Clear from any previous runs
             clear();
             // Compute all the distances
@@ -127,7 +127,7 @@ namespace panna {
             for ( const auto& edge : tree ) {
                 tree_weight += edge.weight ;
             }
-            return tree_weight;
+            return {tree_weight, tree};
         }
 
         /// @brief Find the Minimum Spanning Tree using only confirmed edges

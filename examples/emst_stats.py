@@ -46,9 +46,72 @@ def compute_cumulative_distance_distribution(
     return bounds, counts
 
 
+class UnionFind:
+    def __init__(self, size):
+        # Initially, each element is its own parent (self root)
+        self.parent = list(range(size))
+        # Rank used for union by rank optimization
+        self.rank = [0] * size
+
+    def find(self, x):
+        # Path compression heuristic
+        if self.parent[x] != x:
+            self.parent[x] = self.find(self.parent[x])
+        return self.parent[x]
+
+    def union(self, x, y):
+        # Union by rank heuristic
+        rootX = self.find(x)
+        rootY = self.find(y)
+
+        if rootX != rootY:
+            if self.rank[rootX] > self.rank[rootY]:
+                self.parent[rootY] = rootX
+            elif self.rank[rootX] < self.rank[rootY]:
+                self.parent[rootX] = rootY
+            else:
+                self.parent[rootY] = rootX
+                self.rank[rootX] += 1
+
+    def connected(self, x, y):
+        # Check if two elements are in the same set
+        return self.find(x) == self.find(y)
+
+
+def exact_emst(data):
+    n = data.shape[0]
+    edges = []
+    for i in range(n):
+        for j in range(i):
+            edges.append((np.linalg.norm(data[i] - data[j]), i, j))
+
+    tree = []
+    edges = sorted(edges)
+    uf = UnionFind(n)
+    for edge in edges:
+        if not uf.connected(edge[1], edge[2]):
+            uf.union(edge[1], edge[2])
+            tree.append(edge)
+
+    diameter = edges[-1][0]
+
+    return tree, edges, diameter
+
+
 @MEM.cache
 def cached_emst(data):
-    return panna.EMST(data, epsilon=0.0).find_mst()
+    emst = panna.EMST(data, epsilon=0.0, delta=0.001).find_mst()
+    our_weights = emst[0]
+    if data.shape[0] <= 10000:
+        exact = panna.EMST(data).find_mst_exact()
+        exact_weights = exact[0]
+        tree, _, _ = exact_emst(data)
+        check_weights = np.array([e[0] for e in tree])
+        ic(our_weights, check_weights, exact_weights)
+        ic(sum(our_weights), sum(check_weights), sum(exact_weights))
+        assert sum(our_weights) == sum(check_weights)
+
+    return emst
 
 
 def compute_stats_csv():
@@ -66,6 +129,7 @@ def compute_stats_csv():
         ic(dataset)
         pca_dimensions = 4 if dataset == "pamap2" else None
         _, data = panna.datasets.load(dataset, pca_dimensions=pca_dimensions)
+        data = data[:100]
         n = data.shape[0]
         num_pairs = n * (n - 1) // 2
         weights, _edges = cached_emst(data)

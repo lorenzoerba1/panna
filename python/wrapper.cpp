@@ -223,6 +223,11 @@ struct EMST_exposed {
         return tree_to_pytuple( tree );
     }
 
+    nb::tuple find_mst_exact() {
+        auto tree = inner->exact_tree().second;
+        return tree_to_pytuple( tree );
+    }
+
     // Method to find the MST for the reachability and return results as NumPy arrays
     nb::tuple find_mst_dbscan(unsigned int k) {
         // Call the underlying C++ method
@@ -453,6 +458,8 @@ NB_MODULE( _panna_impl, m ) {
         // Bind the find_mst method
         .def("find_mst_dbscan", &EMST_exposed::find_mst_dbscan, nb::arg("k") = 5,
             "Find the minimum spanning tree (MST) and the k-NNs for each node.")
+            .def("find_mst_exact", &EMST_exposed::find_mst_exact,
+                 "Find the exact minimum spanning tree (MST) for the dataset.")
             .def("find_mst", &EMST_exposed::find_mst,
                  "Find the minimum spanning tree (MST) for the dataset.");
 
