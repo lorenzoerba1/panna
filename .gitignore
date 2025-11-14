@@ -36,3 +36,4 @@ scalability
 .venv/
 /dist
 *.pyc
+/.cache

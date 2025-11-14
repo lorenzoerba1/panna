@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstring>
+#include <omp.h>
 #include <random>
 #include <stdexcept>
 #include <vector>
@@ -382,46 +383,123 @@ namespace panna {
         }
     };
 
+    //! Computes a lower bound to the diameter of the dataset
     template<typename Distance, typename Dataset>
     float approximate_diameter(Dataset & dataset) {
+        const size_t n = dataset.size();
         size_t root = 0;
 
+        // find the farthest from arbitrary point
         float maxdist = 0.0;
-        for(size_t i=0; i<dataset.size(); i++) {
+        size_t maxdist_idx = 0;
+        for(size_t i=0; i<n; i++) {
             float d = Distance::compute(dataset[root], dataset[i]);
+            if (d > maxdist) {
+                maxdist = d;
+                maxdist_idx = i;
+            }
+        }
+
+        // find the farthest from the previously found point
+        maxdist = 0.0;
+        for (size_t i=0; i<n; i++) {
+            float d = Distance::compute(dataset[maxdist_idx], dataset[i]);
             if (d > maxdist) {
                 maxdist = d;
             }
         }
+
+        // now sample pairs, to see if we pick one at larger distance
+        const size_t num_pairs = n * (n-1) / 2;
+        std::uniform_int_distribution<size_t> random_id( 0, n - 1 );
+        float sampled_maxdist = 0.0;
+        const size_t sample_size = static_cast<size_t>(std::min(0.01 * num_pairs, 1e9));
+
+#pragma omp parallel
+        {
+            static std::mt19937_64 rng( omp_get_thread_num() );
+            float private_max_dist_found = 0.0;
+#pragma omp for
+            for ( size_t sample = 0; sample < sample_size; sample++ ) {
+                const size_t a = random_id( rng );
+                const size_t b = random_id( rng );
+                const float dist = Distance::compute( dataset[a], dataset[b] );
+                if (dist > private_max_dist_found) {
+                    private_max_dist_found = dist;
+                }
+            }
+
+#pragma omp critical
+            {
+                if (private_max_dist_found> sampled_maxdist) {
+                    sampled_maxdist = private_max_dist_found ;
+                }
+            }
+        }
         
-        return maxdist * 2.0;
+        return std::max(sampled_maxdist, maxdist);
     }
 
     template <typename Distance, typename Dataset>
-    std::vector<float> distance_histogram( const Dataset& dataset,
-                                           const std::vector<float>& bin_bounds,
-                                           size_t sample_size ) {
+    std::pair<std::vector<float>, std::vector<float>> distance_histogram( const Dataset& dataset,
+                                                                          size_t n_bins,
+                                                                          float min_distance,
+                                                                          float max_distance,
+                                                                          size_t sample_size ) {
         const size_t n = dataset.size();
         const size_t num_pairs = n * ( n - 1 ) / 2;
         const float sampling_factor = ( (float)num_pairs ) / sample_size;
-        auto& rng = get_global_rng();
         std::uniform_int_distribution<size_t> random_id( 0, n - 1 );
-        std::vector<float> counts( bin_bounds.size() + 1 );
-        for ( size_t sample = 0; sample < sample_size; sample++ ) {
-            const size_t a = random_id( rng );
-            const size_t b = random_id( rng );
-            const float dist = Distance::compute( dataset[a], dataset[b] );
-            const auto pp = std::partition_point(
-                bin_bounds.cbegin(), bin_bounds.cend(), [&]( float d ) { return d <= dist; } );
-            const size_t i = std::distance( bin_bounds.cbegin(), pp );
-            counts[i] += 1;
+        std::vector<float> counts( n_bins );
+
+        const double width = ( max_distance - min_distance ) / static_cast<double>( n_bins );
+        std::vector<float> bounds( n_bins + 1 );
+        for ( std::size_t i = 0; i <= n_bins; ++i ) {
+            bounds[i] = min_distance + i * width;
+        }
+        size_t oob = 0;
+        float max_dist_found = 0.0;
+
+#pragma omp parallel
+        {
+            static std::mt19937_64 rng( omp_get_thread_num() );
+            std::vector<float> counts_private( n_bins );
+            size_t private_oob = 0;
+            float private_max_dist_found = 0.0;
+#pragma omp for
+            for ( size_t sample = 0; sample < sample_size; sample++ ) {
+                const size_t a = random_id( rng );
+                const size_t b = random_id( rng );
+                const float dist = Distance::compute( dataset[a], dataset[b] );
+                if ( dist < min_distance || dist > max_distance ) {
+                    // ignore out of bounds, the caller does not care about them
+                    private_oob++;
+                    if (dist > private_max_dist_found) {
+                        private_max_dist_found = dist;
+                    }
+                    continue;
+                }
+                const size_t i =
+                    static_cast<size_t>( std::floor( ( dist - min_distance ) / width ) );
+                counts_private[i] += sampling_factor;
+            }
+
+#pragma omp critical
+            {
+                for ( size_t i = 0; i < counts_private.size(); i++ ) {
+                    counts[i] += counts_private[i];
+                }
+                oob += private_oob;
+                if (private_max_dist_found> max_dist_found) {
+                    max_dist_found = private_max_dist_found ;
+                }
+            }
+        }
+        if (oob > 0) {
+            LOG_WARN("msg", "out of bound pairs!", "oob", oob, "max-dist", max_dist_found);
         }
 
-        for ( size_t i = 0; i < counts.size(); i++ ) {
-            counts[i] *= sampling_factor;
-        }
-
-        return counts;
+        return {counts, bounds};
     }
 
     struct Edge {

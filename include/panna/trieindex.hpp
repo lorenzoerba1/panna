@@ -254,14 +254,15 @@ namespace panna {
         }
 
         // Function to return all colliding couples in a given repetition and concatenation
-        size_t
+        std::pair<size_t, size_t>
         search_pairs_filter( size_t repetition,
                              size_t concatenations,
                              std::vector<Edge>& output,
                              float weight_filter,
                              DSU& dsu_true ) {
             expect( hasher );
-            size_t counter = 0;
+            size_t distance_cnt = 0;
+            size_t collision_cnt = 0;
             std::vector<std::tuple<uint32_t, uint32_t, float>> scratch;
             scratch.reserve( 1 << 16 );
 
@@ -296,18 +297,19 @@ namespace panna {
 
                     PointHandle a = dataset[std::get<0>( scratch[i] )];
                     PointHandle b = dataset[std::get<1>( scratch[i] )];
+                    collision_cnt++;
                     if ( dsu_true.is_connected( a_idx, b_idx ) ) {
                         continue;
                     }
                     float distance = Distance::compute( a, b );
-                    counter++;
+                    distance_cnt++;
                     if ( distance > weight_filter ) {
                         continue;
                     }
                     output.emplace_back( distance, a_idx, b_idx );
                 }
             }
-            return counter;
+            return {distance_cnt, collision_cnt};
         }
 
         // Function to return all colliding couples in a given repetition and concatenation

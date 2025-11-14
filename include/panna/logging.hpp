@@ -67,7 +67,7 @@ static void log(LogLevel level, const char * k, V v, Others... others) {
 }
 
 #define LOG_ERROR(args...) log(panna::LogLevel::ERROR, args)
-#define LOG_WARN(args...)  log(panna::LogLevel::WARN, args)
+#define LOG_WARN(args...)  log(panna::LogLevel::WARNING, args)
 #define LOG_INFO(args...)  log(panna::LogLevel::INFO, args)
 #define LOG_DEBUG(args...) log(panna::LogLevel::DEBUG, args)
 #define LOG_TRACE(args...) log(panna::LogLevel::TRACE, args)

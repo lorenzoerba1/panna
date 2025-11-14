@@ -132,6 +132,7 @@
               scikit-learn
               scipy
               matplotlib
+              certifi
             ]);
 
         container = pkgs.singularity-tools.buildImage {
@@ -139,6 +140,7 @@
           runScript = "#!${pkgs.stdenv.shell}\npython $@";
           contents = [
             python-interpreter
+            pkgs.cacert
           ];
           diskSize = 1024 * 3; # necessary to fit the packages, otherwise the build fails
         };
@@ -170,6 +172,7 @@
                   nanobind
                   icecream
                   scikit-build-core
+                  certifi
                   sigmod-hdbscan.packages.${system}.default
                 ])
             )
