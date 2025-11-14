@@ -67,8 +67,7 @@ namespace panna {
         //! implemented and that has a `squared_norm` method.
         template <typename Point>
         static float compute( Point a, Point b ) {
-            float dot = panna::dot_product( a, b );
-            return std::sqrt( a.squared_norm() + b.squared_norm() - 2 * dot );
+            return panna::euclidean(a, b);
         }
 
         static float to_euclidean(float distance) {

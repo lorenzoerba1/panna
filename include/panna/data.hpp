@@ -270,6 +270,83 @@ namespace panna {
         }
     };
 
+    struct EuclideanPointHandle {
+        size_t dimensions;
+        const float * vector;
+
+        friend std::ostream& operator<<( std::ostream& os, const EuclideanPointHandle& handle ) {
+            std::vector<float> vec( handle.dimensions );
+            os << "[";
+            for (size_t i=0; i<handle.dimensions; i++) {
+                os << handle.vector[i] << ", ";
+            }
+            os << "]";
+            return os;
+        }
+    };
+
+    class EuclideanPoints {
+        size_t dimensions = 0;
+        // OPTIMIZE: use a better layout, with padding and alignment,
+        // so to enable SIMD optimization
+        std::vector<float> data;
+
+    public:
+        using PointHandle = EuclideanPointHandle;
+
+        EuclideanPoints() {
+        }
+
+        EuclideanPoints( size_t dimensions ):
+            dimensions( dimensions ), data( ) {
+        }
+
+        template <typename Archive>
+        void serialize( Archive& ar ) {
+            ar( dimensions, data );
+        }
+
+        friend bool operator==( const EuclideanPoints& a, const EuclideanPoints& b ) {
+            return a.dimensions == b.dimensions && a.data == b.data;
+        }
+
+        void clear() {
+            data.clear();
+        }
+
+        PointHandle operator[]( size_t i ) const {
+            PointHandle handle;
+            handle.dimensions = dimensions;
+            handle.vector = &data[dimensions*i];
+            return handle;
+        }
+
+        template <typename FloatIter>
+        void push_back( FloatIter begin, FloatIter end ) {
+            for (auto it=begin; it!= end; it++)  {
+                data.push_back(*it);
+            }
+        }
+
+        PointHandle push_back_random() {
+            std::vector<float> values;
+            for ( unsigned int i = 0; i < dimensions; i++ ) {
+                values.push_back( sample_random_normal() );
+            }
+
+            push_back( values.begin(), values.end() );
+            return operator[]( size() - 1 );
+        }
+
+        size_t size() const {
+            return data.size() / dimensions;
+        }
+        
+        size_t get_dimensions() const {
+            return dimensions;
+        }
+    };
+
     class SparseSetHandle {
         size_t set_size;
         const uint32_t* tokens;

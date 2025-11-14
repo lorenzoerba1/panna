@@ -28,6 +28,16 @@ namespace panna {
         return sum;
     }
 
+    template<>
+    float dot_product( EuclideanPointHandle a, EuclideanPointHandle b ) {
+        assert( a.dimensions == b.dimensions );
+        float sum = 0.0;
+        for ( size_t i = 0; i < a.dimensions; i++ ) {
+            sum += a.vector[i] * b.vector[i];
+        }
+        return sum;
+    }
+
 #ifdef __AVX2__
     inline static int16_t reduce_sum( __m256i values ) {
         const static unsigned int VALUES_PER_CHUNK = 16;
@@ -102,6 +112,26 @@ namespace panna {
         for (size_t i=0; i<point.size(); i++) {
             point[i] /= norm;
         }
+    }
+
+    
+    template <typename T>
+    static float euclidean( T a, T b );
+
+    template <>
+    float euclidean( NormedPointHandle a, NormedPointHandle b ) {
+        float dot = dot_product( a, b );
+        return std::sqrt( a.squared_norm() + b.squared_norm() - 2 * dot );
+    }
+
+    template <>
+    float euclidean( EuclideanPointHandle a, EuclideanPointHandle b ) {
+        float d = 0;
+        for (size_t i=0; i<a.dimensions; i++) {
+            float diff = a.vector[i] - b.vector[i];
+            d += diff*diff;
+        }
+        return std::sqrt(d);
     }
 
     constexpr static unsigned int ceil_log( unsigned int value ) {

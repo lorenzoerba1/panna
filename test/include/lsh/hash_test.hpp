@@ -94,7 +94,7 @@ namespace panna {
     }
 
     TEST_CASE( "E2LSH collision probability" ) {
-        using Dataset = NormedPoints;
+        using Dataset = EuclideanPoints;
         float r = 1.0;
         for ( size_t dimensions : { 10, 100, 200 } ) {
             E2LSHBuilder<1, Dataset> builder( r, dimensions );

@@ -26,7 +26,7 @@ float compute_recall( const std::vector<std::pair<float, uint32_t>>& ground,
 
 int main( int , char** ) {
     using Distance = panna::EuclideanDistance;
-    using Dataset = panna::NormedPoints;
+    using Dataset = panna::EuclideanPoints;
     using HasherBuilder = panna::E2LSHBuilder<8, Dataset>;
     using Hasher = HasherBuilder::Output;
 
