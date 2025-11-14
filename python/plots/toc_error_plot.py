@@ -76,6 +76,16 @@ if __name__ == "__main__":
             r"ToC-K $\gamma$ 0.2 c 0.1",
             r"ToC-K $\gamma$ 0.5 c 0.1",
             r"ToC-K $\gamma$ 1.0 c 0.1",
+            r"ToC-K $\gamma$ 0.05 c 0.05",
+            r"ToC-K $\gamma$ 0.1 c 0.05",
+            r"ToC-K $\gamma$ 0.2 c 0.05",
+            r"ToC-K $\gamma$ 0.5 c 0.05",
+            r"ToC-K $\gamma$ 1.0 c 0.05",
+            r"ToC-K $\gamma$ 0.05 c 0.1",
+            r"ToC-K $\gamma$ 0.1 c 0.1",
+            r"ToC-K $\gamma$ 0.2 c 0.1",
+            r"ToC-K $\gamma$ 0.5 c 0.1",
+            r"ToC-K $\gamma$ 1.0 c 0.1",
     ]
     handles, labels = ax.get_legend_handles_labels()
     ax.legend_.remove()
