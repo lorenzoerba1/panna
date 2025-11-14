@@ -22,6 +22,7 @@ def compute_flexibility(tree, epsilon, diameter):
         # if cost + remaining * diameter <= (1 + epsilon) * total_cost:
         # if upper_bound - lower_bound <= epsilon * (cost + lower_bound):
         if upper_bound <= epsilon * cost:
+            ic(cost, remaining, upper_bound, diameter)
             return remaining
     return 0
 
@@ -67,21 +68,24 @@ def compute_stats_csv():
         _, data = panna.datasets.load(dataset, pca_dimensions=pca_dimensions)
         n = data.shape[0]
         num_pairs = n * (n - 1) // 2
-        weights, edges = cached_emst(data)
+        weights, _edges = cached_emst(data)
         weights = np.sort(weights)
         diameter = panna.approximate_diameter(data)
         bounds, counts = compute_cumulative_distance_distribution(data, weights[0], diameter)
-        # exact_counts, exact_bounds = exact_hist(data)
 
         plt.figure()
+        plt.title(dataset)
         plt.plot(bounds, counts)
-        # plt.plot(exact_bounds, exact_counts, c="red")
+        
+        # plt.plot(weights, [0.01]*len(weights), '|', color='k')
         with open(outfile, "a") as fp:
             out = csv.writer(fp)
             for epsilon in [0, 0.01, 0.1]:
                 flexibility = compute_flexibility(weights, epsilon, diameter)
-                mass = compute_edge_mass(bounds, counts, weights[-flexibility - 1])
+                max_rigid_weight = weights[-flexibility-1]
+                mass = compute_edge_mass(bounds, counts, max_rigid_weight)
                 plt.axhline(mass, linestyle="dotted")
+                plt.axvline(max_rigid_weight, linestyle="dotted")
                 plt.annotate(f"ε={epsilon}", (0, mass))
                 out.writerow((dataset, epsilon, flexibility, mass, num_pairs, mass/num_pairs))
         plt.savefig(f"examples/cumdist-{dataset}.png", dpi=300)
