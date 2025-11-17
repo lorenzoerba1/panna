@@ -3,6 +3,7 @@ Datasets that can be used to try out different algorithms.
 """
 
 import numpy as np
+import pandas as pd
 import os
 from pathlib import Path
 import urllib.request
@@ -66,6 +67,30 @@ def _load_census(path: Path):
     data = raw["X"].astype(np.float32)
     return data, None, None
 
+def _load_ht(path: Path):
+    # Unzip
+    with zipfile.ZipFile(path, 'r') as zip_ref:
+        zip_ref.extractall(path.parent)
+        # Unzip the inner file "HT_Sensor_dataset.zip"
+        inner_zip_path = path.parent / "gas+sensors+for+home+activity+monitoring/HT_Sensor_dataset.zip"
+        with zipfile.ZipFile(inner_zip_path, 'r') as inner_zip_ref:
+            inner_zip_ref.extractall(path.parent / "gas+sensors+for+home+activity+monitoring")
+    # Load data
+    data_path = path.parent / "gas+sensors+for+home+activity+monitoring/HT_Sensor_dataset/HT_Sensor_dataset.dat"
+    data = pd.read_csv(data_path, sep=r'\s+', header=None).to_numpy().astype(np.float32)
+    data = np.nan_to_num(data)
+    return data, None, None
+
+def _load_chem(path: Path):
+    # Unzip
+    with zipfile.ZipFile(path, 'r') as zip_ref:
+        zip_ref.extractall(path.parent)
+    # Load data
+    data_path = path.parent / "gas+sensor+array+under+dynamic+gas+mixtures/ethylene_CO.txt"
+    data = pd.read_csv(data_path, sep=r'\s+').to_numpy().astype(np.float32)
+    data = np.nan_to_num(data)
+    return data, None, None
+        
 
 _DATASETS_INFO = {
     "landmark-nomic-768-normalized": (
@@ -123,8 +148,16 @@ _DATASETS_INFO = {
         _load_census,
         "euclidean",
     ),
-    # "": "https://archive.ics.uci.edu/static/public/362/gas+sensors+for+home+activity+monitoring.zip",
-    # "": "https://archive.ics.uci.edu/static/public/322/gas+sensor+array+under+dynamic+gas+mixtures.zip",
+     "ht": (
+         "https://archive.ics.uci.edu/static/public/362/gas+sensors+for+home+activity+monitoring.zip",
+            _load_ht,
+            "euclidean",
+    ),
+     "chem": (
+         "https://archive.ics.uci.edu/static/public/322/gas+sensor+array+under+dynamic+gas+mixtures.zip",
+         _load_chem,
+         "euclidean",
+    ),
 }
 
 
