@@ -22,7 +22,7 @@ int main() {
     // const size_t dimensions = 20;
     const size_t rep = 500;
     const size_t n = 5000;
-    using Point = NormedPoints;         // UnitNormPoints or NormedPoints
+    using Point = EuclideanPoints;         // UnitNormPoints or EuclideanPoints
     using Distance = EuclideanDistance; // EuclideanDistance or AngularDistance or CosineDistance
     using Hasher = E2LSH<conc, Point, Distance>;
     // using Hasher = CrossPolytope<conc, Point, Distance, rotations>;
@@ -48,7 +48,7 @@ int main() {
     // points.resize( n );
 
     size_t dimensions = points[0].size();
-    E2LSHBuilder<conc, NormedPoints, Distance> builder( dimensions );
+    E2LSHBuilder<conc, EuclideanPoints, Distance> builder( dimensions );
     EMST<Point, Hasher, Distance> tree( dimensions, rep, builder, points, 0.01, 0.2 );
 
     // Exact computation
@@ -65,7 +65,7 @@ int main() {
     // Exact with predictions
     auto start = std::chrono::high_resolution_clock::now();
     // // for (size_t iter= 0; iter< 3 ; iter++) {
-    // //     EMST<NormedPoints, Hasher, EuclideanDistance> tree( dimensions, rep, builder, points
+    // //     EMST<EuclideanPoints, Hasher, EuclideanDistance> tree( dimensions, rep, builder, points
     // );
 
     const auto& [weight, emst_exact] = tree.find_tree();
@@ -92,16 +92,16 @@ int main() {
     // }
 
      expect(conc_toc <= 4); // more than 4 concatenations is too much in practice!
-     NormedPoints dataset( dimensions );
+     EuclideanPoints dataset( dimensions );
      for ( auto& p : points ) {
          dataset.push_back( p.begin(), p.end() );
      }
      float fp = 0.1;
      float gamma = 0.2;
-     E2LSHBuilder<conc_toc, NormedPoints, Distance> builder_toc( dimensions );
+     E2LSHBuilder<conc_toc, EuclideanPoints, Distance> builder_toc( dimensions );
      auto start_toc = std::chrono::high_resolution_clock::now();
-     auto res = panna::baselines::emst_theory_of_computing<NormedPoints,
-                                                           E2LSHBuilder<conc_toc, NormedPoints, Distance>,
+     auto res = panna::baselines::emst_theory_of_computing<EuclideanPoints,
+                                                           E2LSHBuilder<conc_toc, EuclideanPoints, Distance>,
                                                            Distance>( dataset, gamma, fp, builder_toc );
      auto end_toc = std::chrono::high_resolution_clock::now();
      auto elapsed_toc_s = std::chrono::duration<double>( end_toc - start_toc ).count();
