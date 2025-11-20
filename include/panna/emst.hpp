@@ -98,6 +98,16 @@ namespace panna {
         /// @brief Destructor
         ~EMST() = default;
 
+        /// @brief the number of distances actually computed by the algorithm
+        size_t get_distance_count() const {
+            return distances_computed;
+        }
+
+        /// @brief the number of collisions seen by the algorithm
+        size_t get_collisions_count() const {
+            return num_collisions;
+        }
+
         /// @brief Computes the exact MST with Kruskal's algorithm in a naive way
         /// @return weight of the exact MST
         std::pair<float, std::vector<Edge>> exact_tree() {
@@ -760,6 +770,7 @@ namespace panna {
             dsu_true = DSU( num_data );
             max_weight = std::numeric_limits<float>::infinity();
             distances_computed = 0;
+            num_collisions = 0;
             filter = DSU( num_data );
         }
     }; // closes class

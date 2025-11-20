@@ -214,9 +214,12 @@ struct EMST_exposed {
         inner = std::make_unique<EMST_t>(dimensions, repetitions, builder, data_cpp, delta, epsilon);
     }
 
-    // float find_mst() {
-    //     return inner->find_tree().first;
-    // }
+    nb::dict stats() {
+        nb::dict ret;
+        ret["distance_count"] = inner->get_distance_count();
+        ret["collisions_count"] = inner->get_collisions_count();
+        return ret;
+    }
 
     nb::tuple find_mst() {
         auto tree = inner->find_tree().second;
@@ -458,9 +461,11 @@ NB_MODULE( _panna_impl, m ) {
         // Bind the find_mst method
         .def("find_mst_dbscan", &EMST_exposed::find_mst_dbscan, nb::arg("k") = 5,
             "Find the minimum spanning tree (MST) and the k-NNs for each node.")
-            .def("find_mst_exact", &EMST_exposed::find_mst_exact,
-                 "Find the exact minimum spanning tree (MST) for the dataset.")
-            .def("find_mst", &EMST_exposed::find_mst,
-                 "Find the minimum spanning tree (MST) for the dataset.");
+        .def("find_mst_exact", &EMST_exposed::find_mst_exact,
+             "Find the exact minimum spanning tree (MST) for the dataset.")
+        .def("find_mst", &EMST_exposed::find_mst,
+             "Find the minimum spanning tree (MST) for the dataset.")
+        .def("stats", &EMST_exposed::stats,
+             "Return a dictionary with execution-related statistics");
 
 }

@@ -217,7 +217,7 @@
             mlpack
             armadillo
             hl-bin
-            tree-similarity
+            # tree-similarity
           ];
 
           NIX_ENFORCE_NO_NATIVE = false;
