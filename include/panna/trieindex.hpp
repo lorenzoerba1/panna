@@ -70,7 +70,7 @@ namespace panna {
             return dataset.size();
         }
 
-        size_t memory_usage() const {
+        double memory_usage() const {
             size_t total_size = sizeof( *this );
             total_size += dataset.size() * sizeof( PointHandle );
             total_size += lsh_maps.size() * sizeof( PrefixMap<THashValue> );
@@ -79,7 +79,7 @@ namespace panna {
                 total_size += map.memory_usage();
             }
             // Return in Gigabytes
-            return total_size / (1024 * 1024 * 1024);
+            return static_cast<double>(total_size) / (1024.0 * 1024.0 * 1024.0);
         }
 
         size_t num_concatenations() const {

@@ -86,13 +86,13 @@ namespace panna {
             local_edges.resize( MAX_REPETITIONS );
             local_confirmed.resize( MAX_REPETITIONS );
             // Measure the size of the index
-            size_t index_size = table.memory_usage();
+            double index_size = table.memory_usage();
             LOG_INFO("msg", "Index constructed",
                      "L", MAX_REPETITIONS,
                      "K", MAX_HASHBITS,
                      "num_data", num_data,
                      "delta", delta,
-                     "index_size_Mbytes", index_size);
+                     "index_size_Gbytes", index_size);
         };
 
         /// @brief Destructor
