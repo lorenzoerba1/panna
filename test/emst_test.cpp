@@ -21,7 +21,7 @@ int main() {
     const size_t conc = 12;
     // const size_t dimensions = 20;
     const size_t rep = 500;
-    const size_t n = 5000;
+    const size_t n = 100;
     using Point = EuclideanPoints;         // UnitNormPoints or EuclideanPoints
     using Distance = EuclideanDistance; // EuclideanDistance or AngularDistance or CosineDistance
     using Hasher = E2LSH<conc, Point, Distance>;
@@ -45,11 +45,11 @@ int main() {
 
     std::vector<std::vector<float>> points =
         H5Easy::load<std::vector<std::vector<float>>>( file, "/train" );
-    // points.resize( n );
+    points.resize( n );
 
     size_t dimensions = points[0].size();
     E2LSHBuilder<conc, EuclideanPoints, Distance> builder( dimensions );
-    EMST<Point, Hasher, Distance> tree( dimensions, rep, builder, points, 0.01, 0.2 );
+    EMST<Point, Hasher, Distance> tree( dimensions, rep, builder, points, 0.01, 0.0 );
 
     // Exact computation
     // auto start_exact = std::chrono::high_resolution_clock::now();
@@ -76,7 +76,7 @@ int main() {
              //"weight-difference", weight - weight_exact,
              "elapsed_s", elapsed);
     
-    tree.find_tree_hist(emst_exact);
+    // tree.find_tree_hist(emst_exact);
     exit(0);
 
     // // // Approximate with predictions
@@ -91,30 +91,30 @@ int main() {
     //             "elapsed_s", elapsed.count());
     // }
 
-     expect(conc_toc <= 4); // more than 4 concatenations is too much in practice!
-     EuclideanPoints dataset( dimensions );
-     for ( auto& p : points ) {
-         dataset.push_back( p.begin(), p.end() );
-     }
-     float fp = 0.1;
-     float gamma = 0.2;
-     E2LSHBuilder<conc_toc, EuclideanPoints, Distance> builder_toc( dimensions );
-     auto start_toc = std::chrono::high_resolution_clock::now();
-     auto res = panna::baselines::emst_theory_of_computing<EuclideanPoints,
-                                                           E2LSHBuilder<conc_toc, EuclideanPoints, Distance>,
-                                                           Distance>( dataset, gamma, fp, builder_toc );
-     auto end_toc = std::chrono::high_resolution_clock::now();
-     auto elapsed_toc_s = std::chrono::duration<double>( end_toc - start_toc ).count();
-     float weight_toc = res.first;
-     LOG_INFO( "msg",
-               "computed toc EMST baseline",
-               "toc-emst-weight",
-               weight_toc,
-               "ratio-toc",
-               weight_toc / weight,//_exact,
-               "elapsed_s",
-               elapsed_toc_s,
-               "time_ratio",
-               elapsed_toc_s / elapsed );
+     // expect(conc_toc <= 4); // more than 4 concatenations is too much in practice!
+     // EuclideanPoints dataset( dimensions );
+     // for ( auto& p : points ) {
+     //     dataset.push_back( p.begin(), p.end() );
+     // }
+     // float fp = 0.1;
+     // float gamma = 0.2;
+     // E2LSHBuilder<conc_toc, EuclideanPoints, Distance> builder_toc( dimensions );
+     // auto start_toc = std::chrono::high_resolution_clock::now();
+     // auto res = panna::baselines::emst_theory_of_computing<EuclideanPoints,
+     //                                                       E2LSHBuilder<conc_toc, EuclideanPoints, Distance>,
+     //                                                       Distance>( dataset, gamma, fp, builder_toc );
+     // auto end_toc = std::chrono::high_resolution_clock::now();
+     // auto elapsed_toc_s = std::chrono::duration<double>( end_toc - start_toc ).count();
+     // float weight_toc = res.first;
+     // LOG_INFO( "msg",
+     //           "computed toc EMST baseline",
+     //           "toc-emst-weight",
+     //           weight_toc,
+     //           "ratio-toc",
+     //           weight_toc / weight,//_exact,
+     //           "elapsed_s",
+     //           elapsed_toc_s,
+     //           "time_ratio",
+     //           elapsed_toc_s / elapsed );
     return 0;
 }

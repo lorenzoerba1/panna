@@ -11,6 +11,7 @@
 #include <type_traits>
 
 #include "cereal/archives/binary.hpp"
+#include "panna/expect.hpp"
 #include "panna/kdtree.hpp"
 #include "panna/logging.hpp"
 #include "panna/lsh/predicates.hpp"
@@ -374,7 +375,7 @@ namespace panna {
         } // End search couples
 
         float fail_probability( float dist, size_t concat, size_t rep ) {
-            return failure_probability( *hasher, dist, concat, rep + 1, lsh_maps.size() );
+            return failure_probability( *hasher, dist, concat, rep, lsh_maps.size() );
         }
 
         // FIXME: I don't think this belongs here, form an API standpoint
