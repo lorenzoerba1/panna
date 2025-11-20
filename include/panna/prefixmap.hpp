@@ -506,6 +506,16 @@ namespace panna {
             ar( indices, hashes );
         }
 
+        size_t memory_usage() const {
+            size_t total_size = sizeof( *this );
+            total_size += indices.size() * sizeof( uint32_t );
+            total_size += hashes.size() * sizeof( THashValue );
+            for ( const auto& rd : parallel_rebuilding_data ) {
+                total_size += rd.capacity() * sizeof( HashedVecIdx );
+            }
+            return total_size;
+        }
+
         friend bool operator==( const PrefixMap<THashValue>& a, const PrefixMap<THashValue>& b ) {
             return a.indices == b.indices && a.hashes == b.hashes &&
                    a.parallel_rebuilding_data == b.parallel_rebuilding_data;
