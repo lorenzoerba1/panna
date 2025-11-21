@@ -724,8 +724,9 @@ namespace panna {
             float weight = 0.0f;
             size_t idx = 0;
             while (prob < delta && idx < top.size()) {
-                float w =  top[idx].weight ;
-                prob += table.fail_probability( w, i, j );
+                const float w =  top[idx].weight ;
+                const float fp = table.fail_probability( w, i, j ); 
+                prob += fp;
                 weight += w;
                 idx += 1;
             }

@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstddef>
 
+#include "panna/expect.hpp"
 #include "panna/lsh/tensoring.hpp"
 
 namespace panna {
@@ -17,6 +18,7 @@ namespace panna {
                                       size_t concatenations,
                                       size_t repetitions,
                                       size_t max_repetitions ) {
+        expect(repetitions <= max_repetitions);
         float collision_probability = hasher.collision_probability( distance );
         float p_cur =
             std::pow( 1 - std::pow( collision_probability, concatenations ), repetitions );
@@ -34,6 +36,7 @@ namespace panna {
                                       size_t concatenations,
                                       size_t repetitions,
                                       size_t max_repetitions ) {
+        expect(repetitions <= max_repetitions);
         auto cur_left_concatenations = ( concatenations + 1 ) / 2;
         auto cur_right_concatenations = concatenations - cur_left_concatenations;
 
