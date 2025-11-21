@@ -82,6 +82,27 @@
             cp -r include/* $out/include
           '';
         };
+        # TODO install the damn thing from source
+        # tree-similarity = pkgs.stdenv.mkDerivation rec {
+        #   name = "tree-similarity";
+        #   version = "0.1.1";
+        #   src = pkgs.fetchFromGitHub {
+        #     owner = "DatabaseGroup";
+        #     repo = "tree-similarity";
+        #     rev = "v${version}";
+        #     hash = "sha256-f20ad2ffb2852ebee6033775cdaa369e0cf4b7fd";
+        #   };
+        #   buildInputs = with pkgs; [
+        #     cmake
+        #     ninja
+        #   ];
+        #   installPhase = ''
+        #     mkdir $out/build
+        #     cd $out/build
+        #     cmake ..
+        #     ninja install
+        #   '';
+        # };
 
         panna-python = python.pkgs.buildPythonPackage {
           pname = "panna";
@@ -196,6 +217,7 @@
             mlpack
             armadillo
             hl-bin
+            tree-similarity
           ];
 
           NIX_ENFORCE_NO_NATIVE = false;
