@@ -8,7 +8,7 @@ import sys
 import os
 sys.path.append(os.path.join(Path(__file__).resolve().parents[2]))
 
-import _panna_impl as panna
+import panna
 
 if __name__ == "__main__":
     panna.set_seed(1989)
@@ -23,7 +23,7 @@ if __name__ == "__main__":
          "sift-128-euclidean.hdf5",
          "deep-image-96-angular.hdf5",
     ]
-    path_prefix = Path(__file__).resolve().parents[2]
+    path_prefix = Path(__file__).resolve().parents[1]
 
     dataset_folder = os.path.join(path_prefix, "datasets")
     results_folder = os.path.join(path_prefix, "results")
@@ -35,9 +35,9 @@ if __name__ == "__main__":
                 
                 for delta in deltas:
                     
-                    emst = panna.EMST(data, delta= delta, epsilon=0.2)
+                    emst = panna.EMST(data, delta= delta, epsilon=0)
                     start_time = perf_counter()
-                    weight = emst.find_exact_mst()
+                    weight = emst.find_mst()
                     end_time = perf_counter()
                     elapsed_time = end_time - start_time
                     f_out.write(f"K+, {data.shape[0]}, {path}, {weight}, {elapsed_time}, {delta}\n")
@@ -45,7 +45,7 @@ if __name__ == "__main__":
                     for epsilon in eps:
                         emst = panna.EMST(data, delta= delta, epsilon=epsilon)
                         start_time = perf_counter()
-                        weight = emst.find_epsilon_mst()
+                        weight = emst.find_mst()
                         end_time = perf_counter()
                         elapsed_time = end_time - start_time
                         # We have to write                     
