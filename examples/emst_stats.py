@@ -100,22 +100,9 @@ def exact_emst(data):
 
 @MEM.cache
 def cached_emst(data):
-    emst = panna.EMST(data, epsilon=0.0, delta=0.001).find_mst()
-    our_weights = emst[0]
-    recomputed_weights = [
-        np.linalg.norm(data[e[0]] - data[e[1]])
-        for e in emst[1]
-    ]
-    if data.shape[0] <= 10000:
-        exact = panna.EMST(data).find_mst_exact()
-        exact_weights = exact[0]
-        tree, _, _ = exact_emst(data)
-        check_weights = np.array([e[0] for e in tree])
-        ic(recomputed_weights, our_weights, check_weights, exact_weights)
-        ic(sum(recomputed_weights), sum(our_weights), sum(check_weights), sum(exact_weights))
-        ic(emst[1][:10], tree[:10])
-        assert sum(our_weights) == sum(check_weights)
-
+    emst_algo = panna.EMST(data, epsilon=0.0, delta=0.001)
+    emst = emst_algo.find_mst()
+    ic(emst_algo.stats())
     return emst
 
 
@@ -134,7 +121,6 @@ def compute_stats_csv():
         ic(dataset)
         pca_dimensions = 4 if dataset == "pamap2" else None
         _, data = panna.datasets.load(dataset, pca_dimensions=pca_dimensions)
-        data = data[:100]
         n = data.shape[0]
         num_pairs = n * (n - 1) // 2
         weights, _edges = cached_emst(data)
