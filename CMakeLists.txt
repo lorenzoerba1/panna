@@ -64,10 +64,7 @@ if (NOT SKBUILD)
 
   add_executable(mare test/mare_test.cpp)
   target_link_libraries(mare PRIVATE HighFive)
-
-  add_executable(dtb test/DTB_test.cpp)
-  target_link_libraries(dtb PRIVATE  HighFive)
-
+  
   # if (HighFive_FOUND)
   #   add_executable(glove examples/glove.cpp)
   #   target_link_libraries(glove HighFive dbg_macro)
