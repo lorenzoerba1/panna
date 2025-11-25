@@ -11,7 +11,7 @@ sys.path.append(os.path.join(Path(__file__).resolve().parents[2]))
 import panna
 
 if __name__ == "__main__":
-    panna.set_seed(1989)
+    panna.set_seed(360)
     deltas = [0.01, 0.05, 0.1, 0.2]
     eps = [0.2, 0.5, 1.0, 5.0, 10.0, 20.0]
     paths = [
@@ -31,23 +31,26 @@ if __name__ == "__main__":
     with open(os.path.join(results_folder, "weight_results.csv"), "a+") as f_out:
         for path in paths:
             with h5py.File(os.path.join(dataset_folder, path), "r") as f:
-                data = np.array(f["train"]).astype(np.float32)[:5000]
+                data = np.array(f["train"]).astype(np.float32)[:1000]
                 
                 for delta in deltas:
                     
                     emst = panna.EMST(data, delta= delta, epsilon=0)
                     start_time = perf_counter()
-                    weight = emst.find_mst()
+                    edges = emst.find_mst()
                     end_time = perf_counter()
                     elapsed_time = end_time - start_time
+                    # 
+                    weight = sum(edges[0])
                     f_out.write(f"K+, {data.shape[0]}, {path}, {weight}, {elapsed_time}, {delta}\n")
                     
                     for epsilon in eps:
                         emst = panna.EMST(data, delta= delta, epsilon=epsilon)
                         start_time = perf_counter()
-                        weight = emst.find_mst()
+                        edges = emst.find_mst()
                         end_time = perf_counter()
                         elapsed_time = end_time - start_time
+                        weight = sum(edges[0])
                         # We have to write                     
                         # outfile <<"K± e" << ep << ", " << points.size() << ", " << name << ", " << weight << ", "<< duration << ", " << prob << std::endl;
                         f_out.write(f"K± e{epsilon}, {data.shape[0]}, {path}, {weight}, {elapsed_time}, {delta}\n")
