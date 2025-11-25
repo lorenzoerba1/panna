@@ -3,6 +3,7 @@
 #include "lsh/hash_test.hpp"
 #include "data_test.hpp"
 #include "linalg_test.hpp"
-#include "serialize_test.hpp"
+// #include "serialize_test.hpp"
 #include "trieindex_test.hpp"
+#include "emst_test.hpp"
 

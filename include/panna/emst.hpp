@@ -217,6 +217,7 @@ namespace panna {
                                               "stop.confirmed_weight", stop.confirmed_weight,
                                               "stop.heaviest_confirmed_edge", stop.heaviest_confirmed_edge,
                                               "stop.edges_to_confirm", stop.edges_to_confirm,
+                                              "heaviest_edge", top[num_data-2].weight,
                                               "weight_lower_bound", weight_lower_bound,
                                               "should_stop", should_stop );
                                     // clang-format on

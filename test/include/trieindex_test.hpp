@@ -53,7 +53,6 @@ namespace panna {
                         }
                     }
                 }
-                dbg( num_correct, expected_correct );
                 // Only fail if the recall is far away from the expectation.
                 REQUIRE( num_correct >= 0.9 * expected_correct );
             }
