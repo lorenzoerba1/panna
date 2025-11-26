@@ -561,11 +561,13 @@ namespace panna {
                                         for ( const auto& edge : top ) {
                                             tree.emplace_back( static_cast<float>( ( edge ).a ),
                                                                static_cast<float>( ( edge ).b ),
-                                                                 edge.weight  ); 
+                                                               edge.weight );
                                         }
                                     }
                                     // If the weight hasn't changed epsilon*old_weight
-                                    else if ( i <= 5 && std::abs( old_weight - tree_weight ) / old_weight < epsilon ) {
+                                    else if ( i <= 5 &&
+                                              std::abs( old_weight - tree_weight ) / old_weight <
+                                                  epsilon ) {
                                         tree.clear();
                                         LOG_INFO("msg", "Tree weight converged",
                                                  "old_weight", old_weight,
@@ -630,8 +632,8 @@ namespace panna {
         void enumerate_edges( size_t i, size_t j, std::vector<Edge>& Tu_local ) {
             // Discover edges that share the same prefix at iteration i, j
             size_t cnt_dist, cnt_collisions;
-            std::tie( cnt_dist, cnt_collisions ) =
-                table.search_pairs_filter( j, i, Tu_local, max_weight, filter );
+            std::tie( cnt_dist, cnt_collisions ) = table.search_pairs_different_groups(
+                j, i, Tu_local, max_weight, [&]( uint32_t x ) { return filter.find( x ); } );
 #pragma omp atomic
             distances_computed += cnt_dist;
 #pragma omp atomic
