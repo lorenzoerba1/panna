@@ -36,7 +36,7 @@ int main () {
         }
 
         // Exact computation
-        EMST<Point, Hasher, Distance> tree( dimension, rep, builder, points, 0.0 );
+        EMST<Point, Hasher, Distance> tree( dimension, rep, builder, points, 0 );
         EMST<Point, Hasher, Distance> approx_tree( dimension, rep, builder, points, 0.1 );
         // auto start = std::chrono::high_resolution_clock::now();
         // float weight = tree.exact_tree();

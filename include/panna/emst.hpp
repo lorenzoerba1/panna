@@ -27,7 +27,7 @@ namespace panna {
         uint32_t MAX_HASHBITS;
         Index<Dataset, Hasher, Distance> table;
         uint32_t num_data{ 0 };
-        double delta{ 0.01 };
+        float delta{ 0.01 };
         const float epsilon{ 0.2 };
         DSU dsu_true;
         DSU filter;
@@ -63,8 +63,8 @@ namespace panna {
               const size_t repetitions,
               const typename Hasher::Builder builder,
               std::vector<std::vector<float>>& data_in,
-              const double delta_in = 0.01,
-              const float epsilon = 0.2 ):
+              const float delta_in = 0.01f,
+              const float epsilon = 0.2f ):
             dimensionality( dimensions ),
             table( Index<Dataset, Hasher, Distance>( dimensions, builder, repetitions ) ),
             num_data( data_in.size() ),
@@ -246,6 +246,7 @@ namespace panna {
                 }
                 LOG_INFO( "msg", "finished prefix", "prefix", i );
             }
+
             // This is just a sanity check to see if dsu works as intended
             is_connected( tree );
             LOG_INFO( "msg", "EMST finished", "distances_computed", distances_computed, "num_collisions", num_collisions );
@@ -733,13 +734,18 @@ namespace panna {
             float prob = 0.0f;
             float weight = 0.0f;
             size_t idx = 0;
-            while (prob < delta && idx < top.size()) {
-                const float w =  top[idx].weight ;
-                const float fp = table.fail_probability( w, i, j ); 
+            while ( idx < top.size() ) {
+                const float w = top[idx].weight;
+                const float fp = table.fail_probability( w, i, j );
+
+                if ( prob + fp > delta ) {
+                    break;
+                }
                 prob += fp;
                 weight += w;
                 idx += 1;
             }
+
             size_t edges_to_confirm = top.size() - idx;
 
             float total_weight = weight;

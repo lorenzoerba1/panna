@@ -45,7 +45,7 @@ int main() {
 
     std::vector<std::vector<float>> points =
         H5Easy::load<std::vector<std::vector<float>>>( file, "/train" );
-    points.resize( n );
+    // points.resize( n );
 
     size_t dimensions = points[0].size();
     E2LSHBuilder<conc, EuclideanPoints, Distance> builder( dimensions );
