@@ -5,7 +5,6 @@
 #include <cmath>
 #include <random>
 
-#include "dbg.h"
 #include "panna/data.hpp"
 #include "panna/linalg.hpp"
 #include "panna/rand.hpp"

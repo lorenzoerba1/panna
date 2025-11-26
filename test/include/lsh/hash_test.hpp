@@ -97,8 +97,8 @@ namespace panna {
         using Dataset = EuclideanPoints;
         float r = 1.0;
         for ( size_t dimensions : { 10, 100, 200 } ) {
-            E2LSHBuilder<1, Dataset> builder( r, dimensions );
-            test_hash_collision_probability<Dataset, EuclideanDistance, E2LSHBuilder<1, Dataset>>(
+            E2LSHBuilder<1, Dataset, EuclideanDistance> builder( r, dimensions );
+            test_hash_collision_probability<Dataset, EuclideanDistance, E2LSHBuilder<1, Dataset, EuclideanDistance>>(
                 builder, dimensions, 4096 );
         }
     }
@@ -253,7 +253,6 @@ namespace panna {
 
         for ( float d : { 0.1, 0.2, 0.3 } ) {
             float fp = failure_probability( tensored, d, 4, 1, tensored.get_repetitions() );
-            dbg( d, fp );
         }
     }
 

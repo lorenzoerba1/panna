@@ -47,10 +47,9 @@ if (NOT SKBUILD)
   # FetchContent_MakeAvailable(Catch2)
   find_package(Catch2)
 
-
-  # include_directories("test/include")
-  # add_executable(tests test/tests.cpp)
-  # target_link_libraries(tests PRIVATE Catch2::Catch2WithMain dbg_macro)
+  include_directories("test/include")
+  add_executable(tests test/tests.cpp)
+  target_link_libraries(tests PRIVATE Catch2::Catch2WithMain)
 
   find_package(HighFive)
   add_executable(emst test/emst_test.cpp)
@@ -64,7 +63,7 @@ if (NOT SKBUILD)
 
   add_executable(mare test/mare_test.cpp)
   target_link_libraries(mare PRIVATE HighFive)
-  
+
   # if (HighFive_FOUND)
   #   add_executable(glove examples/glove.cpp)
   #   target_link_libraries(glove HighFive dbg_macro)
