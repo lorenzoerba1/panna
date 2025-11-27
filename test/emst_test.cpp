@@ -21,10 +21,10 @@ int main() {
     const size_t conc = 12;
     // const size_t dimensions = 20;
     const size_t rep = 500;
-    const size_t n = 100;
-    using Point = EuclideanPoints;         // UnitNormPoints or EuclideanPoints
+    const size_t n = 10000;
+    using Dataset = NormedPoints;         // UnitNormPoints or EuclideanPoints
     using Distance = EuclideanDistance; // EuclideanDistance or AngularDistance or CosineDistance
-    using Hasher = E2LSH<conc, Point, Distance>;
+    using Hasher = E2LSH<conc, Dataset, Distance>;
     // using Hasher = CrossPolytope<conc, Point, Distance, rotations>;
 
     // CrossPolytopeBuilder<conc, Point, Distance, rotations> builder( dimensions );
@@ -45,11 +45,11 @@ int main() {
 
     std::vector<std::vector<float>> points =
         H5Easy::load<std::vector<std::vector<float>>>( file, "/train" );
-    // points.resize( n );
+    points.resize( n );
 
     size_t dimensions = points[0].size();
-    E2LSHBuilder<conc, EuclideanPoints, Distance> builder( dimensions );
-    EMST<Point, Hasher, Distance> tree( dimensions, rep, builder, points, 0.01, 0.0 );
+    E2LSHBuilder<conc, Dataset, Distance> builder( dimensions );
+    EMST<Dataset, Hasher, Distance> tree( dimensions, rep, builder, points, 0.01, 0.0 );
 
     // Exact computation
     // auto start_exact = std::chrono::high_resolution_clock::now();
@@ -65,7 +65,7 @@ int main() {
     // Exact with predictions
     auto start = std::chrono::high_resolution_clock::now();
     // // for (size_t iter= 0; iter< 3 ; iter++) {
-    // //     EMST<EuclideanPoints, Hasher, EuclideanDistance> tree( dimensions, rep, builder, points
+    // //     EMST<Point, Hasher, EuclideanDistance> tree( dimensions, rep, builder, points
     // );
 
     const auto& [weight, emst_exact] = tree.find_tree();
@@ -92,16 +92,16 @@ int main() {
     // }
 
      // expect(conc_toc <= 4); // more than 4 concatenations is too much in practice!
-     // EuclideanPoints dataset( dimensions );
+     // Point dataset( dimensions );
      // for ( auto& p : points ) {
      //     dataset.push_back( p.begin(), p.end() );
      // }
      // float fp = 0.1;
      // float gamma = 0.2;
-     // E2LSHBuilder<conc_toc, EuclideanPoints, Distance> builder_toc( dimensions );
+     // E2LSHBuilder<conc_toc, Point, Distance> builder_toc( dimensions );
      // auto start_toc = std::chrono::high_resolution_clock::now();
-     // auto res = panna::baselines::emst_theory_of_computing<EuclideanPoints,
-     //                                                       E2LSHBuilder<conc_toc, EuclideanPoints, Distance>,
+     // auto res = panna::baselines::emst_theory_of_computing<Point,
+     //                                                       E2LSHBuilder<conc_toc, Point, Distance>,
      //                                                       Distance>( dataset, gamma, fp, builder_toc );
      // auto end_toc = std::chrono::high_resolution_clock::now();
      // auto elapsed_toc_s = std::chrono::duration<double>( end_toc - start_toc ).count();

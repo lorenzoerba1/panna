@@ -131,12 +131,12 @@ struct TrieIndex {
                                        "`crosspolytope` or `simhash`" );
             }
         } else if ( distance == "euclidean" ) {
-            using Builder = panna::E2LSHBuilder<8, panna::EuclideanPoints, panna::EuclideanDistance>;
+            using Builder = panna::E2LSHBuilder<8, panna::NormedPoints, panna::EuclideanDistance>;
             Builder builder( 0.0, dimensions );
-            panna::Index<panna::EuclideanPoints, Builder::Output, panna::EuclideanDistance> index(
+            panna::Index<panna::NormedPoints, Builder::Output, panna::EuclideanDistance> index(
                 dimensions, builder, repetitions );
             inner = std::make_unique<
-                ConcreteIndex<panna::EuclideanPoints, Builder::Output, panna::EuclideanDistance>>(
+                ConcreteIndex<panna::NormedPoints, Builder::Output, panna::EuclideanDistance>>(
                 index );
         } else {
             throw nb::value_error( "Unsupported distance metric" );
@@ -176,7 +176,7 @@ nb::tuple tree_to_pytuple(std::vector<panna::Edge> & tree) {
 }
 
 struct EMST_exposed {
-    using EMST_t = panna::EMST<panna::EuclideanPoints, panna::E2LSH<12, panna::EuclideanPoints, panna::EuclideanDistance>, panna::EuclideanDistance>;
+    using EMST_t = panna::EMST<panna::NormedPoints, panna::E2LSH<12, panna::NormedPoints, panna::EuclideanDistance>, panna::EuclideanDistance>;
     std::unique_ptr<EMST_t> inner;
 
     // Constructor to be called from Python. It takes a NumPy array and optional keyword arguments.
@@ -208,7 +208,7 @@ struct EMST_exposed {
             }
         }
 
-        using Hasher = panna::E2LSH<12, panna::EuclideanPoints, panna::EuclideanDistance>;
+        using Hasher = panna::E2LSH<12, panna::NormedPoints, panna::EuclideanDistance>;
         Hasher::Builder builder(0.0, dimensions);
 
         inner = std::make_unique<EMST_t>(dimensions, repetitions, builder, data_cpp, delta, epsilon);
@@ -328,7 +328,7 @@ nb::tuple emst_theory_of_computing( nb::ndarray<float, nb::c_contig>& data_in, n
 
     size_t nrows = data_in.shape( 0 );
     size_t dimensionality = data_in.shape( 1 );
-    panna::EuclideanPoints dataset( dimensionality );
+    panna::NormedPoints dataset( dimensionality );
     float* data = data_in.data();
     for ( size_t row = 0; row < nrows; row++ ) {
         float* begin = data + row * dimensionality;
@@ -340,11 +340,11 @@ nb::tuple emst_theory_of_computing( nb::ndarray<float, nb::c_contig>& data_in, n
 
     const size_t K = 3; // using a larger value entails using way too many repetitions in the last iterations
     using Distance = panna::EuclideanDistance;
-    using Hasher = panna::E2LSH<K, panna::EuclideanPoints, Distance>;
+    using Hasher = panna::E2LSH<K, panna::NormedPoints, Distance>;
     Hasher::Builder builder( 0.0, dimensionality );
 
     auto res =
-        panna::baselines::emst_theory_of_computing<panna::EuclideanPoints, Hasher::Builder, Distance>(
+        panna::baselines::emst_theory_of_computing<panna::NormedPoints, Hasher::Builder, Distance>(
             dataset, gamma, delta, builder );
     auto tree = res.second;
 
@@ -376,7 +376,7 @@ distance_histogram( nb::ndarray<float, nb::c_contig>& data_in,
                     size_t sample_size ) {
     size_t nrows = data_in.shape( 0 );
     size_t dimensionality = data_in.shape( 1 );
-    panna::EuclideanPoints dataset( dimensionality );
+    panna::NormedPoints dataset( dimensionality );
     float* data = data_in.data();
     for ( size_t row = 0; row < nrows; row++ ) {
         float* begin = data + row * dimensionality;
@@ -414,7 +414,7 @@ float
 approximate_diameter( nb::ndarray<float, nb::c_contig>& data_in ) {
     size_t nrows = data_in.shape( 0 );
     size_t dimensionality = data_in.shape( 1 );
-    panna::EuclideanPoints dataset( dimensionality );
+    panna::NormedPoints dataset( dimensionality );
     float* data = data_in.data();
     for ( size_t row = 0; row < nrows; row++ ) {
         float* begin = data + row * dimensionality;

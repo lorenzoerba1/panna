@@ -37,6 +37,24 @@ include_directories("external")
 # FetchContent_Declare(dbg_macro GIT_REPOSITORY https://github.com/sharkdp/dbg-macro FIND_PACKAGE_ARGS)
 # FetchContent_MakeAvailable(dbg_macro)
 
+# Get the current git commit hash
+execute_process(
+  COMMAND git rev-parse --short HEAD
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  OUTPUT_VARIABLE GIT_COMMIT_HASH
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+# Configure a header file to pass the git hash to the source code
+configure_file(
+  ${CMAKE_SOURCE_DIR}/include/panna/git_version.hpp.in
+  ${CMAKE_BINARY_DIR}/panna/git_version.hpp
+  @ONLY
+)
+
+# Add the generated header directory to the include paths
+include_directories(${CMAKE_BINARY_DIR})
+
 if (NOT SKBUILD)
   # FetchContent_Declare(
   #   Catch2

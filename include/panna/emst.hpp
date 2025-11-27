@@ -8,6 +8,7 @@
 #include "panna/dsu.hpp"
 #include "panna/logging.hpp"
 #include "panna/trieindex.hpp"
+#include "panna/git_version.hpp"
 
 namespace panna {
 
@@ -71,6 +72,8 @@ namespace panna {
             epsilon( epsilon ),
             dsu_true( DSU( num_data ) ),
             filter( DSU( num_data ) ) {
+            LOG_INFO("git-version", GIT_COMMIT_HASH);
+
             // Insert the data
             for ( auto& point : data_in ) {
                 table.insert( point.begin(), point.end() );
