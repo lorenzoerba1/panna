@@ -175,12 +175,16 @@ namespace panna {
                                                std::make_move_iterator( local_top.end() ) );
 
                     // FIXME: make the batch size a parameter
-#pragma omp critical
-                    {
-                        completed_repetitions++;
-                        if ( completed_repetitions % 50 == 0 ||
-                             completed_repetitions >= MAX_REPETITIONS ) {
-                            edges.insert( edges.end(),
+                    size_t current_repetition;
+                    #pragma omp atomic capture
+                    current_repetition = ++completed_repetitions;
+
+                    if ( current_repetition % 50 == 0 || current_repetition >= MAX_REPETITIONS ) {
+                        #pragma omp critical
+                        {
+                            // completed_repetitions++; // Already incremented
+                            if ( true ) { // Condition already checked
+                                edges.insert( edges.end(),
                                           std::make_move_iterator( top.begin() ),
                                           std::make_move_iterator( top.end() ) );
 
@@ -241,6 +245,9 @@ namespace panna {
                                 }
                                 // Lose the unused edges, MST is composable wrt to edge partitioning
                                 edges.clear();
+                                }
+                                // Lose the unused edges, MST is composable wrt to edge partitioning
+                                edges.clear();
                             }
                         }
                     }
@@ -288,14 +295,18 @@ namespace panna {
                     std::sort(local_Tu.begin(), local_Tu.end());
 
                     local_confirmed[j].insert( local_confirmed[j].end(),
-                                               std::make_move_iterator( local_Tu.begin() ),
-                                               std::make_move_iterator( local_Tu.end() ) );
+                                               std::make_move_iterator( local_top.begin() ),
+                                               std::make_move_iterator( local_top.end() ) );
 
-                    if ( j%50 == 0 )
+                    size_t current_repetition;
+                    #pragma omp atomic capture
+                    current_repetition = ++completed_repetitions;
+
+                    if ( current_repetition % 50 == 0 || current_repetition >= MAX_REPETITIONS )
                     {
                     #pragma omp critical
                     {
-                        completed_repetitions+= 50;
+                        // completed_repetitions+= 50; // Already incremented
 
                         for ( size_t local_index = 0; local_index < MAX_REPETITIONS; local_index++ ) {
                             auto& local = local_confirmed[local_index];
@@ -438,7 +449,11 @@ namespace panna {
                                                std::make_move_iterator( local_top.end() ) );
 
                     // Every x iterations we have a batch, construct the MST from these edges
-                    if ( j%50 == 0 )
+                    size_t current_repetition;
+                    #pragma omp atomic capture
+                    current_repetition = ++completed_repetitions;
+
+                    if ( current_repetition % 50 == 0 || current_repetition >= MAX_REPETITIONS )
                      {
 #pragma omp critical
                         {   
@@ -567,7 +582,7 @@ namespace panna {
                                 edges.clear();
                             }
                         }
-                        completed_repetitions+= 50;
+                        // completed_repetitions+= 50; // Already incremented
                     }
                 }
                 // Clear the local neighbors
@@ -611,13 +626,9 @@ namespace panna {
         /// @param Tu_local vector that stores the edges
         void enumerate_edges( size_t i, size_t j, std::vector<Edge>& Tu_local ) {
             // Discover edges that share the same prefix at iteration i, j
-            std::vector<Edge> couples;
             size_t cnt_dist, cnt_collisions;
             std::tie( cnt_dist, cnt_collisions ) =
-                table.search_pairs_filter( j, i, couples, max_weight, filter );
-            Tu_local.insert( Tu_local.end(),
-                             std::make_move_iterator( couples.begin() ),
-                             std::make_move_iterator( couples.end() ) );
+                table.search_pairs_filter( j, i, Tu_local, max_weight, filter );
 #pragma omp atomic
             distances_computed += cnt_dist;
 #pragma omp atomic

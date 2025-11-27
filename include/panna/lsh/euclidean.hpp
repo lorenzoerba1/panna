@@ -159,7 +159,7 @@ namespace panna {
             };
 
             // Step 1: exponential search until both bounds known, starting from initial guess
-            for (int iter = 0; iter < 5 && !(qw_lower && qw_upper); ++iter) {
+            for (int iter = 0; iter < 10 && !(qw_lower && qw_upper); ++iter) {
                 float avg_collisions = compute_avg_collisions(quantization_width);
                 LOG_INFO("msg", "Exponential search quantization width",
                          "quantization_width", quantization_width,
@@ -204,9 +204,9 @@ namespace panna {
             }
 
             // If the target is not met, just return to the intial guess
-            if (!qw_lower || !qw_upper) {
-                quantization_width = (max - min) / 16.0f;
-            }
+            // if (!qw_lower || !qw_upper) {
+            //     quantization_width = (max - min) / 16.0f;
+            // }
 
             LOG_INFO("msg", "Quantization width set to", "quantization_width", quantization_width);
         }
