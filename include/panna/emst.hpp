@@ -549,7 +549,7 @@ namespace panna {
                                         filter.union_sets( ( *it ).a, ( *it ).b );
                                     }
                                     LOG_INFO("prefix", i,
-                                             "repetition", j,
+                                             "repetition", completed_repetitions,
                                              "tree_weight", tree_weight,
                                              "bound_weight", bound_weight,
                                              "max_edge_weight", top.back().weight,
