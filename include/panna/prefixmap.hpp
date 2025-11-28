@@ -5,6 +5,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <iostream>
 #include <limits>
 #include <optional>
@@ -16,6 +17,8 @@
 #include "panna/expect.hpp"
 // Tree import
 #include "panna/dsu.hpp"
+#include "panna/logging.hpp"
+
 namespace panna {
 
     //! Returns the index of the first element strictly larger than the `needle`, starting from
@@ -107,6 +110,67 @@ namespace panna {
             return true;
         }
     };
+
+    //! Given two integer ranges, loops a pair of indices through the cartesian product
+    struct CartesianIndex {
+        size_t begin_i;
+        size_t end_i;
+        size_t begin_j;
+        size_t end_j;
+        size_t i;
+        size_t j;
+
+        CartesianIndex(): CartesianIndex(0, 0, 0, 0) {}
+
+        CartesianIndex( size_t begin_i, size_t end_i, size_t begin_j, size_t end_j ):
+            begin_i( begin_i ),
+            end_i( end_i ),
+            begin_j( begin_j ),
+            end_j( end_j ),
+            i( begin_i ),
+            j( begin_j ) {
+        }
+
+        std::optional<std::pair<uint32_t, uint32_t>> next() {
+            if (i >= end_i || j >= end_j) {
+                return std::nullopt;
+            }
+            std::pair<uint32_t, uint32_t> ret(i, j);
+            expect(i < end_i);
+            expect(j < end_j);
+            j += 1;
+            if ( j >= end_j ) {
+                i += 1;
+                j = begin_j;
+            }
+            return std::optional(ret);
+        }
+    };
+
+    //! Index that chains multiple indices together, for example chains multiple CartesianIndices together
+    template<typename T>
+    struct ChainedIndex {
+        std::vector<T> inner;
+
+        ChainedIndex(): inner() {}
+        ChainedIndex(std::vector<T> indices): inner(indices) {}
+
+        std::optional<std::pair<uint32_t, uint32_t>> next() {
+            // move the last index forward, or pop it if it is exhausted
+            // and continue to the previous one
+            while (!inner.empty()) {
+                auto maybe_pair = inner.back().next();
+                if (maybe_pair) {
+                    return maybe_pair;
+                } else {
+                    inner.pop_back();
+                }
+            }
+            // all indices are exhausted
+            return std::nullopt;
+        }
+    };
+
 
     template <typename THashValue>
     class PrefixMapCursor {
@@ -339,6 +403,162 @@ namespace panna {
                 }
                 buffer.emplace_back(
                     indices[idx.i], indices[idx.j], std::numeric_limits<float>::infinity() );
+            }
+        }
+
+        //! The total number of collisions, _including_ the ones on longer prefixes
+        size_t total_collisions() {
+            size_t cnt = 0;
+            while ( true ) {
+                size_t bucket_size = range_end - range_start;
+                cnt += (bucket_size - 1) * bucket_size / 2;
+                if ( !next_hash() ) {
+                    // there are no more buckets
+                    break;
+                }
+            }
+            return cnt;
+        }
+    };
+
+    //! Cursor over pairs of indices that only outputs pairs that belong to different groups,
+    //! where groups are encoded by 
+    template <typename THashValue>
+    class PairPrefixMapCursorGrouped {
+    private:
+        const std::vector<THashValue>& hashes;
+        const std::vector<uint32_t>& indices;
+        THashValue hash;
+        size_t range_start;
+        size_t range_end;
+        uint8_t prefix_length;
+        std::optional<uint8_t> prev_prefix_length;
+        ChainedIndex<CartesianIndex> idx;
+        // the function that, given a point index, returns the index of the group
+        // it belongs to.
+        std::function<uint32_t(uint32_t)> group_fun;
+        // the indices in the current range, grouped by the grouping defined by the function
+        std::vector<std::pair<uint32_t, std::pair<uint32_t, THashValue>>> grouped_indices;
+
+        // Find the first index such that the prefix is >= the given hash.
+        size_t first_ge_pos( THashValue hash, uint8_t prefix ) {
+            return std::distance(
+                hashes.begin(),
+                std::partition_point( hashes.begin(), hashes.end(), [&]( const auto& h ) {
+                    return h.prefix_less( hash, prefix );
+                } ) );
+        }
+
+        // Find the first index such that the prefix is > the given hash (**strictly** larger).
+        size_t first_gt_pos( THashValue hash, uint8_t prefix ) {
+            return std::distance(
+                hashes.begin(),
+                std::partition_point( hashes.begin(), hashes.end(), [&]( const auto& h ) {
+                    return !hash.prefix_less( h, prefix );
+                } ) );
+        }
+
+        //! Moves the reference hash of the cursor to the next one in the `hashes` array.
+        //! Returns `false` if we reached the end of the available hashes,
+        //! and true otherwise
+        bool next_hash() {
+            if ( range_end == hashes.size() ) {
+                return false;
+            }
+            hash = hashes[range_end];
+            // We don't need to search for the start
+            range_start = range_end;
+            // but we do need to search for the end
+            range_end = first_gt_pos( hash, prefix_length );
+
+            grouped_indices.clear();
+            for ( size_t i = range_start; i < range_end; i++ ) {
+                grouped_indices.push_back( std::make_pair( group_fun( indices[i] ), std::make_pair(indices[i], hashes[i]) ) );
+            }
+            std::sort(grouped_indices.begin(), grouped_indices.end());
+            // populate the chained index
+            std::vector<CartesianIndex> index_chain;
+
+            // identify the ranges
+            size_t sub_start = 0;
+            while ( sub_start < grouped_indices.size() ) {
+                uint32_t needle = grouped_indices[sub_start].first;
+                size_t sub_end = std::distance(
+                    grouped_indices.cbegin(),
+                    std::partition_point( grouped_indices.cbegin(),
+                                          grouped_indices.cend(),
+                                          [&]( const auto& group ) { return group.first <= needle; } ) );
+                expect(sub_start < sub_end);
+                expect(sub_end <= grouped_indices.size());
+                // we just need to compare with the preceding ones, the following ones will be taken
+                // care of in subsequent iterations: this way we avoid generating duplicate pairs.
+                index_chain.push_back( CartesianIndex( 0, sub_start, sub_start, sub_end ) );
+                sub_start = sub_end;
+            }
+            // Schedule the indices for consumption
+            idx = ChainedIndex(index_chain);
+
+            return true;
+        }
+
+    public:
+        PairPrefixMapCursorGrouped( const std::vector<THashValue>& hashes,
+                                const std::vector<uint32_t>& indices,
+                                std::function<uint32_t(uint32_t)> group_fun,
+                                uint8_t prefix ):
+            PairPrefixMapCursorGrouped( hashes, indices, group_fun, prefix, std::nullopt ) {
+        }
+
+        PairPrefixMapCursorGrouped( const std::vector<THashValue>& hashes,
+                                const std::vector<uint32_t>& indices,
+                                std::function<uint32_t(uint32_t)> group_fun,
+                                uint8_t prefix,
+                                std::optional<uint8_t> prev_prefix ):
+            hashes( hashes ),
+            indices( indices ),
+            group_fun(group_fun),
+            prefix_length( prefix ),
+            prev_prefix_length( prev_prefix ) {
+
+            assert( hashes.size() > 0 );
+            assert( std::is_sorted( hashes.begin(), hashes.end() ) );
+
+            range_end = 0;
+            next_hash();
+        }
+
+        //! fill the given buffer of pairs, without changing its capacity
+        void fill_pairs_buffer( std::vector<std::tuple<uint32_t, uint32_t, float>>& buffer ) {
+            size_t max_num = buffer.capacity();
+            buffer.clear();
+            while ( buffer.size() < max_num ) {
+                auto maybe_ij = idx.next();
+                while ( !maybe_ij ) {
+                    // we exhausted the bucket, move to the next one
+                    if ( !next_hash() ) {
+                        // there are no more buckets
+                        break;
+                    }
+                    maybe_ij = idx.next();
+                }
+                if ( !maybe_ij.has_value() ) {
+                    break;
+                }
+                size_t i, j;
+                std::tie( i, j ) = *maybe_ij;
+                expect( i < grouped_indices.size() );
+                expect( j < grouped_indices.size() );
+                // check if we had a collision at the previous prefix
+                // TODO: handle this with grouping as well
+                if ( prev_prefix_length &&
+                     grouped_indices[i].second.second.prefix_eq( grouped_indices[j].second.second,
+                                                                 *prev_prefix_length ) ) {
+                    // skip the pair, in this case
+                    continue;
+                }
+                buffer.emplace_back( grouped_indices[i].second.first,
+                                     grouped_indices[j].second.first,
+                                     std::numeric_limits<float>::infinity() );
             }
         }
 
@@ -611,6 +831,15 @@ namespace panna {
         create_pair_cursor_new( uint8_t prefix, std::optional<uint8_t> prev_prefix ) const {
             return PairPrefixMapCursorNew<THashValue>( hashes, indices, prefix, prev_prefix );
         }
+
+        PairPrefixMapCursorGrouped<THashValue>
+        create_pair_cursor_grouped( uint8_t prefix,
+                                    std::optional<uint8_t> prev_prefix,
+                                    std::function<uint32_t( uint32_t )> group_fun ) const {
+            return PairPrefixMapCursorGrouped<THashValue>(
+                hashes, indices, group_fun, prefix, prev_prefix );
+        }
+
         THashValue hash_for( size_t idx ) const {
             auto pos =
                 std::distance( indices.begin(), std::find( indices.begin(), indices.end(), idx ) );

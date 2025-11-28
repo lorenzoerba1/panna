@@ -266,6 +266,65 @@ namespace panna {
             g_collisions += collisions;
         }
 
+        //! Enumerates in the output vector the pairs colliding in the given
+        //! repetition with the given number of concatenations, but only if they
+        //! belong to different groups, as indicated by the group_fun function parameter
+        std::pair<size_t, size_t>
+        search_pairs_different_groups( size_t repetition,
+                                       size_t concatenations,
+                                       std::vector<Edge>& output,
+                                       float weight_filter,
+                                       std::function<uint32_t( uint32_t )> group_fun ) {
+            expect( hasher );
+            size_t distance_cnt = 0;
+            size_t collision_cnt = 0;
+            std::vector<std::tuple<uint32_t, uint32_t, float>> scratch;
+            scratch.reserve( 1 << 16 );
+
+            PairPrefixMapCursorGrouped<typename Hasher::Value> cursor =
+                lsh_maps[repetition].create_pair_cursor_grouped(
+                    concatenations,
+                    ( concatenations < hasher->get_concatenations() )
+                        ? std::optional( concatenations + 1 )
+                        : std::nullopt,
+                    group_fun );
+
+            while ( true ) {
+                cursor.fill_pairs_buffer( scratch );
+                if ( scratch.size() == 0 ) {
+                    // no new pairs
+                    break;
+                }
+                LOG_DEBUG( "repetition",
+                           repetition,
+                           "prefix",
+                           concatenations,
+                           "num_new_pairs",
+                           scratch.size() );
+                for ( size_t i = 0; i < scratch.size(); i++ ) {
+                    uint32_t a_idx = std::get<0>( scratch[i] );
+                    uint32_t b_idx = std::get<1>( scratch[i] );
+                    if (b_idx < a_idx) {
+                        // ensure that a_idx is always smaller
+                        uint32_t tmp = b_idx;
+                        b_idx = a_idx;
+                        a_idx = tmp;
+                    }
+
+                    PointHandle a = dataset[a_idx];
+                    PointHandle b = dataset[b_idx];
+                    collision_cnt++;
+                    float distance = Distance::compute( a, b );
+                    distance_cnt++;
+                    if ( distance > weight_filter ) {
+                        continue;
+                    }
+                    output.emplace_back( distance, a_idx, b_idx );
+                }
+            }
+            return {distance_cnt, collision_cnt};
+        }
+
         // Function to return all colliding couples in a given repetition and concatenation
         std::pair<size_t, size_t>
         search_pairs_filter( size_t repetition,
