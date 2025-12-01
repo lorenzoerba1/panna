@@ -36,7 +36,7 @@ test: build-tests
     build/tests "angular distance trie index"
 
 build-tests:
-    cmake --build build -j --target tests
+    cmake --config RelWithDebugInfo --build build -j --target tests
 
 clean:
     cd build && make clean

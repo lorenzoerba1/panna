@@ -271,7 +271,7 @@ namespace panna {
     };
 
     struct EuclideanPointHandle {
-        size_t dimensions;
+        const size_t dimensions;
         const float * vector;
 
         friend std::ostream& operator<<( std::ostream& os, const EuclideanPointHandle& handle ) {
@@ -315,17 +315,22 @@ namespace panna {
         }
 
         PointHandle operator[]( size_t i ) const {
-            PointHandle handle;
-            handle.dimensions = dimensions;
-            handle.vector = &data[dimensions*i];
+            expect(dimensions*i + dimensions <= data.size());
+            PointHandle handle {
+                .dimensions = dimensions,
+                .vector = &data[dimensions*i]
+            };
             return handle;
         }
 
         template <typename FloatIter>
         void push_back( FloatIter begin, FloatIter end ) {
+            size_t cnt=0;
             for (auto it=begin; it!= end; it++)  {
                 data.push_back(*it);
+                cnt+=1;
             }
+            expect(cnt == dimensions);
         }
 
         PointHandle push_back_random() {

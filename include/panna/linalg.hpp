@@ -16,6 +16,21 @@
 namespace panna {
 
     template <typename T>
+    static T add( T &a, T &b );
+
+    template<>
+    std::vector<float> add(std::vector<float> &a, std::vector<float>&b) {
+        expect(a.size() == b.size());
+        std::vector<float> out(a.size());
+        for (size_t i=0; i<a.size(); i++) {
+            out[i] = a[i] + b[i];
+        }
+        return out;
+    }
+
+    
+
+    template <typename T>
     static float dot_product( T a, T b );
 
     template<>
@@ -30,7 +45,7 @@ namespace panna {
 
     template<>
     float dot_product( EuclideanPointHandle a, EuclideanPointHandle b ) {
-        assert( a.dimensions == b.dimensions );
+        expect( a.dimensions == b.dimensions );
         float sum = 0.0;
         for ( size_t i = 0; i < a.dimensions; i++ ) {
             sum += a.vector[i] * b.vector[i];
@@ -114,6 +129,12 @@ namespace panna {
         }
     }
 
+    static void rescale(std::vector<float> & point, float factor) {
+        for (size_t i=0; i<point.size(); i++) {
+            point[i] *= factor;
+        }
+    }
+
     
     template <typename T>
     static float euclidean( T a, T b );
@@ -129,6 +150,36 @@ namespace panna {
         float d = 0;
         for (size_t i=0; i<a.dimensions; i++) {
             float diff = a.vector[i] - b.vector[i];
+            d += diff*diff;
+        }
+        return std::sqrt(d);
+    }
+
+    template <>
+    float euclidean(std::vector<float> a, std::vector<float> b) {
+        float d = 0;
+        for (size_t i=0; i<a.size(); i++) {
+            float diff = a[i] - b[i];
+            d += diff*diff;
+        }
+        return std::sqrt(d);
+    }
+
+    template <size_t D>
+    float euclidean(std::array<float, D> a, std::array<float, D> b) {
+        float d = 0;
+        for (size_t i=0; i<a.size(); i++) {
+            float diff = a[i] - b[i];
+            d += diff*diff;
+        }
+        return std::sqrt(d);
+    }
+
+    template <size_t D>
+    float euclidean(std::array<float, D> a, std::array<long, D> b) {
+        float d = 0;
+        for (size_t i=0; i<a.size(); i++) {
+            float diff = a[i] - ((float) b[i]);
             d += diff*diff;
         }
         return std::sqrt(d);

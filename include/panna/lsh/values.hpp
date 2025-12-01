@@ -185,7 +185,7 @@ namespace panna {
             return hash;
         }
 
-        void set( size_t idx, uint8_t value ) {
+        void set( size_t idx, Symbol value ) {
             hashes[idx] = value;
         }
 
@@ -241,6 +241,9 @@ namespace panna {
     template <uint8_t K>
     using IntLshValue = SymbolLshValue<int32_t, K>;
 
+    template <uint8_t K>
+    using LongLshValue = SymbolLshValue<int64_t, K>;
+
     static_assert( sizeof( BytewiseLshValue<8> ) == 8,
                    "BytewiseLshValue must use exactly K bytes" );
     static_assert( std::is_standard_layout<BytewiseLshValue<8>>(), "BytewiseLshValue must be Plain Old Data" );
@@ -253,4 +256,93 @@ namespace panna {
     static_assert( std::is_trivially_copyable<ShortLshValue<4>>(),
                    "ShortLshValue must be trivially copiable" );
     static_assert( std::is_trivial<ShortLshValue<4>>(), "ShortLshValue must be trivial" );
+
+    template <typename T, size_t SIZE, uint8_t K>
+    struct ArrayLshValue {
+    private:
+        //! The hash values
+        std::array<std::array<T, SIZE>, K> hashes;
+
+        // To allow the implementation of `interleave` to work
+        friend struct ArrayLshValue<T, SIZE, 2 * K>;
+
+        friend std::ostream& operator<<( std::ostream& os, const ArrayLshValue<T, SIZE, K>& hash ) {
+            os << "#";
+            for ( size_t i = 0; i < K; i++ ) {
+                os << std::hex << +hash.hashes[i];
+                // os << std::hex << static_cast<int64_t>( hash.hashes[i] );
+                if ( i < K - 1 ) {
+                    os << "_";
+                }
+            }
+            return os;
+        }
+
+    public:
+        using DoubleWidth = ArrayLshValue<T, SIZE, 2 * K>;
+
+        template <typename Archive>
+        void serialize( Archive& ar ) {
+            ar( hashes );
+        }
+
+        //! How many concatenated hash values are stored in this value?
+        constexpr static uint8_t get_concatenations() {
+            return K;
+        };
+
+        // we use a factory function rather than a constructor to keep this
+        // struct Plain Old Data.
+        constexpr static ArrayLshValue<T, SIZE, K> make( std::array<std::array<T, SIZE>, K> bytes ) {
+            ArrayLshValue<T, SIZE, K> hash;
+            hash.hashes = bytes;
+            return hash;
+        }
+
+        void set( size_t idx, uint8_t value ) {
+            hashes[idx] = value;
+        }
+
+        inline bool prefix_eq( ArrayLshValue<T, SIZE, K> other, uint8_t prefix ) const {
+            assert( prefix <= K );
+            for ( uint8_t i = 0; i < prefix; i++ ) {
+                if ( hashes[i] != other.hashes[i] ) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        inline constexpr bool prefix_less( const ArrayLshValue<T, SIZE, K>& other,
+                                           uint8_t prefix ) const {
+            assert( prefix <= K );
+            for ( uint8_t i = 0; i < prefix; i++ ) {
+                if ( hashes[i] < other.hashes[i] ) {
+                    return true;
+                } else if ( hashes[i] > other.hashes[i] ) {
+                    return false;
+                }
+            }
+            return false;
+        }
+
+        constexpr inline bool operator<( ArrayLshValue<T, SIZE, K> other ) const {
+            return this->prefix_less( other, K );
+        }
+
+        constexpr inline bool operator==( ArrayLshValue<T, SIZE, K> other ) const {
+            return this->prefix_eq( other, K );
+        }
+
+        static constexpr inline ArrayLshValue<T, SIZE, K>
+        interleave( ArrayLshValue<T, SIZE, K / 2> a, ArrayLshValue<T, SIZE, K / 2> b ) {
+            static_assert( K % 2 == 0, "K should be even" );
+            ArrayLshValue<T, SIZE, K> out;
+            for ( size_t i = 0; i < K / 2; i++ ) {
+                out.hashes[2 * i] = a.hashes[i];
+                out.hashes[2 * i + 1] = b.hashes[i];
+            }
+            return out;
+        }
+    };
 } // namespace panna

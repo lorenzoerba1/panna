@@ -18,7 +18,6 @@ Makefile
 *.db
 *.png
 *.pdf
-*.txt
 txts/
 *.sh
 *.pyc
