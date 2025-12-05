@@ -15,7 +15,7 @@ int main( int, char** ) {
     using namespace panna;
     using HashFamily = LatticeLSH<1, EuclideanPoints, EuclideanDistance>;
 
-    const size_t samples = 1e4;
+    const size_t samples = 1e6;
     const size_t dimensions = 8;
     const float step = 0.01;
     const float max_distance = 6.0;

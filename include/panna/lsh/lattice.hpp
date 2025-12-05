@@ -100,8 +100,6 @@ namespace panna {
     template <uint8_t K, typename Dataset, typename Distance>
     class LatticeLSHBuilder;
 
-    class LatticeLSHCollisionEstimates;
-
     template <uint8_t K, typename Dataset, typename Distance>
     class LatticeLSH {
     public:
@@ -245,130 +243,6 @@ namespace panna {
             std::stringstream sstream;
             sstream << "LatticeLSH(scaling=" << scaling_factor << ")";
             return sstream.str();
-        }
-    };
-
-    class LatticeLSHCollisionEstimates {
-        static const size_t LATTICE_DIMENSIONS = 8;
-
-        std::vector<float> probabilities;
-        // the step of the simulation process
-        float eps;
-
-        static std::array<std::vector<float>, LATTICE_DIMENSIONS> sample_directions(size_t dimensions, std::mt19937_64 &rng) {
-            std::array<std::vector<float>, LATTICE_DIMENSIONS> pts;
-            for(size_t i=0; i<LATTICE_DIMENSIONS; i++) {
-                pts[i] = sample_random_normal_vector(dimensions, rng);
-            }
-            return pts;
-        }
-
-        static std::array<float, LATTICE_DIMENSIONS> sample_offsets(std::mt19937_64 & rng) {
-            std::array<float, LATTICE_DIMENSIONS> offsets;
-            for(size_t i=0; i<LATTICE_DIMENSIONS; i++) {
-                offsets[i] = sample_random_01(rng);
-            }
-            return offsets;
-        }
-
-        std::array<float, LATTICE_DIMENSIONS>
-        project( const std::vector<float>& point,
-                 const std::array<std::vector<float>, LATTICE_DIMENSIONS>& directions,
-                 const std::array<float, LATTICE_DIMENSIONS>& offsets,
-                 float scaling_factor ) const {
-            std::array<float, LATTICE_DIMENSIONS> out;
-            for ( size_t i = 0; i < LATTICE_DIMENSIONS; i++ ) {
-                out[i] = dot_product( point, directions[i] ) / scaling_factor + offsets[i];
-            }
-            return out;
-        }
-
-        std::array<long, LATTICE_DIMENSIONS>
-        hash( const std::vector<float>& point,
-              const std::array<std::vector<float>, LATTICE_DIMENSIONS>& directions,
-              const std::array<float, LATTICE_DIMENSIONS>& offsets,
-              float scaling_factor ) {
-            auto prj = project( point, directions, offsets, scaling_factor );
-            auto snap1 = decode_d8( prj, 0.0 );
-            auto snap2 = decode_d8( prj, -0.5 );
-            if ( euclidean( prj, snap1 ) < euclidean( prj, snap2 ) ) {
-                return to_integer_coords(snap1);
-            } else {
-                return to_integer_coords(snap2);
-            }
-
-        }
-
-    public:
-        LatticeLSHCollisionEstimates( size_t dimensions, float scaling_factor, float epsilon, size_t samples ):
-            eps( epsilon ) {
-            using HashFamily = LatticeLSH<1, EuclideanPoints, EuclideanDistance>;
-            expect( dimensions >= 8 );
-
-            std::vector<float> zero;
-            zero.resize(dimensions);
-
-            float dist = 0.0;
-            // set the collision probability at distance 0.0
-            probabilities.push_back(1.0);
-            while (true) {
-                dist += eps;
-                // prepare a random data point at distance `dist` from the origin
-                std::vector<float> x = sample_random_normal_vector(dimensions);
-                normalize(x);
-                rescale(x, dist);
-                expect(abs(euclidean(zero, x) - dist) < 1e-4) ;
-
-                EuclideanPoints points(dimensions);
-                points.push_back(zero.begin(), zero.end());
-                points.push_back(x.begin(), x.end());
-
-                size_t collisions = 0;
-
-                #pragma omp parallel
-                {
-                    std::mt19937_64 rng(omp_get_thread_num());
-                    size_t tl_collisions = 0;
-                    std::vector<HashFamily::Value> hashes;
-
-#pragma omp for
-                        for ( size_t sample = 0; sample < samples; sample++ ) {
-                        HashFamily lsh( 0.0, scaling_factor, dimensions, 1 );
-                        lsh.hash(points[0], hashes);
-                        auto h_zero = hashes[0];
-                        lsh.hash(points[1], hashes);
-                        auto h_x = hashes[0];
-                        if ( h_zero == h_x ) {
-                            tl_collisions += 1;
-                        }
-                    }
-
-#pragma omp critical
-                    {
-                        collisions += tl_collisions;
-                    }
-                }
-
-                const float p = ( (float)collisions ) / samples;
-                LOG_INFO("dist", dist, "p", p);
-                if ( p < 1e-5 ) {
-                    break;
-                }
-                probabilities.push_back(p);
-            }
-        }
-
-        const std::vector<float> & get_probabilities() const {
-            return probabilities;
-        }
-
-        float get_collision_probability( float euclidean_distance ) const {
-            size_t idx = std::floor( euclidean_distance / eps );
-            if ( idx < probabilities.size() ) {
-                return probabilities[idx];
-            } else {
-                return 0;
-            }
         }
     };
 

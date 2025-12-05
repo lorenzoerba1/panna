@@ -34,43 +34,10 @@ namespace panna {
         REQUIRE( decoded == expected );
     }
 
-    TEST_CASE( "LatticeLSH collision probabilities" ) {
-        for ( size_t dimensions : { 8 } ) {
-            E2LSH<1, EuclideanPoints, EuclideanDistance> e2lsh(1.0, dimensions, 2);
-            LOG_INFO( "msg", "new test", "dimensions", dimensions );
-            float scaling_factor = 1.0;
-            float epsilon = 0.05;
-            size_t samples = 1e5;
-            LatticeLSHCollisionEstimates estimates( dimensions, scaling_factor, epsilon, samples );
-            float prev = 1.0;
-            float dist = 0.0;
-            for ( float p : estimates.get_probabilities() ) {
-                dist += epsilon;
-                float e2lsh_prob = e2lsh.collision_probability(dist);
-                LOG_INFO("dist", dist, "e2lsh", e2lsh_prob, "lattice", p);
-                REQUIRE( p <= prev + 50.0 / samples );
-                prev = p;
-            }
-            float r1 = 0.1;
-            float r2 = 0.2;
-            float p1_lattice = estimates.get_collision_probability(r1);
-            float p2_lattice = estimates.get_collision_probability(r2);
-            float p1_e2lsh = e2lsh.collision_probability(r1);
-            float p2_e2lsh = e2lsh.collision_probability(r2);
-            LOG_INFO(
-                "rho-lattice", std::log(1/p1_lattice) / std::log(1/p2_lattice),
-                "rho-e2lsh", std::log(1/p1_e2lsh) / std::log(1/p2_e2lsh)
-            );
-        }
-    }
-
     TEST_CASE( "LatticeLSH empirical collision probabilities" ) {
         using HashFamily = LatticeLSH<1, EuclideanPoints, EuclideanDistance>;
-        const size_t dimensions = 8;
         const float scaling_factor = 1.0;
-        const float epsilon = 0.01;
         const size_t samples = 1e5;
-        LatticeLSHCollisionEstimates estimates( dimensions, scaling_factor, epsilon, samples );
 
         for (size_t dimensions : {8, 16, 128}) {
             LOG_INFO("msg", "new test", "dimension", dimensions);
@@ -104,10 +71,8 @@ namespace panna {
                 }
                 float empirical_p = ( (float)collisions ) / repetitions;
                 float e2lsh_p = e2lsh.collision_probability( d );
-                float expected_p = estimates.get_collision_probability( d );
                 float rho = std::log( prev_p ) / std::log( empirical_p );
                 float rho_e2lsh = std::log( prev_e2lsh ) / std::log( e2lsh_p );
-                float relative_error = std::abs( empirical_p - expected_p ) / expected_p;
                 LOG_INFO( "d",
                           d,
                           "empirical",
@@ -117,11 +82,8 @@ namespace panna {
                           "rho",
                           rho,
                           "rho-e2lsh",
-                          rho_e2lsh,
-                          "expected_p",
-                          expected_p,
-                          "relative-error",
-                          relative_error );
+                          rho_e2lsh
+                          );
                 distance *= 2;
                 prev_p = empirical_p;
                 prev_e2lsh = e2lsh_p;
