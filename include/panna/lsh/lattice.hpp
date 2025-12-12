@@ -5,12 +5,14 @@
 #include <random>
 #include <vector>
 
+#include "panna/data.hpp"
 #include "panna/distance.hpp"
 #include "panna/expect.hpp"
 #include "panna/linalg.hpp"
 #include "panna/logging.hpp"
 #include "panna/lsh/values.hpp"
 #include "panna/lsh/lattice_probabilities.hpp"
+#include "panna/prefixmap.hpp"
 #include "panna/rand.hpp"
 namespace panna {
 
@@ -110,7 +112,7 @@ namespace panna {
 
     private:
 
-        float offset;
+        std::vector<float> data_offset;
         float scaling_factor;
         size_t repetitions;
         Dataset random_vectors;
@@ -137,12 +139,19 @@ namespace panna {
         LatticeLSH() {
         }
 
-        LatticeLSH( float offset, float scaling_factor, size_t dimensions, size_t repetitions ):
+        LatticeLSH( std::vector<float> offset,
+                    float scaling_factor,
+                    size_t dimensions,
+                    size_t repetitions ):
             LatticeLSH( offset, scaling_factor, dimensions, repetitions, get_global_rng() ) {
         }
 
-        LatticeLSH( float offset, float scaling_factor, size_t dimensions, size_t repetitions, std::mt19937_64 & rng ):
-            offset( offset ),
+        LatticeLSH( std::vector<float> offset,
+                    float scaling_factor,
+                    size_t dimensions,
+                    size_t repetitions,
+                    std::mt19937_64& rng ):
+            data_offset( offset ),
             scaling_factor( scaling_factor ),
             repetitions( repetitions ),
             random_vectors( dimensions ),
@@ -150,19 +159,15 @@ namespace panna {
             for ( size_t vec_idx = 0; vec_idx < repetitions * K * LATTICE_DIMENSIONS; vec_idx++ ) {
                 std::vector<float> dir = sample_random_normal_vector( dimensions, rng );
                 rescale( dir, 1.0 / std::sqrt( LATTICE_DIMENSIONS ) );
-                float sum = 0.0;
-                for ( size_t i = 0; i < dimensions; i++ ) {
-                    sum += dir[i];
-                }
                 random_vectors.push_back( dir.begin(), dir.end() );
                 offsets.push_back( sample_random_01(rng) );
-                corrections.push_back( offset / scaling_factor * sum );
+                corrections.push_back( dot_product(dir, data_offset) / scaling_factor );
             }
         }
 
         template <typename Archive>
         void serialize( Archive& ar ) {
-            ar( offset, scaling_factor, repetitions, random_vectors, offsets, corrections );
+            ar( data_offset, scaling_factor, repetitions, random_vectors, offsets, corrections );
         }
 
         static constexpr size_t get_concatenations() {
@@ -190,7 +195,8 @@ namespace panna {
         }
 
         float collision_probability( float distance ) const {
-            // FIXME: rescale distance
+            distance = Distance::to_euclidean(distance); // This gives the chance of applying the square root
+            distance = distance / scaling_factor;
             if (distance > panna::lattice_lsh::MAX_DISTANCE) {
                 return 0.0;
             }
@@ -205,7 +211,7 @@ namespace panna {
 
     template <uint8_t K, typename Dataset, typename Distance>
     class LatticeLSHBuilder {
-        float offset = 0.0;
+        std::vector<float> offset;
         float scaling_factor = 0.0;
         size_t dimensions = 0;
 
@@ -216,7 +222,7 @@ namespace panna {
         }
 
         LatticeLSHBuilder( size_t dimensions ):
-            offset( 0 ), scaling_factor( 0 ), dimensions( dimensions ) {
+            offset( dimensions ), scaling_factor( 0 ), dimensions( dimensions ) {
         }
 
         LatticeLSHBuilder( float offset, float scaling_factor, size_t dimensions ):
@@ -232,6 +238,47 @@ namespace panna {
             if ( scaling_factor != 0.0 ) {
                 return;
             }
+            const size_t n = points.size();
+            offset = mean_point(points);
+            const float diameter = approximate_diameter<Distance>(points);
+            const size_t sample_repetitions = 4;
+            LOG_INFO("diameter", diameter);
+
+            auto compute_avg_collisions = [&](float scale) -> float {
+                std::vector<PrefixMap<typename Output::Value>> pmaps(sample_repetitions);
+                Output hasher(offset, scale, dimensions, sample_repetitions);
+                PrefixMap<typename Output::Value>::populate_from(pmaps, points, hasher);
+
+                size_t collisions = 0;
+                for (auto& pmap : pmaps) {
+                    PairPrefixMapCursorNew<typename Output::Value> cursor =
+                        pmap.create_pair_cursor_new(hasher.get_concatenations(), std::nullopt);
+                    collisions += cursor.total_collisions();
+                }
+                return static_cast<float>(collisions) / pmaps.size();
+            };
+
+            // TODO: make these configurable to handle different scenarios
+            const float threshold_low = n / 2.0;
+            const float threshold_high = n * 2.0;
+            LOG_INFO("threshold-low", threshold_low, "threshold_high", threshold_high);
+
+            float low=0.0, high=diameter;
+            const size_t MAX_ITER = 40;
+            for(size_t iter=0; iter<MAX_ITER; iter++) {
+                float scale = (low+high) / 2.0;
+                float avg_collisions = compute_avg_collisions(scale);
+                LOG_INFO("scale", scale, "avg-collisions", avg_collisions);
+                if (threshold_low <= avg_collisions && avg_collisions <= threshold_high) {
+                    scaling_factor = scale;
+                    break;
+                } else if (avg_collisions < threshold_low) {
+                    low = scale;
+                } else {
+                    high = scale;
+                }
+            }
+            LOG_INFO("scaling-factor", scaling_factor);
         }
 
         Output build( size_t repetitions ) const {

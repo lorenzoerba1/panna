@@ -8,6 +8,7 @@
 #include "panna/emst.hpp"
 #include "panna/logging.hpp"
 #include "panna/lsh/euclidean.hpp"
+#include "panna/lsh/lattice.hpp"
 #include "panna/rand.hpp"
 
 using namespace panna;
@@ -20,12 +21,12 @@ int main() {
     const size_t conc_toc = 3;
     const size_t conc = 12;
     // const size_t dimensions = 20;
-    const size_t rep = 500;
+    const size_t rep = 1024;
     const size_t n = 10000;
     using Dataset = NormedPoints;         // UnitNormPoints or EuclideanPoints
     using Distance = EuclideanDistance; // EuclideanDistance or AngularDistance or CosineDistance
-    using Hasher = E2LSH<conc, Dataset, Distance>;
-    // using Hasher = CrossPolytope<conc, Point, Distance, rotations>;
+    // using Hasher = E2LSH<conc, Dataset, Distance>;
+    using Hasher = LatticeLSH<4, Dataset, Distance>;
 
     // CrossPolytopeBuilder<conc, Point, Distance, rotations> builder( dimensions );
 
@@ -45,10 +46,10 @@ int main() {
 
     std::vector<std::vector<float>> points =
         H5Easy::load<std::vector<std::vector<float>>>( file, "/train" );
-    //points.resize( n );
+    // points.resize( n );
 
     size_t dimensions = points[0].size();
-    E2LSHBuilder<conc, Dataset, Distance> builder( dimensions );
+    Hasher::Builder builder( dimensions );
     EMST<Dataset, Hasher, Distance> tree( dimensions, rep, builder, points, 0.01, 0.0 );
 
     // Exact computation

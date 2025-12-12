@@ -34,6 +34,22 @@ namespace panna {
         REQUIRE( decoded == expected );
     }
 
+    TEST_CASE( "LatticeLSH builder" ) {
+        using HashFamily = LatticeLSH<1, EuclideanPoints, EuclideanDistance>;
+
+        panna::seed_global_rng(1234);
+
+        const size_t dimensions = 8;
+        EuclideanPoints pts(dimensions);
+        for(size_t i=0; i<10000; i++) {
+            pts.push_back_random();
+        }
+
+        HashFamily::Builder builder(dimensions);
+        builder.fit(pts);
+        HashFamily lsh = builder.build(4);
+    }
+
     TEST_CASE( "LatticeLSH empirical collision probabilities" ) {
         using HashFamily = LatticeLSH<1, EuclideanPoints, EuclideanDistance>;
         const float scaling_factor = 1.0;
@@ -59,8 +75,9 @@ namespace panna {
                 pts.push_back( y.begin(), y.end() );
                 const float d = EuclideanDistance::compute( pts[0], pts[1] );
 
+                std::vector<float> zero(dimensions);
                 E2LSH<1, EuclideanPoints, EuclideanDistance> e2lsh( scaling_factor, dimensions, 1 );
-                HashFamily lsh( 0, 1, dimensions, repetitions );
+                HashFamily lsh( zero, 1, dimensions, repetitions );
                 lsh.hash( pts[0], h1 );
                 lsh.hash( pts[1], h2 );
                 size_t collisions = 0;

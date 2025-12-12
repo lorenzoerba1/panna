@@ -465,9 +465,43 @@ namespace panna {
         }
     };
 
+    template <typename Point>
+    static void add_to( std::vector<float>& accumulator, const Point& point );
+
+    template <>
+    void add_to( std::vector<float>& accumulator, const EuclideanPointHandle& point ) {
+        expect( accumulator.size() == point.dimensions );
+        for ( size_t i = 0; i < point.dimensions; i++ ) {
+            accumulator[i] += point.vector[i];
+        }
+    }
+
+    template <>
+    void add_to( std::vector<float>& accumulator, const NormedPointHandle& point ) {
+        expect( accumulator.size() == point.inner.dimensions );
+        std::vector<float> v(point.inner.dimensions);
+        point.inner.into_vec(v);
+        for ( size_t i = 0; i < point.inner.dimensions; i++ ) {
+            accumulator[i] += v[i] * std::sqrt(point.sq_norm);
+        }
+    }
+
+    template <typename Dataset>
+    std::vector<float> mean_point( const Dataset& dataset ) {
+        std::vector<float> mean( dataset.get_dimensions() );
+        const size_t n = dataset.size();
+        for ( size_t i = 0; i < n; i++ ) {
+            add_to( mean, dataset[i] );
+        }
+        for ( size_t i = 0; i < dataset.get_dimensions(); i++ ) {
+            mean[i] /= (float)n;
+        }
+        return mean;
+    }
+
     //! Computes a lower bound to the diameter of the dataset
-    template<typename Distance, typename Dataset>
-    float approximate_diameter(Dataset & dataset) {
+    template <typename Distance, typename Dataset>
+    float approximate_diameter( Dataset& dataset ) {
         const size_t n = dataset.size();
         size_t root = 0;
 

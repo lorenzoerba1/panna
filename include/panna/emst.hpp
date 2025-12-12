@@ -262,7 +262,7 @@ namespace panna {
 
             // This is just a sanity check to see if dsu works as intended
             is_connected( tree );
-            LOG_INFO( "msg", "EMST finished", "distances_computed", distances_computed, "num_collisions", num_collisions );
+            LOG_INFO( "msg", "EMST finished", "distances_computed", distances_computed, "num_collisions", num_collisions, "num_total_pairs", (num_data -1) * num_data/ 2 );
             return { tree_weight, tree };
         }
 
@@ -756,6 +756,9 @@ namespace panna {
             while ( idx < top.size() ) {
                 const float w = top[idx].weight;
                 const float fp = table.fail_probability( w, i, j );
+                // if ( i > 0 ) {
+                //     LOG_INFO( "msg", "evaluating failure probability", "weight", w, "fp", fp );
+                // }
 
                 if ( prob + fp > delta ) {
                     break;

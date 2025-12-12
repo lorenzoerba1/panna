@@ -5,11 +5,12 @@
 #include "panna/distance.hpp"
 #include "panna/emst.hpp"
 #include "panna/lsh/euclidean.hpp"
+#include "panna/lsh/lattice.hpp"
 #include "panna/rand.hpp"
 
 namespace panna {
 
-    TEST_CASE( "EMST" ) {
+    TEST_CASE( "EMST e2lsh" ) {
         using Dataset = EuclideanPoints;
         using Distance = EuclideanDistance;
         using Hasher = E2LSH<12, Dataset, Distance>;
@@ -25,6 +26,34 @@ namespace panna {
             Hasher::Builder builder( 2.0, dimensions );
 
             EMST<Dataset, Hasher, Distance> emst( dimensions, 200, builder, data, 0.001, 0.0 );
+
+            auto exact = emst.exact_tree();
+            auto exact_with_fp = emst.find_tree();
+
+            REQUIRE( exact.first == exact_with_fp.first );
+        }
+    }
+
+    TEST_CASE( "EMST LatticeLSH" ) {
+        using Dataset = EuclideanPoints;
+        using Distance = EuclideanDistance;
+        using Hasher = LatticeLSH<4, Dataset, Distance>;
+        const size_t dimensions = 8;
+
+        const std::vector<size_t> sizes = {10000};
+        for (size_t n : sizes) {
+            std::vector<std::vector<float>> data;
+            EuclideanPoints pts(dimensions);
+            for ( size_t i = 0; i < n; i++ ) {
+                auto v =  sample_random_normal_vector( dimensions ) ;
+                data.push_back(v);
+                pts.push_back(v.begin(), v.end());
+            }
+
+            Hasher::Builder builder( dimensions );
+            builder.fit(pts);
+
+            EMST<Dataset, Hasher, Distance> emst( dimensions, 512, builder, data, 0.001, 0.0 );
 
             auto exact = emst.exact_tree();
             auto exact_with_fp = emst.find_tree();

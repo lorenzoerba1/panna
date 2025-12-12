@@ -9,6 +9,7 @@
 #include "panna/distance.hpp"
 #include "panna/lsh/crosspolytope.hpp"
 #include "panna/lsh/euclidean.hpp"
+#include "panna/lsh/lattice.hpp"
 #include "panna/lsh/simhash.hpp"
 #include "panna/baselines/toc_emst.hpp"
 #include "panna/trieindex.hpp"
@@ -176,7 +177,9 @@ nb::tuple tree_to_pytuple(std::vector<panna::Edge> & tree) {
 }
 
 struct EMST_exposed {
-    using EMST_t = panna::EMST<panna::NormedPoints, panna::E2LSH<12, panna::NormedPoints, panna::EuclideanDistance>, panna::EuclideanDistance>;
+    using Hasher = panna::LatticeLSH<4, panna::NormedPoints, panna::EuclideanDistance>;
+    // using Hasher = panna::E2LSH<12, panna::NormedPoints, panna::EuclideanDistance>;
+    using EMST_t = panna::EMST<panna::NormedPoints, Hasher, panna::EuclideanDistance>;
     std::unique_ptr<EMST_t> inner;
 
     // Constructor to be called from Python. It takes a NumPy array and optional keyword arguments.
@@ -208,8 +211,7 @@ struct EMST_exposed {
             }
         }
 
-        using Hasher = panna::E2LSH<12, panna::NormedPoints, panna::EuclideanDistance>;
-        Hasher::Builder builder(0.0, dimensions);
+        Hasher::Builder builder(dimensions);
 
         inner = std::make_unique<EMST_t>(dimensions, repetitions, builder, data_cpp, delta, epsilon);
     }
