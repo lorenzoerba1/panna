@@ -227,6 +227,8 @@ namespace panna {
                                               "heaviest_edge", top[num_data-2].weight,
                                               "weight_lower_bound", weight_lower_bound,
                                               "should_stop", should_stop );
+                                    // Without this we are not filtering anything
+                                    max_weight =  top[num_data-2].weight;
                                     // clang-format on
 
                                     // stop if we are done
