@@ -100,7 +100,7 @@ def exact_emst(data):
 
 @MEM.cache
 def cached_emst(data):
-    emst_algo = panna.EMST(data, epsilon=0.0, delta=0.001)
+    emst_algo = panna.EMST(data, epsilon=0.0, delta=0.1)
     emst = emst_algo.find_mst()
     ic(emst_algo.stats())
     return emst
@@ -120,7 +120,7 @@ def compute_stats_csv():
             continue
         ic(dataset)
         pca_dimensions = 4 if dataset == "pamap2" else None
-        _, data = panna.datasets.load(dataset, pca_dimensions=pca_dimensions)
+        _, data = panna.datasets.load(dataset, pca_dimensions=pca_dimensions, normalize = "angular" in dataset)
         n = data.shape[0]
         num_pairs = n * (n - 1) // 2
         weights, _edges = cached_emst(data)

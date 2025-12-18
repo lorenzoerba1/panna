@@ -165,7 +165,7 @@ def available_datasets():
     return list(_DATASETS_INFO.keys())
 
 
-def load(name: str, pca_dimensions=None, center_mean=False, load_queries=False):
+def load(name: str, pca_dimensions=None, center_mean=False, load_queries=False, normalize=False):
     if name not in available_datasets():
         raise KeyError(
             f"Dataset `{name}` not available. Pick one of {available_datasets()}"
@@ -189,6 +189,11 @@ def load(name: str, pca_dimensions=None, center_mean=False, load_queries=False):
         train = pca.fit_transform(train)
         if test is not None:
             test = pca.fit_transform(test)
+
+    if normalize:
+        train /= np.linalg.norm(train, axis=1)[:,np.newaxis]
+        if test is not None:
+            test /= np.linalg.norm(test, axis=1)[:,np.newaxis]
 
     if load_queries:
         return distance, train, test, distances
