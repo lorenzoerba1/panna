@@ -61,6 +61,4 @@ namespace panna {
             REQUIRE( exact.first == exact_with_fp.first );
         }
     }
-
-  
 }

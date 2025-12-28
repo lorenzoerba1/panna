@@ -1,4 +1,5 @@
 #pragma once
+#include <mutex>
 #include <string>
 #include <iostream>
 #include <chrono>
@@ -55,12 +56,15 @@ static void do_log(const char * k, V v, Others... others) {
   do_log(others...);
 }
 
+static std::mutex mtx;
+
 template<typename V, typename... Others>
 static void log(LogLevel level, const char * k, V v, Others... others) {
   if (level > CURRENT_LEVEL) {
     return;
   }
 
+  std::lock_guard<std::mutex> lock(mtx);
   std::chrono::duration since_epoch = std::chrono::system_clock::now().time_since_epoch();
   auto time = std::chrono::duration_cast<std::chrono::seconds>(since_epoch);
   do_log("level", level, "time", time.count(), k, v, others...);

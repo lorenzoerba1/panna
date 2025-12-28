@@ -1,7 +1,9 @@
 #pragma once
 #include <cstdint>
+#include <numeric>
 #include <vector>
 
+// TODO: add the possibility to clear and reuse the data structure
 namespace panna {
     /// @brief Disjoint Set Union data structure, implemented with path compression and union by
     /// rank.
@@ -14,6 +16,16 @@ namespace panna {
             std::iota( parent.begin(), parent.end(), 0 );
         }
 
+        size_t size() const {
+            return parent.size();
+        }
+
+        /// Resets the information in this data structure
+        void reset() {
+            std::iota( parent.begin(), parent.end(), 0 );
+            std::fill( rank.begin(), rank.end(), 0 );
+        }
+
         /// @brief Return the parent of the set containing x
         /// @param x, the element to find
         /// @return the parent of the set containing x
@@ -21,6 +33,22 @@ namespace panna {
             if ( parent[x] != x )
                 parent[x] = find( parent[x] ); // Path compression
             return parent[x];
+        }
+
+        /// Find without path compression, so the operation can be const.
+        /// For this to be efficient, paths need to have been compressed
+        /// previously by other calls to `find`
+        uint32_t cfind( uint32_t x ) const {
+            if ( parent[x] != x )
+                x = cfind( parent[x] );
+            return x;
+        }
+
+        /// force the compression of all paths
+        void compress_all() {
+            for (size_t i=0; i<parent.size(); i++) {
+                find(i);
+            }
         }
 
         /// @brief Check if x and y are in the same set

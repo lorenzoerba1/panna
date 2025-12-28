@@ -9,4 +9,5 @@
 #include "trieindex_test.hpp"
 #include "emst_test.hpp"
 #include "prefixmap_test.hpp"
+#include "channel_test.hpp"
 

@@ -274,7 +274,7 @@ namespace panna {
             size_t buffer_size,
             float weight_filter,
             std::function<uint32_t( uint32_t )> group_fun,
-            std::function<bool( std::vector<Edge>& )> batch_output ) {
+            std::function<bool( std::vector<Edge>& )> batch_output ) const {
             expect( hasher );
             size_t distance_cnt = 0;
             size_t collision_cnt = 0;
