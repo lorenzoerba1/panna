@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "omp.h"
+#include "panna/data.hpp"
 #include "panna/expect.hpp"
 // Tree import
 #include "panna/dsu.hpp"
@@ -510,15 +511,15 @@ namespace panna {
         }
 
         PairPrefixMapCursorGrouped( const std::vector<THashValue>& hashes,
-                                const std::vector<uint32_t>& indices,
-                                std::function<uint32_t(uint32_t)> group_fun,
-                                uint8_t prefix,
-                                std::optional<uint8_t> prev_prefix ):
+                                    const std::vector<uint32_t>& indices,
+                                    std::function<uint32_t( uint32_t )> group_fun,
+                                    uint8_t prefix,
+                                    std::optional<uint8_t> prev_prefix ):
             hashes( hashes ),
             indices( indices ),
-            group_fun(group_fun),
             prefix_length( prefix ),
-            prev_prefix_length( prev_prefix ) {
+            prev_prefix_length( prev_prefix ),
+            group_fun( group_fun ) {
 
             assert( hashes.size() > 0 );
             assert( std::is_sorted( hashes.begin(), hashes.end() ) );
@@ -528,10 +529,9 @@ namespace panna {
         }
 
         //! fill the given buffer of pairs, without changing its capacity
-        void fill_pairs_buffer( std::vector<std::tuple<uint32_t, uint32_t, float>>& buffer ) {
-            size_t max_num = buffer.capacity();
+        void fill_pairs_buffer( std::vector<Edge>& buffer, size_t buffer_size ) {
             buffer.clear();
-            while ( buffer.size() < max_num ) {
+            while ( buffer.size() < buffer_size ) {
                 auto maybe_ij = idx.next();
                 while ( !maybe_ij ) {
                     // we exhausted the bucket, move to the next one
@@ -556,9 +556,9 @@ namespace panna {
                     // skip the pair, in this case
                     continue;
                 }
-                buffer.emplace_back( grouped_indices[i].second.first,
-                                     grouped_indices[j].second.first,
-                                     std::numeric_limits<float>::infinity() );
+                buffer.emplace_back( std::numeric_limits<float>::infinity(),
+                                     grouped_indices[i].second.first,
+                                     grouped_indices[j].second.first );
             }
         }
 

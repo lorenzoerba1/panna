@@ -1,6 +1,7 @@
 #pragma once
 #include <algorithm>
 #include <iostream>
+#include <iterator>
 #include <random>
 #include <unistd.h>
 #include <vector>
@@ -166,12 +167,12 @@ namespace panna {
                     if ( found ) {
                         continue;
                     }
-                    DSU local_dsu( num_data );
-                    std::vector<Edge> local_top, local_Tu;
-                    enumerate_edges( i, j, local_Tu );
+                    // DSU local_dsu( num_data );
+                    std::vector<Edge> local_top;
+                    update_local_tree( i, j, local_top );
 
-                    std::sort( local_Tu.begin(), local_Tu.end() );
-                    kruskal( local_dsu, local_Tu, local_top );
+                    // std::sort( local_Tu.begin(), local_Tu.end() );
+                    // kruskal( local_dsu, local_Tu, local_top );
 
                     local_confirmed[j].insert( local_confirmed[j].end(),
                                                std::make_move_iterator( local_top.begin() ),
@@ -635,7 +636,44 @@ namespace panna {
             // Discover edges that share the same prefix at iteration i, j
             size_t cnt_dist, cnt_collisions;
             std::tie( cnt_dist, cnt_collisions ) = table.search_pairs_different_groups(
-                j, i, Tu_local, max_weight, [&]( uint32_t x ) { return filter.find( x ); } );
+                j,
+                i,
+                10*num_data, // batch size
+                max_weight,
+                [&]( uint32_t x ) { return filter.find( x ); },
+                [&]( std::vector<Edge>& scratch ) {
+                    for ( auto edge : scratch ) {
+                        Tu_local.push_back(edge);
+                    }
+                    return false;
+                } );
+#pragma omp atomic
+            distances_computed += cnt_dist;
+#pragma omp atomic
+            num_collisions += cnt_collisions;
+            return;
+        };
+
+        /// Update the given tree with the edges discovered from repetition j
+        /// at prefix i. 
+        void update_local_tree( size_t i, size_t j, std::vector<Edge>& tree) {
+            DSU dsu(num_data);
+            auto [cnt_dist, cnt_collisions] = table.search_pairs_different_groups(
+                j,
+                i,
+                10*num_data, // buffer size
+                max_weight,
+                [&]( uint32_t x ) { return filter.find( x ); },
+                [&]( std::vector<Edge>& scratch ) {
+                    LOG_INFO("msg","building tree on batch", "batch_size", scratch.size());
+                    scratch.insert( scratch.end(),
+                                      std::make_move_iterator( tree.begin() ),
+                                      std::make_move_iterator( tree.end() ) );
+                    std::sort(scratch.begin(), scratch.end());
+                    tree.clear();
+                    kruskal(dsu, scratch, tree);
+                    return false;
+                } );
 #pragma omp atomic
             distances_computed += cnt_dist;
 #pragma omp atomic

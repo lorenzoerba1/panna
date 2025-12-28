@@ -44,7 +44,8 @@ int main( int, char** ) {
         const float d = EuclideanDistance::compute( pts[0], pts[1] );
         expect( std::abs( distance - d ) < 1e-5 );
 
-        HashFamily lsh( 0, 1, dimensions, samples, rng );
+        std::vector<float> zero(dimensions);
+        HashFamily lsh( zero, 1, dimensions, samples, rng );
         lsh.hash( pts[0], h1 );
         lsh.hash( pts[1], h2 );
         size_t collisions = 0;

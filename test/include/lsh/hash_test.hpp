@@ -251,9 +251,9 @@ namespace panna {
 
         REQUIRE( hash_a == hash_b );
 
-        for ( float d : { 0.1, 0.2, 0.3 } ) {
-            float fp = failure_probability( tensored, d, 4, 1, tensored.get_repetitions() );
-        }
+        // for ( float d : { 0.1, 0.2, 0.3 } ) {
+        //     float fp = failure_probability( tensored, d, 4, 1, tensored.get_repetitions() );
+        // }
     }
 
 } // namespace panna

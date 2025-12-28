@@ -12,7 +12,6 @@
 
 #include "cereal/archives/binary.hpp"
 #include "panna/expect.hpp"
-#include "panna/kdtree.hpp"
 #include "panna/logging.hpp"
 #include "panna/lsh/predicates.hpp"
 #include "panna/prefixmap.hpp"
@@ -269,17 +268,18 @@ namespace panna {
         //! Enumerates in the output vector the pairs colliding in the given
         //! repetition with the given number of concatenations, but only if they
         //! belong to different groups, as indicated by the group_fun function parameter
-        std::pair<size_t, size_t>
-        search_pairs_different_groups( size_t repetition,
-                                       size_t concatenations,
-                                       std::vector<Edge>& output,
-                                       float weight_filter,
-                                       std::function<uint32_t( uint32_t )> group_fun ) {
+        std::pair<size_t, size_t> search_pairs_different_groups(
+            size_t repetition,
+            size_t concatenations,
+            size_t buffer_size,
+            float weight_filter,
+            std::function<uint32_t( uint32_t )> group_fun,
+            std::function<bool( std::vector<Edge>& )> batch_output ) {
             expect( hasher );
             size_t distance_cnt = 0;
             size_t collision_cnt = 0;
-            std::vector<std::tuple<uint32_t, uint32_t, float>> scratch;
-            scratch.reserve( 1 << 16 );
+            std::vector<Edge> scratch;
+            scratch.reserve(buffer_size);
 
             PairPrefixMapCursorGrouped<typename Hasher::Value> cursor =
                 lsh_maps[repetition].create_pair_cursor_grouped(
@@ -290,7 +290,7 @@ namespace panna {
                     group_fun );
 
             while ( true ) {
-                cursor.fill_pairs_buffer( scratch );
+                cursor.fill_pairs_buffer( scratch, buffer_size );
                 if ( scratch.size() == 0 ) {
                     // no new pairs
                     break;
@@ -302,8 +302,8 @@ namespace panna {
                            "num_new_pairs",
                            scratch.size() );
                 for ( size_t i = 0; i < scratch.size(); i++ ) {
-                    uint32_t a_idx = std::get<0>( scratch[i] );
-                    uint32_t b_idx = std::get<1>( scratch[i] );
+                    uint32_t a_idx = scratch[i].a;
+                    uint32_t b_idx = scratch[i].b;
                     if (b_idx < a_idx) {
                         // ensure that a_idx is always smaller
                         uint32_t tmp = b_idx;
@@ -315,11 +315,16 @@ namespace panna {
                     PointHandle b = dataset[b_idx];
                     collision_cnt++;
                     float distance = Distance::compute( a, b );
+                    scratch[i].weight = distance;
                     distance_cnt++;
                     if ( distance > weight_filter ) {
                         continue;
                     }
-                    output.emplace_back( distance, a_idx, b_idx );
+                    // output.emplace_back( distance, a_idx, b_idx );
+                }
+                if (batch_output(scratch)) {
+                    // early return if the callback says so
+                    break;
                 }
             }
             return {distance_cnt, collision_cnt};
