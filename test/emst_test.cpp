@@ -77,7 +77,6 @@ int main() {
              //"weight-difference", weight - weight_exact,
              "elapsed_s", elapsed);
     
-    // tree.find_tree_hist(emst_exact);
     exit(0);
 
     // // // Approximate with predictions

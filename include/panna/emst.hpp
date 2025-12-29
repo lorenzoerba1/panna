@@ -345,132 +345,9 @@ namespace panna {
             return { tree_weight, tree };
         }
 
-        std::vector<std::pair<float, unsigned int>>
-        find_tree_hist( std::vector<Edge> tree ) {
-            clear();
-            float tree_weight = 0;
-            std::vector<std::pair<float, unsigned int>> hist;
-            hist.push_back( std::make_pair( 0.0f, 0 ) );
-            for ( const auto& edge : tree ) {
-                float weight = edge.weight;
-                //top.push_back( std::make_tuple( weight, edge ) );
-                hist.push_back( std::make_pair( weight, 0 ) );
-            }
-            hist.push_back( std::make_pair( std::numeric_limits<float>::max(), 0 ) );
-
-            bool found = false;
-            std::vector<Edge> edges;
-            for ( size_t i_rev = 0; i_rev <= MAX_HASHBITS; i_rev++ ) {
-                size_t i = MAX_HASHBITS - i_rev;
-                if ( found ) {
-                    break;
-                }
-                size_t completed_repetitions = 0;
-
-                #pragma omp parallel for schedule(static, 1)
-                for ( size_t j = 0; j < MAX_REPETITIONS; j++ ) {
-                    if ( found ) {
-                        continue;
-                    }
-                    DSU local_dsu( num_data );
-                    std::vector<Edge> local_top, local_Tu;
-                    enumerate_edges( i, j, local_Tu );
-                    
-                    std::sort(local_Tu.begin(), local_Tu.end());
-
-                    local_confirmed[j].insert( local_confirmed[j].end(),
-                                               std::make_move_iterator( local_top.begin() ),
-                                               std::make_move_iterator( local_top.end() ) );
-
-                    size_t current_repetition;
-                    #pragma omp atomic capture
-                    current_repetition = ++completed_repetitions;
-
-                    if ( current_repetition % 50 == 0 || current_repetition >= MAX_REPETITIONS )
-                    {
-                    #pragma omp critical
-                    {
-                        // completed_repetitions+= 50; // Already incremented
-
-                        for ( size_t local_index = 0; local_index < MAX_REPETITIONS; local_index++ ) {
-                            auto& local = local_confirmed[local_index];
-
-                            // For each edge in local, find where it is placed between the distances of the histogram and increment its count
-                            for ( const auto& edge : local ) {
-                                float weight =  edge.weight ;
-                                for ( size_t h = 0; h < hist.size() - 1; h++ ) {
-                                    if ( weight >= hist[h].first && weight < hist[h + 1].first ) {
-                                        hist[h].second += 1;
-                                        break;
-                                    }
-                                }
-
-                            }
-                            edges.insert( edges.end(),
-                                std::make_move_iterator(local.begin()),
-                                std::make_move_iterator(local.end()));
-                            local.clear();
-                        }
-                        std::sort( edges.begin(), edges.end() );
-                        edges.erase( std::unique( edges.begin(), edges.end() ), edges.end() );
-                        top.clear();
-                        dsu_true = DSU( num_data );
-                        kruskal( dsu_true, edges, top );
-
-                        LOG_INFO( "prefix", i, "repetition", completed_repetitions, "tree_size", top.size() );
-                        if ( top.size() == num_data - 1 ) {
-                            float new_tree_weight = 0;
-                            max_weight = std::pow(  top.back().weight , 2 );
-                            for ( const auto& edge : top ) {
-                                new_tree_weight += edge.weight ;
-                            }
-                            tree_weight = new_tree_weight;
-                            // Fill the DSU filter with just the confirmed edgesù
-                            auto partition_point =
-                                std::partition_point( top.begin(), top.end(), [&]( const auto& e ) {
-                                    return table.fail_probability( e.weight, i, j ) < delta;
-                                } );
-                            
-
-                            float fp = failure_probability( i, completed_repetitions );
-                            LOG_INFO( "prefix",
-                                        i,
-                                        "repetition",
-                                        completed_repetitions,
-                                        "tree_weight",
-                                        tree_weight,
-                                        "failure_probability",
-                                        fp,
-                                        "max_edge_weight",
-                                        top.back().weight ,
-                                        "mean_edge_weight",
-                                        tree_weight / ( num_data - 1 ) );
-                            if ( fp < delta ) {
-                                found = true;
-                            }   
-                        }
-                        
-                    }
-                }
-            }
-                LOG_INFO( "msg", "finished prefix", "prefix", i );
-            }
-            LOG_INFO("msg", "EMST finished",
-                     "distances_computed", distances_computed);
-            // Write the histogram to a file
-            std::ofstream hist_file("histogram.csv");
-            hist_file << "weight,count\n";
-            for (const auto& [weight, count] : hist) {
-                hist_file << weight << "," << count << "\n";
-            }
-            return hist;
-        }
-
-
         // TODO: maybe this should also be factored in the find_tree code?
-        std::pair<
-        std::vector<Edge>,
-        std::vector< std::vector< std::pair<float, unsigned int>>> > find_tree_dbscan( size_t k=5 ) {
+        std::pair<std::vector<Edge>, std::vector<std::vector<std::pair<float, unsigned int>>>>
+        find_tree_dbscan( size_t k = 5 ) {
             clear();
             // dirty_start(local_confirmed[0]);
             float tree_weight = 0, old_weight = std::numeric_limits<float>::infinity();
@@ -682,7 +559,6 @@ namespace panna {
             
             return { tree, neighbors };
         }
-
 
         float mean_weight() {
             size_t edges_to_pick = std::min<size_t>( ( num_data - 1 ) * num_data / 2, 10000 );
