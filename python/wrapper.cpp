@@ -236,7 +236,7 @@ struct EMST_exposed {
     // Method to find the MST for the reachability and return results as NumPy arrays
     nb::tuple find_mst_dbscan(unsigned int k) {
         // Call the underlying C++ method
-        auto result_pair = inner->find_tree_dbscan(k);
+        auto result_pair = inner->find_tree_mutual_reachability_distance(k);
 
         // 1. MST Edges
         auto& tree_edges_vec = result_pair.first;
@@ -268,11 +268,7 @@ struct EMST_exposed {
 
         auto core_vec_ptr = std::make_unique<std::vector<float>>(num_points);
         for (size_t i = 0; i < num_points; ++i) {
-            if (!neighbor_results[i].empty()) {
-                (*core_vec_ptr)[i] = neighbor_results[i].front().first;
-            } else {
-                (*core_vec_ptr)[i] = std::numeric_limits<float>::infinity();
-            }
+            (*core_vec_ptr)[i] = neighbor_results.core_distance(i);
         }
 
         nb::capsule core_owner(core_vec_ptr.get(), [](void *p) noexcept {
@@ -294,8 +290,9 @@ struct EMST_exposed {
         
         for (size_t i = 0; i < num_points; ++i) {
             for (size_t j = 0; j < num_neighbors_per_point; ++j) {
-                if (j < neighbor_results[i].size()) {
-                    (*neighbors_vec_ptr)[i * num_neighbors_per_point + j] = neighbor_results[i][j].second;
+                auto nn = neighbor_results.get_neighbors(i);
+                if (j < nn.size()) {
+                    (*neighbors_vec_ptr)[i * num_neighbors_per_point + j] = nn[j];
                 } else {
                     (*neighbors_vec_ptr)[i * num_neighbors_per_point + j] = i;
                 }

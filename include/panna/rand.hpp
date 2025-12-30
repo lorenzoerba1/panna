@@ -1,6 +1,8 @@
 #pragma once
 
 #include <random>
+#include <unordered_set>
+#include <vector>
 
 namespace panna {
 
@@ -51,4 +53,20 @@ namespace panna {
         }
         return out;
     }
+
+    static std::vector<size_t> sample_k( size_t n, size_t k ) {
+        // This uses Robert Floyd's algorithm: https://dl.acm.org/doi/abs/10.1145/30401.315746
+        auto& gen = get_global_rng();
+        std::unordered_set<size_t> s;
+
+        for ( size_t i = n - k; i < n; ++i ) {
+            std::uniform_int_distribution<size_t> dist( 0, i );
+            size_t t = dist( gen );
+            if ( !s.insert( t ).second )
+                s.insert( i );
+        }
+
+        return std::vector<size_t>( s.begin(), s.end() );
+    }
+
 } // namespace panna

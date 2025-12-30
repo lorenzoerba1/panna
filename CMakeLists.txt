@@ -17,6 +17,7 @@ set(CMAKE_BUILD_PARALLEL_LEVEL 8)
 add_compile_options(-Wall -Wextra -Wno-noexcept-type -Wno-implicit-fallthrough -Wno-unused-function)
 # Always optimize as much as we can
 # Instead of relying on -march=native (which breaks when building with nix) we
+# define the flags we need here
 add_compile_options(-O3 -g -mavx2 -mfma)
 
 find_package(OpenMP)

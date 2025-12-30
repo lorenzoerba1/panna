@@ -13,6 +13,7 @@
 #include "panna/channel.hpp"
 #include "panna/dsu.hpp"
 #include "panna/logging.hpp"
+#include "panna/rand.hpp"
 #include "panna/trieindex.hpp"
 #include "panna/git_version.hpp"
 
@@ -36,6 +37,197 @@ namespace panna {
         }
         explicit RunningResult( std::vector<Edge>&& tree, DSU&& filter ):
             tree( tree ), filter( filter ) {
+        }
+    };
+
+
+    /// A mutual-reachability distance edge, keeping track of the lower
+    /// bound on the distance
+    struct MREdge {
+        float weight;
+        float lower_bound;
+        uint32_t a;
+        uint32_t b;
+
+        bool is_tight() const {
+            return weight == lower_bound;
+        }
+
+        Edge as_edge() const {
+            return { .weight = lower_bound, .a = a, .b = b };
+        }
+
+        friend constexpr inline bool operator<( MREdge l, MREdge r ) {
+            return std::tie(l.weight, l.lower_bound, l.a, l.b) < std::tie(r.weight, r.lower_bound, r.a, r.b);
+        }
+
+        friend constexpr inline bool operator==( MREdge l, MREdge r ) {
+            return std::tie(l.weight, l.lower_bound, l.a, l.b) == std::tie(r.weight, r.lower_bound, r.a, r.b);
+        }
+    };
+
+    /// Maintains information about the nearest neighbors of each point, to
+    /// compute core distances.
+    /// Can be updated, but access is not synchronized between threads.
+    struct CoreDistances {
+    private:
+        /// how many points we are managing information about
+        size_t num_points;
+        /// how many neighbors we keep track of
+        size_t num_neighbors;
+        /// the information about neighbors. For each point we
+        /// maintain num_neighbors neighbors
+        std::vector<std::pair<float, uint32_t>> neighbors;
+        /// the maximum distance between each point and
+        /// its current farthest neighbor
+        std::vector<float> max_distances;
+
+        void do_update( uint32_t src, uint32_t dst, float dist ) {
+            // Given the typical small value for num_neighbors,
+            // we simply proceed by a linear scan of the points.
+            if ( src == dst ) {
+                return;
+            }
+            if ( num_neighbors == 0 ) {
+                return;
+            }
+            if ( dist < max_distances[src] ) {
+                size_t offset = src * num_neighbors;
+                // Handle special case of num_neighbors and == 1
+                if ( num_neighbors == 1 ) {
+                    if ( dist < neighbors[offset].first ) {
+                        neighbors[offset] = { dist, dst };
+                        max_distances[src] = dist;
+                    }
+                    return;
+                }
+
+                size_t ifmax = offset; // index of first maximum
+                float fmax = -std::numeric_limits<float>::infinity();
+                float smax = -std::numeric_limits<float>::infinity();
+                for ( size_t i = offset; i < offset + num_neighbors; i++ ) {
+                    if ( neighbors[i].first > fmax ) {
+                        smax = fmax;
+                        fmax = neighbors[i].first;
+                        ifmax = i;
+                    }
+                }
+                // replace the farthest point
+                neighbors[ifmax] = { dist, dst };
+                // update the maximum distance
+                if ( dist > smax ) {
+                    max_distances[src] = dist;
+                } else {
+                    max_distances[src] = smax;
+                }
+            }
+        }
+
+
+    public:
+        explicit CoreDistances(): CoreDistances( 0, 0 ) {
+        }
+        explicit CoreDistances( size_t num_points, size_t num_neighbors ):
+            num_points( num_points ),
+            num_neighbors( num_neighbors ),
+            neighbors( num_points * num_neighbors ),
+            max_distances( num_points, std::numeric_limits<float>::infinity() ) {
+        }
+
+        template <typename Dataset, typename Distance>
+        static CoreDistances random( const Dataset& data, size_t num_neighbors ) {
+            CoreDistances self( data.size(), num_neighbors );
+            std::vector<size_t> pivots = sample_k( data.size() - 1, num_neighbors + 1 );
+
+            #pragma omp parallel for
+            for ( size_t a = 0; a < self.num_points; a++ ) {
+                size_t offset = a * num_neighbors;
+                size_t neighbor_idx = 0;
+                float farthest = 0.0;
+                for ( size_t b : pivots ) {
+                    if (neighbor_idx >= num_neighbors) {
+                        break;
+                    }
+                    if ( a != b ) {
+                        float dist = Distance::compute( data[a], data[b] );
+                        expect(neighbor_idx < num_neighbors);
+                        self.neighbors[offset + neighbor_idx] = { dist, b };
+                        if (dist > farthest) {
+                            farthest = dist;
+                        }
+                        neighbor_idx++;
+                    }
+                }
+                self.max_distances[a] = farthest;
+            }
+            return self;
+        }
+
+        size_t size() const {
+            return num_points;
+        }
+
+        std::vector<uint32_t> get_neighbors(const uint32_t v) const {
+            std::vector<uint32_t> nn;
+            nn.reserve(num_neighbors);
+                size_t offset = v* num_neighbors;
+            for ( size_t i = offset; i < offset + num_neighbors; i++ ) {
+                nn.push_back(neighbors.at(i).second);
+            }
+            return nn;
+        }
+
+        /// update the neighborhood of both a and b, with dist being
+        /// their distance
+        void update( uint32_t a, uint32_t b, float dist ) {
+            do_update( a, b, dist );
+            do_update( b, a, dist );
+        }
+
+        void update( Edge& edge ) {
+            update( edge.a, edge.b, edge.weight );
+        }
+
+        /// the distance of the farthest among the num_points
+        /// neighbors we keep track of
+        float core_distance( uint32_t a ) const {
+            return max_distances[a];
+        }
+
+        /// The current best guess of the mutual reachability
+        /// distance between a and b, given the information we accumulated so far.
+        /// `dist` is the actual distance between a and b
+        float mutual_reachability_distance(uint32_t a, uint32_t b, float dist) const {
+            return std::max(std::max(core_distance(a), core_distance(b)),  dist);
+        }
+
+        float mutual_reachability_distance( const Edge& e ) const {
+            return mutual_reachability_distance( e.a, e.b, e.weight );
+        }
+
+        MREdge mutual_reachability_edge( uint32_t a, uint32_t b, float dist ) const {
+            float mr_dist = mutual_reachability_distance( a, b, dist );
+            return {
+                .weight = mr_dist, .lower_bound = dist, .a = a, .b = b
+            };
+        }
+
+        MREdge mutual_reachability_edge( const Edge& e ) const {
+            return mutual_reachability_edge( e.a, e.b, e.weight );
+        }
+    };
+
+    struct MRRunningResult {
+        std::vector<Edge> tree;
+        DSU filter;
+        CoreDistances neighborhoods;
+
+        explicit MRRunningResult(): tree(), filter( 0 ), neighborhoods() {
+        }
+        explicit MRRunningResult( std::vector<Edge>&& tree,
+                                  DSU&& filter,
+                                  CoreDistances&& neighborhoods ):
+            tree( tree ), filter( filter ), neighborhoods( neighborhoods ) {
         }
     };
 
@@ -165,6 +357,41 @@ namespace panna {
             return {tree_weight, tree};
         }
 
+        std::pair<float, std::vector<Edge>> exact_mutual_reachability_distance_tree( const size_t num_neighbors ) {
+            // Clear from any previous runs
+            clear();
+            // Compute all the distances
+            //  We can pre-allocate all the memory, and avoid the critical region
+            std::vector<Edge> all_edges( ( num_data - 1 ) * num_data / 2 );
+#pragma omp parallel for collapse (2)
+            for ( size_t i = 0; i < num_data; i++ ) {
+                for ( size_t j = i + 1; j < num_data; j++ ) {
+                    float dist = table.get_distance( i, j );
+                    all_edges[i * ( num_data - 1 ) - ( i * ( i + 1 ) / 2 ) + j - 1] =
+                        Edge{ .weight = dist, .a = (uint32_t)i, .b = (uint32_t)j };
+                }
+            }
+            CoreDistances cd( num_data, num_neighbors );
+            for (auto &e: all_edges) {
+                cd.update(e.a, e.b, e.weight);
+            }
+
+            // Create the DSU
+            float tree_weight = 0;
+            std::cout << "Creating the MST" << std::endl;
+            std::vector<Edge> tree;
+            update_tree( tree, all_edges, cd );
+            size_t position_last_edge = static_cast<size_t>(std::find( all_edges.begin(), all_edges.end(), tree.back() ) - all_edges.begin());
+            for ( const auto& edge : tree ) {
+                tree_weight += edge.weight ;
+            }
+            LOG_INFO("msg", "MST created",
+                      "heaviest_edge",  tree.back().weight ,
+                      "tree-weight", tree_weight,
+                      "Weight_edge_2n",  all_edges[std::min(2 * (position_last_edge), (all_edges.size() - 1))].weight 
+            );
+            return {tree_weight, tree};
+        }
         /// the worker function in find_tree
         static void worker_fun( const size_t tid,
                                 const size_t prefix,
@@ -209,7 +436,66 @@ namespace panna {
                     } );
                 count_distances += cnt_dist;
                 count_collisions += cnt_collisions;
+                // OPTIMIZE: do not send the edges that
+                // we know are already in the best tree found so far
                 partials.send( std::move( local_tree ) );
+            }
+        }
+
+        static void worker_fun_mutual_reachability( const size_t tid,
+                                                    const size_t prefix,
+                                                    const Index<Dataset, Hasher, Distance>& table,
+                                                    Billboard<MRRunningResult>& running_result,
+                                                    std::atomic_bool& found,
+                                                    std::atomic<float>& max_weight,
+                                                    std::atomic_size_t& count_distances,
+                                                    std::atomic_size_t& count_collisions,
+                                                    Channel<size_t>& work,
+                                                    Channel<std::vector<Edge>>& partials ) {
+            for ( std::optional<size_t> orepetition = work.receive(); orepetition.has_value();
+                  orepetition = work.receive() ) {
+                std::vector<Edge> possibly_useful_edges;
+                auto rr = running_result.read();
+                std::vector<Edge> local_tree( rr->tree );
+                auto neighborhoods = rr->neighborhoods;
+                size_t repetition = *orepetition;
+                LOG_INFO(
+                    "tid", tid, "repetition", repetition, "prefix", prefix, "logger", "worker" );
+                // The edges we have to keep even if they are not part of the tree,
+                // because they might be updated to a smaller weight in the future
+                std::vector<MREdge> non_tree_edges;
+                if ( found ) {
+                    // Return if the tree was found
+                    LOG_INFO(
+                        "tid", tid, "logger", "worker", "msg", "tree found, stopping worker" );
+                    return;
+                }
+                DSU filter = rr->filter;
+                auto [cnt_dist, cnt_collisions] = table.search_pairs_different_groups(
+                    repetition,
+                    prefix,
+                    10 * filter.size(), // buffer size
+                    max_weight,
+                    [&]( uint32_t x ) { return filter.cfind( x ); },
+                    [&]( std::vector<Edge>& updates ) {
+                        update_tree( local_tree, updates, neighborhoods );
+                        expect( local_tree.size() > 0 );
+                        // keep track of the edges that might still be useful
+                        // add the potentially useful updates to the stash. Note that
+                        // updates are filtered in the `update_tree` call
+                        possibly_useful_edges.insert( possibly_useful_edges.end(),
+                                                      std::make_move_iterator( updates.begin() ),
+                                                      std::make_move_iterator( updates.end() ) );
+                        // early stop if the solution has been found in the meantime
+                        // TODO: send all the edges that might improve the core distances
+                        return found.load();
+                    } );
+                count_distances += cnt_dist;
+                count_collisions += cnt_collisions;
+                possibly_useful_edges.insert( possibly_useful_edges.end(),
+                                              std::make_move_iterator( local_tree.begin() ),
+                                              std::make_move_iterator( local_tree.end() ) );
+                partials.send( std::move( possibly_useful_edges ) );
             }
         }
 
@@ -222,9 +508,9 @@ namespace panna {
 
             std::atomic<float> max_weight( std::numeric_limits<float>::infinity() );
             float tree_weight = 0;
-            // std::vector<Edge> tree;
             std::atomic_size_t count_distances( 0 ), count_collisions( 0 );
-            const size_t max_threads = std::thread::hardware_concurrency() - 1;
+            const size_t hardware_concurrency = std::thread::hardware_concurrency();
+            const size_t max_threads = ( hardware_concurrency > 1 ) ? hardware_concurrency - 1 : 1;
 
             std::atomic_bool found( false );
             for ( size_t prefix = MAX_HASHBITS; prefix > 0 && !found; prefix-- ) {
@@ -338,302 +624,163 @@ namespace panna {
             for (auto e : tree) {
                 tree_weight += e.weight;
             }
+            distances_computed = count_distances;
+            num_collisions = count_collisions;
 
             // This is just a sanity check to see if dsu works as intended
             is_connected( tree );
-            LOG_INFO( "msg", "EMST finished", "distances_computed", distances_computed, "num_collisions", num_collisions, "num_total_pairs", (num_data -1) * num_data/ 2 );
+            LOG_INFO( "msg", "EMST finished", "distances_computed", distances_computed, "num_collisions", num_collisions, "num_total_pairs", ((size_t)num_data -1) *(size_t) num_data/ 2 );
             return { tree_weight, tree };
         }
 
-        // TODO: maybe this should also be factored in the find_tree code?
-        std::pair<std::vector<Edge>, std::vector<std::vector<std::pair<float, unsigned int>>>>
-        find_tree_dbscan( size_t k = 5 ) {
+        std::pair<std::vector<Edge>, CoreDistances>
+        find_tree_mutual_reachability_distance( size_t num_neighbors ) {
             clear();
-            // dirty_start(local_confirmed[0]);
-            float tree_weight = 0, old_weight = std::numeric_limits<float>::infinity();
-            std::vector<Edge> tree;
-            std::vector< std::vector< std::pair<float, unsigned int>>> neighbors (num_data, std::vector< std::pair<float, unsigned int> >() );
-            std::vector<std::vector< std::vector< std::pair<float, unsigned int>>>> local_neighbors_list( 16, std::vector< std::vector< std::pair<float, unsigned int> > >(num_data, std::vector< std::pair<float, unsigned int> >(1, std::make_pair( 0.0f, -1) ) ) );
 
-            bool found = false;
-            std::vector<Edge> edges;
-            // Find also the top-k nearest neighbors for each node
-            for ( size_t i_rev = 0; i_rev <= MAX_HASHBITS; i_rev++ ) {
-                size_t i = MAX_HASHBITS - i_rev;
+            CoreDistances cs =
+                CoreDistances::random<Dataset, Distance>( table.get_dataset(), num_neighbors );
+            Billboard<MRRunningResult> running_result;
+            running_result.update(
+                MRRunningResult( std::vector<Edge>(), DSU( num_data ), std::move( cs ) ) );
+
+            std::atomic<float> max_weight( std::numeric_limits<float>::infinity() );
+            std::atomic_size_t count_distances( 0 ), count_collisions( 0 );
+            const size_t hardware_concurrency = std::thread::hardware_concurrency();
+            const size_t max_threads = ( hardware_concurrency > 1 ) ? hardware_concurrency - 1 : 1;
+
+            std::atomic_bool found( false );
+            for ( size_t prefix = MAX_HASHBITS; prefix > 0 && !found; prefix-- ) {
+                // Set up work to distribute among threads: each worker thread will pull
+                // repetition indices from this
+                Channel<size_t> work( MAX_REPETITIONS );
+                for ( size_t repetition = 0; repetition < MAX_REPETITIONS; repetition++ ) {
+                    work.send( std::move( repetition ) );
+                }
+                // Close the channel, so that workers do not wait indefinitely for new repetitions
+                work.close();
+
+                // Set up the channel to collect partial results
+                Channel<std::vector<Edge>> partials( MAX_REPETITIONS );
+
+                // spawn the threads to carry out the work
+                std::vector<std::thread> workers;
+                for ( size_t tid = 0; tid < max_threads; tid++ ) {
+                    std::thread worker( EMST::worker_fun_mutual_reachability,
+                                        tid,
+                                        prefix,
+                                        std::ref( table ),
+                                        std::ref( running_result ),
+                                        std::ref( found ),
+                                        std::ref( max_weight ),
+                                        std::ref( count_distances ),
+                                        std::ref( count_collisions ),
+                                        std::ref( work ),
+                                        std::ref( partials ) );
+                    workers.push_back( std::move( worker ) );
+                }
+
+                // collect the results from the worker threads
                 size_t completed_repetitions = 0;
-                if ( found )
-                    break;
-#pragma omp parallel for schedule(static, 1)
-                for ( size_t j = 0; j < MAX_REPETITIONS; j++ ) {
-                    if ( found )
-                        continue;
-                    DSU local_dsu( num_data );
-                    auto& local_neighbors = local_neighbors_list[ omp_get_thread_num() ];
-                    std::vector<Edge> local_top, local_Tu;
-                    enumerate_edges( i, j, local_Tu );
+                std::vector<Edge> stash;
+                for ( std::optional<std::vector<Edge>> local_tree = partials.receive();
+                      local_tree.has_value() && !found && completed_repetitions < MAX_REPETITIONS;
+                      local_tree = partials.receive() ) {
+                    filter.reset();
+                    std::vector<Edge> update = std::move( *local_tree );
+                    // clang-format off
+                    LOG_INFO( "logger", "collector", "msg", "received update", "update-size", update.size(), "stash-size", stash.size());
+                    // clang-format: on
+                    update.insert(update.end(), stash.begin(), stash.end());
 
-                    // Fill the neighbors
-                    for ( const auto& edge : local_Tu ) {
-                        local_neighbors[edge.a].emplace_back( edge.weight, edge.b );
-                        local_neighbors[edge.b].emplace_back( edge.weight, edge.a );
+                    completed_repetitions++;
+
+                    std::vector<Edge> tree( running_result.read()->tree );
+                    CoreDistances core_distances(running_result.read()->neighborhoods);
+                    for (auto & edge : update) {
+                        core_distances.update(edge);
                     }
-                    for ( size_t index = 0; index < local_neighbors.size(); index++ ) {
-                        // Use partial sort to keep just the best k
-                        if ( local_neighbors[index].size() > k) {
-                            std::partial_sort( local_neighbors[index].begin(),
-                                                  local_neighbors[index].begin() + k,
-                                                    local_neighbors[index].end() );
-                            local_neighbors[index].resize( k );
-                            continue;
-                        }
+                    update_tree(tree, update, core_distances);
+                    // stash the edges that might be useful in the future
+                    stash = std::move(update);
+                    // clang-format off
+                    LOG_INFO( "logger", "collector", "tree-size", tree.size(), "completed-repetitions", completed_repetitions , "stash-size", stash.size());
+                    // clang-format on
 
-                        std::sort( local_neighbors[index].begin(), local_neighbors[index].end() );
+                    if ( tree.size() == num_data - 1 ) {
+                        StoppingConditionInfo stop =
+                            stopping_condition( tree, prefix, completed_repetitions );
+                        float weight_lower_bound =
+                            stop.confirmed_weight +
+                            stop.edges_to_confirm * stop.heaviest_confirmed_edge;
+                        LOG_INFO( "weight-lower-bound", weight_lower_bound );
+                        bool should_stop =
+                            stop.total_weight <= ( 1 + epsilon ) * weight_lower_bound;
+                        // clang-format off
+                        LOG_INFO( "logger", "collector",
+                                  "stop.total_weight", stop.total_weight,
+                                  "stop.confirmed_weight", stop.confirmed_weight,
+                                  "stop.heaviest_confirmed_edge", stop.heaviest_confirmed_edge,
+                                  "stop.edges_to_confirm", stop.edges_to_confirm,
+                                  "heaviest_edge", tree[num_data-2].weight,
+                                  "weight_lower_bound", weight_lower_bound,
+                                  "should_stop", should_stop );
+                        // clang-format on
+                        max_weight = core_distances.mutual_reachability_distance(tree.back());
+                        LOG_INFO( "logger", "collector", "max-weight", max_weight.load() );
+
+                        // stop if we are done
+                        if ( should_stop ) {
+                            LOG_INFO( "msg", "tree found, signalling stop" );
+                            found = true;
+                        }
+                        // Fill the DSU filter with just the confirmed edges
+                        filter.reset();
+                        for ( size_t idx = 0; idx < stop.confirmed_edges; idx++ ) {
+                            auto edge = tree[idx];
+                            filter.union_sets( edge.a, edge.b );
+                        }
+                    } else {
+                        filter.reset();
                     }
-                    for ( auto& edge : local_Tu ) {
-                        // Use the reachability
-                        // Check if we have the elements in local neighbors before accessing the back
-                        if ( !local_neighbors[edge.a].empty() &&
-                             !local_neighbors[edge.b].empty() ) {
-                           edge.weight = std::max(
-                                edge.weight ,
-                                std::max(
-                                    local_neighbors[ edge.a ].back().first,
-                                    local_neighbors[ edge.b ].back().first ) );
-                        }
-                        if ( local_top.size() == num_data - 1 ) {
-                            break;
-                        }
-                        add_edge( edge, local_dsu, local_top );
-                    }
-                    local_confirmed[j].insert( local_confirmed[j].end(),
-                                               std::make_move_iterator( local_top.begin() ),
-                                               std::make_move_iterator( local_top.end() ) );
+                    // publish the new running result
+                    filter.compress_all();
+                    running_result.update( MRRunningResult(
+                        std::move( tree ), std::move( filter ), std::move( core_distances ) ) );
 
-                    // Every x iterations we have a batch, construct the MST from these edges
-                    size_t current_repetition;
-                    #pragma omp atomic capture
-                    current_repetition = ++completed_repetitions;
-
-                    if ( current_repetition % 50 == 0 || current_repetition >= MAX_REPETITIONS )
-                     {
-#pragma omp critical
-                        {   
-                            // Merge the local neighbors
-                            for ( size_t thread_index = 0; thread_index < local_neighbors_list.size();
-                                    thread_index++ ) {
-                                    auto& thread_neighbors = local_neighbors_list[ thread_index ];
-                                    for ( size_t index = 0; index < thread_neighbors.size(); index++ ) {
-                                        auto& local = thread_neighbors[index];
-                                        neighbors[index].insert( neighbors[index].end(),
-                                                                std::make_move_iterator( local.begin() ),
-                                                                std::make_move_iterator( local.end() ) );
-                                        local.clear();
-                                    }
-                                }
-                            for ( size_t index = 0; index < neighbors.size(); index++ ) {
-                                if ( neighbors[index].size() > k) {
-                                    // Use partial sort to keep just the best k
-                                    std::partial_sort( neighbors[index].begin(),
-                                                       neighbors[index].begin() + k,
-                                                       neighbors[index].end() );
-                                    neighbors[index].resize( k );
-                                    continue;
-                                }
-
-                                std::sort( neighbors[index].begin(), neighbors[index].end() );
-                            }
-
-                            // Merge the local tops
-                            edges.insert( edges.end(),
-                                          std::make_move_iterator( top.begin() ),
-                                          std::make_move_iterator( top.end() ) );
-                            top.clear();
-                            dsu_true = DSU( num_data );
-                            for ( size_t local_index = 0; local_index < j + 1; local_index++ ) {
-                                auto& local = local_confirmed[local_index];
-                                edges.insert( edges.end(),
-                                                std::make_move_iterator(local.begin()),
-                                                std::make_move_iterator(local.end()) );
-                                local.clear();
-                            }
-                            // Change the edge weights based on their reachability
-                            for (auto& edge: edges){
-                                edge.weight  = std::max( 
-                                    edge.weight,
-                                    std::max( neighbors[  edge .a ].back().first,
-                                              neighbors[  edge .b].back().first ) );
-                            }
-                            std::sort( edges.begin(), edges.end() );
-
-                            if ( edges.size() > num_data - 1 ) {
-                                for ( const auto& edge : edges ) {
-                                    add_edge( edge, dsu_true, top );
-                                    if ( top.size() == num_data - 1 ) {
-                                        break;
-                                    }
-                                }
-
-                                if ( top.size() == num_data - 1 ) {
-                                    float new_tree_weight = 0;
-                                    max_weight =  top.back().weight ;
-                                    for ( const auto& edge : top ) {
-                                        new_tree_weight +=  edge.weight ;
-                                    }
-                                    // Find the edges that satisfy the failure probability
-                                    float delta_local = delta;
-                                    auto partition_point = std::find_if(
-                                        top.begin(), top.end(), [&]( const auto& e ) {
-                                            delta_local -= table.fail_probability(
-                                                        e.weight , i, j );
-                                            return delta_local <= 0.0f;
-                                        } );
-                                        
-                                    tree_weight = new_tree_weight;
-                                    float bound_weight =
-                                        ( 1 + epsilon ) *
-                                            std::accumulate( top.begin(),
-                                                             partition_point,
-                                                             0.0f,
-                                                             []( float acc, const Edge& e ) {
-                                                                 return acc +  e.weight ;
-                                                             } );
-                                    if ( partition_point != top.begin() ){
-                                        bound_weight += ( ( *( partition_point - 1 ) ).weight *
-                                                          std::distance( partition_point, top.end() ) );
-                                    }
-                                    // Fill the pruning DSU
-                                    filter = DSU( num_data );
-                                    for ( auto it = top.begin(); it != partition_point; ++it ) {
-                                        filter.union_sets( ( *it ).a, ( *it ).b );
-                                    }
-                                    LOG_INFO("prefix", i,
-                                             "repetition", completed_repetitions,
-                                             "tree_weight", tree_weight,
-                                             "bound_weight", bound_weight,
-                                             "max_edge_weight", top.back().weight,
-                                             "mean_edge_weight", tree_weight / (num_data - 1));
-                                    if ( tree_weight <= bound_weight ) {
-                                        tree.clear();
-                                        found = true;
-                                        // Fill the tree
-                                        for ( const auto& edge : top ) {
-                                            tree.emplace_back( static_cast<float>( ( edge ).a ),
-                                                               static_cast<float>( ( edge ).b ),
-                                                               edge.weight );
-                                        }
-                                    }
-                                    // If the weight hasn't changed epsilon*old_weight
-                                    else if ( i <= 5 &&
-                                              std::abs( old_weight - tree_weight ) / old_weight <
-                                                  epsilon ) {
-                                        tree.clear();
-                                        LOG_INFO("msg", "Tree weight converged",
-                                                 "old_weight", old_weight,
-                                                 "tree_weight", tree_weight,
-                                                 "relative_change", std::abs( old_weight - tree_weight ) / old_weight);
-                                        found = true;
-                                        // Fill the tree
-                                        for ( const auto& edge : top ) {
-                                            tree.emplace_back( static_cast<float>(  edge .a ),
-                                                               static_cast<float>(  edge .b),
-                                                               edge.weight  );
-                                        }
-                                    }
-                                    old_weight = tree_weight;
-                                }
-                                // Lose the unused edges, MST is composable wrt to edge partitioning
-                                edges.clear();
-                            }
-                        }
-                        // completed_repetitions+= 50; // Already incremented
+                    if ( completed_repetitions >= MAX_REPETITIONS ) {
+                        // we are done with this prefix
+                        break;
                     }
                 }
-                // Clear the local neighbors
-                for ( auto& local : local_neighbors_list ) {
-                    for ( auto& vec : local ) {
-                        vec.clear();
-                    }
-                }
-    
-            }
-            
-            return { tree, neighbors };
-        }
 
-        float mean_weight() {
-            size_t edges_to_pick = std::min<size_t>( ( num_data - 1 ) * num_data / 2, 10000 );
-            // Pick edges_to_pick random couples of nodes and compute the mean weight
-            float mean = 0;
-            for ( size_t i = 0; i < edges_to_pick; i++ ) {
-                // Get a random edge
-                std::random_device rd;
-                std::mt19937 gen( rd() );
-                std::uniform_int_distribution<size_t> dist_1( 0, num_data - 1 );
-                size_t random_index_1 = dist_1( gen );
-                size_t random_index_2 = dist_1( gen );
-                // Get the distance of the edge
-                float dist = table.get_distance( random_index_1, random_index_2 );
-                // Add it to the mean
-                mean += dist;
+                // Wait for workers to finish
+                for ( auto&& worker : workers ) {
+                    worker.join();
+                }
+                LOG_INFO( "msg", "completed prefix", "prefix", prefix );
             }
-            mean /= edges_to_pick;
-            return mean;
+
+            auto rr = running_result.read();
+            std::vector<Edge> tree( rr->tree );
+            CoreDistances core_distances( rr->neighborhoods);
+
+            distances_computed = count_distances;
+            num_collisions = count_collisions;
+            // This is just a sanity check to see if dsu works as intended
+            is_connected( tree );
+            LOG_INFO( "msg",
+                      "EMST finished",
+                      "distances_computed",
+                      distances_computed,
+                      "num_collisions",
+                      num_collisions,
+                      "num_total_pairs",
+                      ( (size_t )num_data - 1 ) * (size_t)num_data / 2 );
+            return { tree, core_distances };
         }
 
         //*** Private methods */
     private:
-        /// @brief Obtain the couples of nodes that share the same prefix from the hash table
-        /// @param i Current concatenation in the hash index
-        /// @param j current repetition in the hash index
-        /// @param Tu_local vector that stores the edges
-        void enumerate_edges( size_t i, size_t j, std::vector<Edge>& Tu_local ) {
-            // Discover edges that share the same prefix at iteration i, j
-            size_t cnt_dist, cnt_collisions;
-            std::tie( cnt_dist, cnt_collisions ) = table.search_pairs_different_groups(
-                j,
-                i,
-                10*num_data, // batch size
-                max_weight,
-                [&]( uint32_t x ) { return filter.find( x ); },
-                [&]( std::vector<Edge>& scratch ) {
-                    for ( auto edge : scratch ) {
-                        Tu_local.push_back(edge);
-                    }
-                    return false;
-                } );
-#pragma omp atomic
-            distances_computed += cnt_dist;
-#pragma omp atomic
-            num_collisions += cnt_collisions;
-            return;
-        };
-
-        /// Update the given tree with the edges discovered from repetition j
-        /// at prefix i. 
-        void update_local_tree( size_t i, size_t j, std::vector<Edge>& tree) {
-            DSU dsu(num_data);
-            auto [cnt_dist, cnt_collisions] = table.search_pairs_different_groups(
-                j,
-                i,
-                10*num_data, // buffer size
-                max_weight,
-                [&]( uint32_t x ) { return filter.find( x ); },
-                [&]( std::vector<Edge>& scratch ) {
-                    LOG_INFO("msg","building tree on batch", "batch_size", scratch.size());
-                    scratch.insert( scratch.end(),
-                                      std::make_move_iterator( tree.begin() ),
-                                      std::make_move_iterator( tree.end() ) );
-                    std::sort(scratch.begin(), scratch.end());
-                    tree.clear();
-                    kruskal(dsu, scratch, tree);
-                    return false;
-                } );
-#pragma omp atomic
-            distances_computed += cnt_dist;
-#pragma omp atomic
-            num_collisions += cnt_collisions;
-            return;
-        };
 
         /// @brief Checks wheter a tree is connected
         /// @param tree the tree that we want to check
@@ -680,6 +827,7 @@ namespace panna {
         /// @param edge_list the current edges in the tree
         /// @return true if an edge has been added to the edge_list and the DSU data structure,
         /// false otherwise
+        template<typename Edge>
         static bool add_edge( const Edge& new_edge, DSU& dsu, std::vector<Edge>& edge_list ) {
             // Try to add new edge normally.
             if ( dsu.union_sets( new_edge.a, new_edge.b ) ) {
@@ -693,6 +841,7 @@ namespace panna {
         /// @param dsu the data structure that keeps track of the connected components
         /// @param edge_list the current edges in the tree
         /// @param output the output vector that will contain the edges in the minimum spanning tree
+        template<typename Edge>
         static void kruskal( DSU& dsu, std::vector<Edge>& edge_list, std::vector<Edge>& output ) {
             for ( const auto& edge : edge_list ) {
                 if ( output.size() == dsu.size() - 1 ) {
@@ -700,6 +849,55 @@ namespace panna {
                 }
                 add_edge( edge, dsu, output );
             }
+        }
+
+        /// Update the given tree with edges from the `update` list. After
+        /// execution, tree will contain the minimum spanning tree
+        /// on the union of `tree` and `updates`.
+        /// `updates` will contain unused edges that might possibly participate
+        /// in the minimum spanning tree in the future, if their mutual
+        /// rechability distance lowers, as an effect of newly discovered and better
+        /// neighbors
+        /// `neighborhoods` is used to compute the mutual reachability distances.
+        static void update_tree( std::vector<Edge>& tree,
+                                 std::vector<Edge>& updates,
+                                 const CoreDistances& core_distances ) {
+            DSU uf( core_distances.size() );
+            std::vector<MREdge> all;
+            for ( auto&& e : tree ) {
+                all.push_back( core_distances.mutual_reachability_edge( e ) );
+            }
+            for ( auto&& e : updates ) {
+                all.push_back( core_distances.mutual_reachability_edge( e ) );
+            }
+            std::sort( all.begin(), all.end() );
+            tree.clear();
+            updates.clear();
+            float threshold_up = -std::numeric_limits<float>::infinity();
+            float threshold_low = -std::numeric_limits<float>::infinity();
+            for ( auto&& e : all ) {
+                if ( tree.size() == uf.size() - 1 ) {
+                    break;
+                }
+                if ( uf.union_sets( e.a, e.b ) ) {
+                    if (e.weight > threshold_up) {
+                        threshold_up = e.weight;
+                    }
+                    if (e.lower_bound > threshold_low) {
+                        threshold_low = e.lower_bound;
+                    }
+                    tree.push_back( e.as_edge() );
+                } else {
+                    // FIXME: we might be stashing some duplicates
+                    updates.push_back( e.as_edge() );
+                }
+            }
+            expect(threshold_up >= 0);
+            expect(threshold_low >= 0);
+            auto erase_from = std::remove_if( updates.begin(), updates.end(), [&]( Edge edge ) {
+                return !( threshold_low <= edge.weight && edge.weight <= threshold_up );
+            } );
+            updates.erase(erase_from, updates.end());
         }
 
         /// @brief Generate a random spanning tree to have an initial solution

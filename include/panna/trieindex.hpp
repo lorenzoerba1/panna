@@ -70,6 +70,10 @@ namespace panna {
             return dataset.size();
         }
 
+        const Dataset& get_dataset() const {
+            return dataset;
+        }
+
         double memory_usage() const {
             size_t total_size = sizeof( *this );
             total_size += dataset.size() * sizeof( PointHandle );
