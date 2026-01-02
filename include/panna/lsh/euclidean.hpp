@@ -72,7 +72,7 @@ namespace panna {
                     typename Dataset::PointHandle rand_vec = random_vectors[K * rep + concat];
                     float dotp = dot_product( point, rand_vec );
                     float quantized =
-                        std::floor( ( dotp + offsets[K * rep + concat] ) / quantization_width );
+                        std::floor( ( dotp + offsets.at(K * rep + concat) ) / quantization_width );
                     int8_t code = static_cast<int8_t>( quantized );
                     cur.set( concat, code );
                 }

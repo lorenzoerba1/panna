@@ -70,9 +70,9 @@ namespace panna {
             // Bounding box
             for ( size_t i = l; i < r; i++ ) {
                 for ( int d = 0; d < dim_; d++ ) {
-                    float v = coord_( indices_[i], d );
-                    nodes_[node_idx].min[d] = std::min( nodes_[node_idx].min[d], v );
-                    nodes_[node_idx].max[d] = std::max( nodes_[node_idx].max[d], v );
+                    float v = coord_( indices_.at(i), d );
+                    nodes_.at(node_idx).min.at(d) = std::min( nodes_.at(node_idx).min.at(d), v );
+                    nodes_.at(node_idx).max.at(d) = std::max( nodes_.at(node_idx).max.at(d), v );
                 }
             }
 
@@ -81,8 +81,8 @@ namespace panna {
             }
 
             int axis = std::rand() % dim_;
-            float widest = nodes_[node_idx].max[axis] - nodes_[node_idx].min[axis];
-            nodes_[node_idx].axis = axis;
+            float widest = nodes_.at(node_idx).max.at(axis) - nodes_.at(node_idx).min.at(axis);
+            nodes_.at(node_idx).axis = axis;
 
             size_t m = ( l + r ) >> 1; // Median
             std::nth_element(
@@ -91,10 +91,10 @@ namespace panna {
                 indices_.begin() + r,
                 [&]( uint32_t a, uint32_t b ) { return coord_( a, axis ) < coord_( b, axis ); } );
 
-            nodes_[node_idx].split = coord_( indices_[m], axis, widest );
+            nodes_.at(node_idx).split = coord_( indices_.at(m), axis, widest );
 
-            nodes_[node_idx].left = build_( l, m, depth + 1 );
-            nodes_[node_idx].right = build_( m, r, depth + 1 );
+            nodes_.at(node_idx).left = build_( l, m, depth + 1 );
+            nodes_.at(node_idx).right = build_( m, r, depth + 1 );
 
             return node_idx;
         }
@@ -111,14 +111,14 @@ namespace panna {
         /// min squared distance between two bounding boxes
         float min_dist_sq_( size_t a_idx, size_t b_idx ) const {
             float acc = 0.f;
-            const auto& a_node = nodes_[a_idx];
-            const auto& b_node = nodes_[b_idx];
+            const auto& a_node = nodes_.at(a_idx);
+            const auto& b_node = nodes_.at(b_idx);
             for ( int d = 0; d < dim_; d++ ) {
                 float diff = 0.f;
-                if ( a_node.max[d] < b_node.min[d] )
-                    diff = b_node.min[d] - a_node.max[d];
-                else if ( b_node.max[d] < a_node.min[d] )
-                    diff = a_node.min[d] - b_node.max[d];
+                if ( a_node.max.at(d) < b_node.min.at(d) )
+                    diff = b_node.min.at(d) - a_node.max.at(d);
+                else if ( b_node.max.at(d) < a_node.min.at(d) )
+                    diff = a_node.min.at(d) - b_node.max.at(d);
 
                 acc += diff * diff;
                 if ( acc > radius2_ )
@@ -138,19 +138,19 @@ namespace panna {
             if ( min_dist_sq_( a_idx, b_idx ) > radius2_ )
                 return;
 
-            const auto& a_node = nodes_[a_idx];
-            const auto& b_node = nodes_[b_idx];
+            const auto& a_node = nodes_.at(a_idx);
+            const auto& b_node = nodes_.at(b_idx);
 
             if ( same && a_node.leaf() ) { // ① Leaf vs itself
                 for ( size_t i = a_node.l; i < a_node.r; i++ )
                     for ( size_t j = i + 1; j < a_node.r; j++ )
-                        maybe_emit_( indices_[i], indices_[j], out );
+                        maybe_emit_( indices_.at(i), indices_.at(j), out );
                 return;
             }
             if ( !same && a_node.leaf() && b_node.leaf() ) { // ② Two different leaves
                 for ( size_t i = a_node.l; i < a_node.r; i++ )
                     for ( size_t j = b_node.l; j < b_node.r; j++ )
-                        maybe_emit_( indices_[i], indices_[j], out );
+                        maybe_emit_( indices_.at(i), indices_.at(j), out );
                 return;
             }
 

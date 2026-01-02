@@ -98,13 +98,13 @@ namespace panna {
                     prob = 1.0;
                 }
                 assert( prob <= 1.0 );
-                probabilities[i] = prob;
+                probabilities.at(i) = prob;
             }
         }
 
         float get_collision_probability( float dotp ) const {
             size_t idx = std::floor( ( 1.0 + dotp ) / eps );
-            return probabilities[idx];
+            return probabilities.at(idx);
         }
     };
 
@@ -130,13 +130,13 @@ namespace panna {
             int res = 0;
             float max_sim = 0;
             for ( size_t i = 0; i < dimensions; i++ ) {
-                if ( vec[i] > max_sim ) {
+                if ( vec.at(i) > max_sim ) {
                     res = i;
-                    max_sim = vec[i];
-                } else if ( -vec[i] > max_sim ) {
+                    max_sim = vec.at(i);
+                } else if ( -vec.at(i) > max_sim ) {
                     // TODO: check if -i works as well
                     res = i + dimensions;
-                    max_sim = -vec[i];
+                    max_sim = -vec.at(i);
                 }
             }
             return res;
@@ -145,7 +145,7 @@ namespace panna {
         // Hash a single repetition of the given vector
         int16_t hash_single( std::vector<float>& vec, size_t concatenation, size_t repetition ) {
             size_t idx = repetition * K + concatenation;
-            random_dots[idx].compute( vec );
+            random_dots.at(idx).compute( vec );
             return encode_closest_axis( vec );
         }
 
@@ -170,7 +170,7 @@ namespace panna {
 
             // prepare thread local scratch space
             for ( int i = 0; i < omp_get_max_threads(); i++ ) {
-                tl_rotated_vectors.push_back( random_dots[0].allocate_scratch() );
+                tl_rotated_vectors.push_back( random_dots.at(0).allocate_scratch() );
             }
         }
 
@@ -189,7 +189,7 @@ namespace panna {
         //! `PointHandle::into_vec` that copies the contents of the
         //! point into the given vector, without changing its length.
         void hash( typename Dataset::PointHandle point, std::vector<Value>& output ) {
-            auto& rotated_vector = tl_rotated_vectors[omp_get_thread_num()];
+            auto& rotated_vector = tl_rotated_vectors.at(omp_get_thread_num());
             output.clear();
             Value cur;
             for ( size_t rep = 0; rep < repetitions; rep++ ) {

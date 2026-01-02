@@ -22,7 +22,7 @@ int main() {
     const size_t conc = 12;
     // const size_t dimensions = 20;
     const size_t rep = 1024;
-    const size_t n = 10000;
+    const size_t n = 100;
     using Dataset = NormedPoints;         // UnitNormPoints or EuclideanPoints
     using Distance = EuclideanDistance; // EuclideanDistance or AngularDistance or CosineDistance
     // using Hasher = E2LSH<conc, Dataset, Distance>;
@@ -35,8 +35,8 @@ int main() {
     //     std::vector<float> point = sample_random_normal_vector( 400 );
     //     points.push_back( point );
     // }
-     H5Easy::File file( "datasets/fashion-mnist-784-euclidean.hdf5", H5Easy::File::ReadOnly );
-    // H5Easy::File file( "datasets/glove-100-angular.hdf5", H5Easy::File::ReadOnly );
+     // H5Easy::File file( "datasets/fashion-mnist-784-euclidean.hdf5", H5Easy::File::ReadOnly );
+    H5Easy::File file( "datasets/glove-100-angular.hdf5", H5Easy::File::ReadOnly );
     // H5Easy::File file( "datasets/nytimes-256-angular.hdf5", H5Easy::File::ReadOnly );
     // H5Easy::File file( "datasets/simplewiki-openai-3072-normalized.hdf5", H5Easy::File::ReadOnly); 
     // H5Easy::File file( "datasets/gist-960-euclidean.hdf5", H5Easy::File::ReadOnly );
@@ -53,23 +53,23 @@ int main() {
     EMST<Dataset, Hasher, Distance> tree( dimensions, rep, builder, points, 0.01, 0.0 );
 
     // Exact computation
-    auto start_exact = std::chrono::high_resolution_clock::now();
-    float weight_exact = tree.exact_mutual_reachability_distance_tree(5).first;
-    auto end_exact = std::chrono::high_resolution_clock::now();
-    auto elapsed_exact_s = std::chrono::duration<double>( end_exact - start_exact ).count();
-    LOG_INFO( "msg",
-              "Computed exact weight",
-              "exact_weight",
-              weight_exact,
-              "elapsed_s",
-              elapsed_exact_s );
+    // auto start_exact = std::chrono::high_resolution_clock::now();
+    // float weight_exact = tree.exact_mutual_reachability_distance_tree(5).first;
+    // auto end_exact = std::chrono::high_resolution_clock::now();
+    // auto elapsed_exact_s = std::chrono::duration<double>( end_exact - start_exact ).count();
+    // LOG_INFO( "msg",
+    //           "Computed exact weight",
+    //           "exact_weight",
+    //           weight_exact,
+    //           "elapsed_s",
+    //           elapsed_exact_s );
     // Exact with predictions
     auto start = std::chrono::high_resolution_clock::now();
     // // for (size_t iter= 0; iter< 3 ; iter++) {
     // //     EMST<Point, Hasher, EuclideanDistance> tree( dimensions, rep, builder, points
     // );
 
-    // const auto& [weight, emst_exact] = tree.find_tree();
+    const auto& [weight, emst_exact] = tree.find_tree();
     auto end = std::chrono::high_resolution_clock::now();
     auto elapsed = std::chrono::duration<double>( end - start ).count();
     // LOG_INFO("msg", "Computed exact with predictions weight",
@@ -77,12 +77,12 @@ int main() {
     //          //"weight-difference", weight - weight_exact,
     //          "elapsed_s", elapsed);
 
-    start = std::chrono::high_resolution_clock::now();
-    const auto& [hdbscan_tree, core_dists] = tree.find_tree_mutual_reachability_distance(5);
-    end = std::chrono::high_resolution_clock::now();
-    elapsed = std::chrono::duration<double>( end - start ).count();
-    LOG_INFO("msg", "Computed HDBSCAN tree",
-             "elapsed_s", elapsed);
+    // start = std::chrono::high_resolution_clock::now();
+    // const auto& [hdbscan_tree, core_dists] = tree.find_tree_mutual_reachability_distance(5);
+    // end = std::chrono::high_resolution_clock::now();
+    // elapsed = std::chrono::duration<double>( end - start ).count();
+    // LOG_INFO("msg", "Computed HDBSCAN tree",
+    //          "elapsed_s", elapsed);
     
     exit(0);
 

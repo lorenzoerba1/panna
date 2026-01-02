@@ -91,13 +91,13 @@ namespace panna {
             if ( num_neighbors == 0 ) {
                 return;
             }
-            if ( dist < max_distances[src] ) {
+            if ( dist < max_distances.at(src) ) {
                 size_t offset = src * num_neighbors;
                 // Handle special case of num_neighbors and == 1
                 if ( num_neighbors == 1 ) {
-                    if ( dist < neighbors[offset].first ) {
-                        neighbors[offset] = { dist, dst };
-                        max_distances[src] = dist;
+                    if ( dist < neighbors.at(offset).first ) {
+                        neighbors.at(offset) = { dist, dst };
+                        max_distances.at(src) = dist;
                     }
                     return;
                 }
@@ -106,19 +106,19 @@ namespace panna {
                 float fmax = -std::numeric_limits<float>::infinity();
                 float smax = -std::numeric_limits<float>::infinity();
                 for ( size_t i = offset; i < offset + num_neighbors; i++ ) {
-                    if ( neighbors[i].first > fmax ) {
+                    if ( neighbors.at(i).first > fmax ) {
                         smax = fmax;
-                        fmax = neighbors[i].first;
+                        fmax = neighbors.at(i).first;
                         ifmax = i;
                     }
                 }
                 // replace the farthest point
-                neighbors[ifmax] = { dist, dst };
+                neighbors.at(ifmax) = { dist, dst };
                 // update the maximum distance
                 if ( dist > smax ) {
-                    max_distances[src] = dist;
+                    max_distances.at(src) = dist;
                 } else {
-                    max_distances[src] = smax;
+                    max_distances.at(src) = smax;
                 }
             }
         }
@@ -151,14 +151,14 @@ namespace panna {
                     if ( a != b ) {
                         float dist = Distance::compute( data[a], data[b] );
                         expect(neighbor_idx < num_neighbors);
-                        self.neighbors[offset + neighbor_idx] = { dist, b };
+                        self.neighbors.at(offset + neighbor_idx) = { dist, b };
                         if (dist > farthest) {
                             farthest = dist;
                         }
                         neighbor_idx++;
                     }
                 }
-                self.max_distances[a] = farthest;
+                self.max_distances.at(a) = farthest;
             }
             return self;
         }
@@ -191,7 +191,7 @@ namespace panna {
         /// the distance of the farthest among the num_points
         /// neighbors we keep track of
         float core_distance( uint32_t a ) const {
-            return max_distances[a];
+            return max_distances.at(a);
         }
 
         /// The current best guess of the mutual reachability
@@ -334,7 +334,7 @@ namespace panna {
             for ( size_t i = 0; i < num_data; i++ ) {
                 for ( size_t j = i + 1; j < num_data; j++ ) {
                     float dist = table.get_distance( i, j );
-                    all_edges[i * ( num_data - 1 ) - ( i * ( i + 1 ) / 2 ) + j - 1] =
+                    all_edges.at(i * ( num_data - 1 ) - ( i * ( i + 1 ) / 2 ) + j - 1) =
                         Edge{ .weight = dist, .a = (uint32_t)i, .b = (uint32_t)j };
                 }
             }
@@ -346,11 +346,9 @@ namespace panna {
             std::cout << "Creating the MST" << std::endl;
             std::vector<Edge> tree;
             kruskal( dsu, all_edges, tree );
-            size_t position_last_edge = static_cast<size_t>(std::find( all_edges.begin(), all_edges.end(), tree.back() ) - all_edges.begin());
-            LOG_INFO("msg", "MST created",
-                      "heaviest_edge",  tree.back().weight ,
-                      "Weight_edge_2n",  all_edges[std::min(2 * (position_last_edge), (all_edges.size() - 1))].weight 
-            );
+            expect(tree.size() > 0);
+            LOG_INFO( "msg", "MST created",
+                      "heaviest_edge",  tree.back().weight );
             for ( const auto& edge : tree ) {
                 tree_weight += edge.weight ;
             }
@@ -367,7 +365,7 @@ namespace panna {
             for ( size_t i = 0; i < num_data; i++ ) {
                 for ( size_t j = i + 1; j < num_data; j++ ) {
                     float dist = table.get_distance( i, j );
-                    all_edges[i * ( num_data - 1 ) - ( i * ( i + 1 ) / 2 ) + j - 1] =
+                    all_edges.at(i * ( num_data - 1 ) - ( i * ( i + 1 ) / 2 ) + j - 1) =
                         Edge{ .weight = dist, .a = (uint32_t)i, .b = (uint32_t)j };
                 }
             }
@@ -381,14 +379,12 @@ namespace panna {
             std::cout << "Creating the MST" << std::endl;
             std::vector<Edge> tree;
             update_tree( tree, all_edges, cd );
-            size_t position_last_edge = static_cast<size_t>(std::find( all_edges.begin(), all_edges.end(), tree.back() ) - all_edges.begin());
             for ( const auto& edge : tree ) {
                 tree_weight += edge.weight ;
             }
             LOG_INFO("msg", "MST created",
                       "heaviest_edge",  tree.back().weight ,
-                      "tree-weight", tree_weight,
-                      "Weight_edge_2n",  all_edges[std::min(2 * (position_last_edge), (all_edges.size() - 1))].weight 
+                      "tree-weight", tree_weight
             );
             return {tree_weight, tree};
         }
@@ -579,7 +575,7 @@ namespace panna {
                                   "stop.confirmed_weight", stop.confirmed_weight,
                                   "stop.heaviest_confirmed_edge", stop.heaviest_confirmed_edge,
                                   "stop.edges_to_confirm", stop.edges_to_confirm,
-                                  "heaviest_edge", tree[num_data-2].weight,
+                                  "heaviest_edge", tree.at(num_data-2).weight,
                                   "weight_lower_bound", weight_lower_bound,
                                   "should_stop", should_stop );
                         // clang-format on
@@ -595,7 +591,7 @@ namespace panna {
                         // Fill the DSU filter with just the confirmed edges
                         filter.reset();
                         for ( size_t idx = 0; idx < stop.confirmed_edges; idx++ ) {
-                            auto edge = tree[idx];
+                            auto edge = tree.at(idx);
                             filter.union_sets( edge.a, edge.b );
                         }
                     } else {
@@ -721,7 +717,7 @@ namespace panna {
                                   "stop.confirmed_weight", stop.confirmed_weight,
                                   "stop.heaviest_confirmed_edge", stop.heaviest_confirmed_edge,
                                   "stop.edges_to_confirm", stop.edges_to_confirm,
-                                  "heaviest_edge", tree[num_data-2].weight,
+                                  "heaviest_edge", tree.at(num_data-2).weight,
                                   "weight_lower_bound", weight_lower_bound,
                                   "should_stop", should_stop );
                         // clang-format on
@@ -736,7 +732,7 @@ namespace panna {
                         // Fill the DSU filter with just the confirmed edges
                         filter.reset();
                         for ( size_t idx = 0; idx < stop.confirmed_edges; idx++ ) {
-                            auto edge = tree[idx];
+                            auto edge = tree.at(idx);
                             filter.union_sets( edge.a, edge.b );
                         }
                     } else {
@@ -796,13 +792,13 @@ namespace panna {
             }
             std::vector<unsigned int> stack;
             stack.push_back( 0 );
-            visited[0] = true;
+            visited.at(0) = true;
             while ( !stack.empty() ) {
                 unsigned int node = stack.back();
                 stack.pop_back();
                 for ( const auto& neighbor : adj_list[node] ) {
-                    if ( !visited[neighbor] ) {
-                        visited[neighbor] = true;
+                    if ( !visited.at(neighbor) ) {
+                        visited.at(neighbor) = true;
                         stack.push_back( neighbor );
                     }
                 }
@@ -907,8 +903,8 @@ namespace panna {
             std::shuffle(
                 vertices.begin(), vertices.end(), std::mt19937{ std::random_device{}() } );
             for ( size_t i = 1; i < vertices.size(); i++ ) {
-                clean.emplace_back( table.get_distance( vertices[i - 1], vertices[i] ),
-                                    std::make_pair( vertices[i - 1], vertices[i] ) );
+                clean.emplace_back( table.get_distance( vertices.at(i - 1), vertices.at(i) ),
+                                    std::make_pair( vertices.at(i - 1), vertices.at(i) ) );
             }
         }
 
@@ -944,7 +940,7 @@ namespace panna {
             float weight = 0.0f;
             size_t idx = 0;
             while ( idx < top.size() ) {
-                const float w = top[idx].weight;
+                const float w = top.at(idx).weight;
                 const float fp = table.fail_probability( w, i, j );
                 // if ( i > 0 ) {
                 //     LOG_INFO( "msg", "evaluating failure probability", "weight", w, "fp", fp );
@@ -962,14 +958,14 @@ namespace panna {
 
             float total_weight = weight;
             for (size_t jj=idx; jj<top.size(); jj++) {
-                float w =  top[jj].weight ;
+                float w =  top.at(jj).weight ;
                 total_weight += w;
             }
 
             return StoppingConditionInfo{ .total_weight = total_weight,
                                           .confirmed_weight = weight,
                                           .heaviest_confirmed_edge =
-                                              ( idx > 0 ) ?  top[idx - 1].weight  : 0.0f,
+                                              ( idx > 0 ) ?  top.at(idx - 1).weight  : 0.0f,
                                           .edges_to_confirm = edges_to_confirm,
                                           .confirmed_edges = idx };
         }
@@ -979,7 +975,7 @@ namespace panna {
             float weight = 0.0f;
             size_t idx = 0;
             while ( idx < tree.size() ) {
-                const float w = tree[idx].weight;
+                const float w = tree.at(idx).weight;
                 const float fp = table.fail_probability( w, i, j );
 
                 if ( prob + fp > delta ) {
@@ -994,14 +990,14 @@ namespace panna {
 
             float total_weight = weight;
             for (size_t jj=idx; jj<tree.size(); jj++) {
-                float w =  tree[jj].weight ;
+                float w =  tree.at(jj).weight ;
                 total_weight += w;
             }
 
             return StoppingConditionInfo{ .total_weight = total_weight,
                                           .confirmed_weight = weight,
                                           .heaviest_confirmed_edge =
-                                              ( idx > 0 ) ?  tree[idx - 1].weight  : 0.0f,
+                                              ( idx > 0 ) ?  tree.at(idx - 1).weight  : 0.0f,
                                           .edges_to_confirm = edges_to_confirm,
                                           .confirmed_edges = idx };
         }

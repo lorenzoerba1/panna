@@ -56,14 +56,14 @@ namespace panna::baselines {
                 auto tid = omp_get_thread_num();
                 hasher.hash( dataset[i], hashes );
                 for ( size_t rep = 0; rep < buckets.size(); rep++ ) {
-                    tl_hashes[tid][rep].emplace_back( hashes[rep], i );
+                    tl_hashes[tid][rep].emplace_back( hashes.at(rep), i );
                 }
             }
 
             for ( auto hashes : tl_hashes ) {
                 for ( size_t rep = 0; rep < buckets.size(); rep++ ) {
-                    for ( auto pair : hashes[rep] ) {
-                        buckets[rep][pair.first].push_back( pair.second );
+                    for ( auto pair : hashes.at(rep) ) {
+                        buckets.at(rep)[pair.first].push_back( pair.second );
                     }
                 }
             }
@@ -83,8 +83,8 @@ namespace panna::baselines {
                     return std::nullopt;
                 }
 
-                for ( auto id : buckets[rep][hashes[rep]] ) {
-                    if ( !ignored[id] ) {
+                for ( auto id : buckets.at(rep)[hashes.at(rep)] ) {
+                    if ( !ignored.at(id) ) {
                         float d = Distance::compute( query, dataset[id] );
                         if ( d <= range ) {
                             return std::optional( std::make_pair( id, d ) );
@@ -120,11 +120,11 @@ namespace panna::baselines {
         while ( remaining_points > 0 ) {
             size_t p = 0;
             for ( ; p < points.size(); p++ ) {
-                if ( !removed[p] ) {
+                if ( !removed.at(p) ) {
                     break;
                 }
             }
-            removed[p] = true;
+            removed.at(p) = true;
             remaining_points--;
             std::vector<size_t> S;
             S.push_back( p );
@@ -141,7 +141,7 @@ namespace panna::baselines {
                         float pprime_dist = pprime_pair->second;
                         uint32_t pprime = pprime_pair->first;
                         edges.emplace_back( pprime_dist, q, pprime );
-                        removed[pprime] = true;
+                        removed.at(pprime) = true;
                         remaining_points--;
                         S.push_back( pprime );
                     }
