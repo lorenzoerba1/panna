@@ -211,9 +211,7 @@ struct EMST_exposed {
             }
         }
 
-        Hasher::Builder builder(dimensions);
-
-        inner = std::make_unique<EMST_t>(dimensions, repetitions, builder, data_cpp, delta, epsilon);
+        inner = std::make_unique<EMST_t>(dimensions, repetitions, data_cpp, delta, epsilon);
     }
 
     nb::dict stats() {

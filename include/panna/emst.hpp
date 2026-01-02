@@ -233,21 +233,13 @@ namespace panna {
 
     template <typename Dataset, typename Hasher, typename Distance>
     class EMST {
-        // Object variables
         uint32_t dimensionality;
-        size_t MAX_REPETITIONS; // TODO: make lowercase, as upper case usually denotes constants
-        uint32_t MAX_HASHBITS;
+        size_t max_repetitions;
+        uint32_t max_hashbits;
         Index<Dataset, Hasher, Distance> table;
         uint32_t num_data{ 0 };
         float delta{ 0.01 };
         const float epsilon{ 0.2 };
-        DSU dsu_true;
-        DSU filter;
-        // Sets for the confimed and the unconfirmed edges
-        std::vector<Edge> top;
-        std::vector<std::vector<Edge>> local_confirmed;
-        std::vector<std::vector<Edge>> local_edges;
-        float max_weight;
         size_t distances_computed = 0;
         size_t num_collisions = 0;
 
@@ -273,37 +265,27 @@ namespace panna {
          */
         EMST( const size_t dimensions,
               const size_t repetitions,
-              const typename Hasher::Builder builder,
               std::vector<std::vector<float>>& data_in,
               const float delta_in = 0.01f,
               const float epsilon = 0.2f ):
             dimensionality( dimensions ),
-            table( Index<Dataset, Hasher, Distance>( dimensions, builder, repetitions ) ),
+            table(EMST::setup_index(data_in, dimensions, repetitions)),
             num_data( data_in.size() ),
             epsilon( epsilon ),
-            dsu_true( DSU( num_data ) ),
-            filter( DSU( num_data ) ) {
+            distances_computed( 0 ),
+            num_collisions( 0 ) {
             LOG_INFO("git-version", GIT_COMMIT_HASH);
 
-            // Insert the data
-            for ( auto& point : data_in ) {
-                table.insert( point.begin(), point.end() );
-            }
-            table.rebuild();
-
             // Get info on the index
-            MAX_HASHBITS = table.num_concatenations();
-            MAX_REPETITIONS = table.num_repetitions();
+            max_hashbits = table.num_concatenations();
+            max_repetitions = table.num_repetitions();
             delta = delta_in;// / num_data;
-            max_weight = std::numeric_limits<float>::infinity();
 
-            local_edges.resize( MAX_REPETITIONS );
-            local_confirmed.resize( MAX_REPETITIONS );
             // Measure the size of the index
             double index_size = table.memory_usage();
             LOG_INFO("msg", "Index constructed",
-                     "L", MAX_REPETITIONS,
-                     "K", MAX_HASHBITS,
+                     "L", max_repetitions,
+                     "K", max_hashbits,
                      "num_data", num_data,
                      "delta", delta,
                      "index_size_Gbytes", index_size);
@@ -311,6 +293,21 @@ namespace panna {
 
         /// @brief Destructor
         ~EMST() = default;
+
+        static Index<Dataset, Hasher, Distance>
+        setup_index( const std::vector<std::vector<float>>& data_in,
+                     size_t dimensions,
+                     size_t repetitions ) {
+            typename Hasher::Builder builder(dimensions);
+
+            Index<Dataset, Hasher, Distance> table( dimensions, builder, repetitions );
+            for ( auto& point : data_in ) {
+                table.insert( point.begin(), point.end() );
+            }
+            table.rebuild();
+
+            return table;
+        }
 
         /// @brief the number of distances actually computed by the algorithm
         size_t get_distance_count() const {
@@ -509,18 +506,18 @@ namespace panna {
             const size_t max_threads = ( hardware_concurrency > 1 ) ? hardware_concurrency - 1 : 1;
 
             std::atomic_bool found( false );
-            for ( size_t prefix = MAX_HASHBITS; prefix > 0 && !found; prefix-- ) {
+            for ( size_t prefix = max_hashbits; prefix > 0 && !found; prefix-- ) {
                 // Set up work to distribute among threads: each worker thread will pull
                 // repetition indices from this
-                Channel<size_t> work( MAX_REPETITIONS );
-                for ( size_t repetition = 0; repetition < MAX_REPETITIONS; repetition++ ) {
+                Channel<size_t> work( max_repetitions );
+                for ( size_t repetition = 0; repetition < max_repetitions; repetition++ ) {
                     work.send( std::move( repetition ) );
                 }
                 // Close the channel, so that workers do not wait indefinitely for new repetitions
                 work.close();
 
                 // Set up the channel to collect partial results
-                Channel<std::vector<Edge>> partials( MAX_REPETITIONS );
+                Channel<std::vector<Edge>> partials( max_repetitions );
 
                 // spawn the threads to carry out the work
                 std::vector<std::thread> workers;
@@ -542,9 +539,8 @@ namespace panna {
                 // collect the results from the worker threads
                 size_t completed_repetitions = 0;
                 for ( std::optional<std::vector<Edge>> local_tree = partials.receive();
-                      local_tree.has_value() && !found && completed_repetitions < MAX_REPETITIONS;
+                      local_tree.has_value() && !found && completed_repetitions < max_repetitions;
                       local_tree = partials.receive() ) {
-                    filter.reset();
                     std::vector<Edge> update = std::move( *local_tree );
                     LOG_INFO("logger", "collector", "msg", "received update", "update-size", update.size());
 
@@ -602,7 +598,7 @@ namespace panna {
                     running_result.update(
                         RunningResult( std::move( tree ), std::move( filter ) ) );
 
-                    if (completed_repetitions >= MAX_REPETITIONS) {
+                    if (completed_repetitions >= max_repetitions) {
                         // we are done with this prefix
                         break;
                     }
@@ -645,18 +641,18 @@ namespace panna {
             const size_t max_threads = ( hardware_concurrency > 1 ) ? hardware_concurrency - 1 : 1;
 
             std::atomic_bool found( false );
-            for ( size_t prefix = MAX_HASHBITS; prefix > 0 && !found; prefix-- ) {
+            for ( size_t prefix = max_hashbits; prefix > 0 && !found; prefix-- ) {
                 // Set up work to distribute among threads: each worker thread will pull
                 // repetition indices from this
-                Channel<size_t> work( MAX_REPETITIONS );
-                for ( size_t repetition = 0; repetition < MAX_REPETITIONS; repetition++ ) {
+                Channel<size_t> work( max_repetitions );
+                for ( size_t repetition = 0; repetition < max_repetitions; repetition++ ) {
                     work.send( std::move( repetition ) );
                 }
                 // Close the channel, so that workers do not wait indefinitely for new repetitions
                 work.close();
 
                 // Set up the channel to collect partial results
-                Channel<std::vector<Edge>> partials( MAX_REPETITIONS );
+                Channel<std::vector<Edge>> partials( max_repetitions );
 
                 // spawn the threads to carry out the work
                 std::vector<std::thread> workers;
@@ -679,9 +675,9 @@ namespace panna {
                 size_t completed_repetitions = 0;
                 std::vector<Edge> stash;
                 for ( std::optional<std::vector<Edge>> local_tree = partials.receive();
-                      local_tree.has_value() && !found && completed_repetitions < MAX_REPETITIONS;
+                      local_tree.has_value() && !found && completed_repetitions < max_repetitions;
                       local_tree = partials.receive() ) {
-                    filter.reset();
+                    DSU filter(num_data);
                     std::vector<Edge> update = std::move( *local_tree );
                     // clang-format off
                     LOG_INFO( "logger", "collector", "msg", "received update", "update-size", update.size(), "stash-size", stash.size());
@@ -743,7 +739,7 @@ namespace panna {
                     running_result.update( MRRunningResult(
                         std::move( tree ), std::move( filter ), std::move( core_distances ) ) );
 
-                    if ( completed_repetitions >= MAX_REPETITIONS ) {
+                    if ( completed_repetitions >= max_repetitions ) {
                         // we are done with this prefix
                         break;
                     }
@@ -908,68 +904,6 @@ namespace panna {
             }
         }
 
-        /// @brief Compute an upper bound to the failure probability of the stored spanning tree
-        /// @param i current concatenation in the hash index
-        /// @param j current repetition in the hash index
-        /// @return the failure probability of the minimum spanning tree,
-        float failure_probability( size_t i, size_t j ) {
-            float loose_upper_bound =
-                ( num_data - 1 ) * table.fail_probability(  top.back().weight , i, j );
-            float prob = 0.0f;
-            for ( auto& edge : top ) {
-                prob += table.fail_probability( edge.weight , i, j );
-            }
-            expect( prob <= loose_upper_bound );
-            LOG_DEBUG( "msg", "failure-probability",
-                      "loose-upper-bound", loose_upper_bound,
-                      "union-bound", prob );
-            return prob;
-        }
-
-        /// @brief Compute an upper bound to the failure probability of the stored spanning tree
-        ///
-        /// Returns the total weight of the confirmed edges as well, along with the index of the last
-        /// confirmed edges
-        /// 
-        /// @param i current concatenation in the hash index
-        /// @param j current repetition in the hash index
-        /// @return a tuple containing the failure probability of the minimum spanning tree,
-        /// the total weight of the confirmed edges, and the index of the last confirmed edge
-        StoppingConditionInfo stopping_condition( size_t i, size_t j ) {
-            float prob = 0.0f;
-            float weight = 0.0f;
-            size_t idx = 0;
-            while ( idx < top.size() ) {
-                const float w = top.at(idx).weight;
-                const float fp = table.fail_probability( w, i, j );
-                // if ( i > 0 ) {
-                //     LOG_INFO( "msg", "evaluating failure probability", "weight", w, "fp", fp );
-                // }
-
-                if ( prob + fp > delta ) {
-                    break;
-                }
-                prob += fp;
-                weight += w;
-                idx += 1;
-            }
-
-            size_t edges_to_confirm = top.size() - idx;
-
-            float total_weight = weight;
-            for (size_t jj=idx; jj<top.size(); jj++) {
-                float w =  top.at(jj).weight ;
-                total_weight += w;
-            }
-
-            return StoppingConditionInfo{ .total_weight = total_weight,
-                                          .confirmed_weight = weight,
-                                          .heaviest_confirmed_edge =
-                                              ( idx > 0 ) ?  top.at(idx - 1).weight  : 0.0f,
-                                          .edges_to_confirm = edges_to_confirm,
-                                          .confirmed_edges = idx };
-        }
-
         StoppingConditionInfo stopping_condition( std::vector<Edge> tree, size_t i, size_t j ) {
             float prob = 0.0f;
             float weight = 0.0f;
@@ -1004,20 +938,8 @@ namespace panna {
 
         /// @brief Clear the data structures from previous runs
         void clear() {
-            top.clear();
-            for ( auto& local : local_edges ) {
-                local.clear();
-            }
-            for ( auto& local : local_confirmed ) {
-                local.clear();
-            }
-            local_confirmed.resize( MAX_REPETITIONS );
-            local_edges.resize( MAX_REPETITIONS );
-            dsu_true = DSU( num_data );
-            max_weight = std::numeric_limits<float>::infinity();
             distances_computed = 0;
             num_collisions = 0;
-            filter = DSU( num_data );
         }
     }; // closes class
 } // namespace panna

@@ -49,8 +49,7 @@ int main() {
     points.resize( n );
 
     size_t dimensions = points[0].size();
-    Hasher::Builder builder( dimensions );
-    EMST<Dataset, Hasher, Distance> tree( dimensions, rep, builder, points, 0.01, 0.0 );
+    EMST<Dataset, Hasher, Distance> tree( dimensions, rep, points, 0.01, 0.0 );
 
     // Exact computation
     // auto start_exact = std::chrono::high_resolution_clock::now();
