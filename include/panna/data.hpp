@@ -566,11 +566,12 @@ namespace panna {
         const size_t num_pairs = n * ( n - 1 ) / 2;
         const float sampling_factor = ( (float)num_pairs ) / sample_size;
         std::uniform_int_distribution<size_t> random_id( 0, n - 1 );
-        std::vector<float> counts( n_bins );
+        std::vector<float> counts( n_bins + 1 );
 
         const double width = ( max_distance - min_distance ) / static_cast<double>( n_bins );
         std::vector<float> bounds( n_bins + 1 );
-        for ( std::size_t i = 0; i <= n_bins; ++i ) {
+        bounds.at(0) = 0.0;
+        for ( std::size_t i = 1; i < bounds.size(); ++i ) {
             bounds.at(i) = min_distance + i * width;
         }
         size_t oob = 0;
@@ -579,7 +580,7 @@ namespace panna {
 #pragma omp parallel
         {
             static std::mt19937_64 rng( omp_get_thread_num() );
-            std::vector<float> counts_private( n_bins );
+            std::vector<float> counts_private( n_bins + 1 );
             size_t private_oob = 0;
             float private_max_dist_found = 0.0;
 #pragma omp for
@@ -597,6 +598,10 @@ namespace panna {
                 }
                 const size_t i =
                     static_cast<size_t>( std::floor( ( dist - min_distance ) / width ) );
+                if (i == counts_private.size()) {
+                    LOG_INFO( "i", i, "dist", dist, "mindistance", min_distance, "width", width );
+                }
+                expect(i < counts_private.size());
                 counts_private.at(i) += sampling_factor;
             }
 

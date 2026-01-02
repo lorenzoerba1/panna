@@ -3,6 +3,7 @@
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/string.h>
 #include <sstream>
+#include <stdexcept>
 #include <vector>
 
 #include "panna/data.hpp"
@@ -176,15 +177,36 @@ nb::tuple tree_to_pytuple(std::vector<panna::Edge> & tree) {
         nb::ndarray<nb::numpy, uint32_t, nb::ndim<2>>( ids, { tree_size, 2 }, ids_owner ) );
 }
 
+enum EuclideanHashFamily {
+    Lattice,
+    E2LSH,
+
+};
+
+EuclideanHashFamily string_to_family(std::string s) {
+    if (s == "lattice") {
+        return EuclideanHashFamily::Lattice;
+    } else if (s == "e2lsh") {
+        return EuclideanHashFamily::E2LSH;
+    } else {
+        throw std::invalid_argument("only `lattice` and `e2lsh` are supported");
+    }
+}
+
 struct EMST_exposed {
-    using Hasher = panna::LatticeLSH<4, panna::NormedPoints, panna::EuclideanDistance>;
-    // using Hasher = panna::E2LSH<12, panna::NormedPoints, panna::EuclideanDistance>;
-    using EMST_t = panna::EMST<panna::NormedPoints, Hasher, panna::EuclideanDistance>;
-    std::unique_ptr<EMST_t> inner;
+    using LatticeHasher = panna::LatticeLSH<4, panna::NormedPoints, panna::EuclideanDistance>;
+    using E2LSHHasher = panna::E2LSH<12, panna::NormedPoints, panna::EuclideanDistance>;
+    using Variants = std::variant<
+        panna::EMST<panna::NormedPoints, LatticeHasher, panna::EuclideanDistance>,
+        panna::EMST<panna::NormedPoints, E2LSHHasher, panna::EuclideanDistance>
+    >;
+
+    Variants inner;
+    EuclideanHashFamily family;
 
     // Constructor to be called from Python. It takes a NumPy array and optional keyword arguments.
     EMST_exposed(const nb::ndarray<float, nb::c_contig>& data_in, nb::kwargs kwargs) {
-
+        family = EuclideanHashFamily::Lattice;
         size_t num_points = data_in.shape(0);
         size_t dimensions = data_in.shape(1);
 
@@ -211,30 +233,52 @@ struct EMST_exposed {
             }
         }
 
-        inner = std::make_unique<EMST_t>(dimensions, repetitions, data_cpp, delta, epsilon);
+        if (kwargs.contains("family")) {
+            family = string_to_family(nb::cast<std::string>(kwargs["family"]));
+        }
+        switch ( family ) {
+        case Lattice:
+            inner
+                .emplace<panna::EMST<panna::NormedPoints, LatticeHasher, panna::EuclideanDistance>>(
+                    dimensions, repetitions, data_cpp, delta, epsilon );
+            break;
+        case E2LSH:
+            inner
+                .emplace<panna::EMST<panna::NormedPoints, E2LSHHasher, panna::EuclideanDistance>>(
+                    dimensions, repetitions, data_cpp, delta, epsilon );
+            break;
+        }
     }
 
     nb::dict stats() {
         nb::dict ret;
-        ret["distance_count"] = inner->get_distance_count();
-        ret["collisions_count"] = inner->get_collisions_count();
+        std::visit(
+            [&]( auto& index ) {
+                ret["distance_count"] = index.get_distance_count();
+                ret["collisions_count"] = index.get_collisions_count();
+            },
+            inner );
+        // ret["distance_count"] = inner->get_distance_count();
+        // ret["collisions_count"] = inner->get_collisions_count();
         return ret;
     }
 
     nb::tuple find_mst() {
-        auto tree = inner->find_tree().second;
+        auto tree = std::visit( []( auto& index ) { return index.find_tree().second; }, inner );
         return tree_to_pytuple( tree );
     }
 
     nb::tuple find_mst_exact() {
-        auto tree = inner->exact_tree().second;
+        auto tree = std::visit( []( auto& index ) { return index.exact_tree().second; }, inner );
         return tree_to_pytuple( tree );
     }
 
     // Method to find the MST for the reachability and return results as NumPy arrays
     nb::tuple find_mst_dbscan(unsigned int k) {
         // Call the underlying C++ method
-        auto result_pair = inner->find_tree_mutual_reachability_distance(k);
+        auto result_pair = std::visit(
+            [k]( auto& index ) { return index.find_tree_mutual_reachability_distance( k ); },
+            inner );
 
         // 1. MST Edges
         auto& tree_edges_vec = result_pair.first;

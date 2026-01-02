@@ -41,7 +41,7 @@ def compute_cumulative_distance_distribution(
     num_pairs = n * (n - 1) // 2
     samples = int(min(1e9, num_pairs * sample_fraction))
     counts, bounds = panna.distance_histogram(data, num_buckets, min_distance, max_distance, samples)
-    counts = np.concatenate((counts, [0]))
+    ic(bounds)
     counts = np.cumsum(counts)
     return bounds, counts
 
@@ -126,6 +126,7 @@ def compute_stats_csv():
         weights, _edges = cached_emst(data)
         weights = np.sort(weights)
         diameter = panna.approximate_diameter(data)
+        ic(diameter)
         bounds, counts = compute_cumulative_distance_distribution(data, weights[0], diameter)
 
         plt.figure()

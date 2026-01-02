@@ -244,6 +244,7 @@ namespace panna {
         size_t num_collisions = 0;
 
     public:
+        EMST() {}
         /**
          * @brief Class to construct an approximate Euclidean Mininmum Spanning Tree from data
          * points
