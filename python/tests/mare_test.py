@@ -9,6 +9,8 @@ import os
 sys.path.append(os.path.join(Path(__file__).resolve().parents[2]))
 
 import panna
+import argparse
+from filelock import FileLock
 
 if __name__ == "__main__":
     panna.set_seed(360)
@@ -21,39 +23,52 @@ if __name__ == "__main__":
          "gist-960-euclidean.hdf5",
          "simplewiki-openai-3072-normalized.hdf5",
          "sift-128-euclidean.hdf5",
-         "deep-image-96-angular.hdf5",
+         "deep-image-96-angular.hdf5"
     ]
-    path_prefix = Path(__file__).resolve().parents[1]
+    path_prefix = Path(__file__).resolve().parents[2]
 
     dataset_folder = os.path.join(path_prefix, "datasets")
     results_folder = os.path.join(path_prefix, "results")
-    
-    with open(os.path.join(results_folder, "weight_results.csv"), "a+") as f_out:
-        for path in paths:
-            with h5py.File(os.path.join(dataset_folder, path), "r") as f:
-                data = np.array(f["train"]).astype(np.float32)[:1000]
-                
-                for delta in deltas:
-                    
-                    emst = panna.EMST(data, delta= delta, epsilon=0)
-                    start_time = perf_counter()
-                    edges = emst.find_mst()
-                    end_time = perf_counter()
-                    elapsed_time = end_time - start_time
-                    # 
-                    weight = sum(edges[0])
-                    f_out.write(f"K+, {data.shape[0]}, {path}, {weight}, {elapsed_time}, {delta}\n")
-                    
-                    for epsilon in eps:
-                        emst = panna.EMST(data, delta= delta, epsilon=epsilon)
-                        start_time = perf_counter()
-                        edges = emst.find_mst()
-                        end_time = perf_counter()
-                        elapsed_time = end_time - start_time
-                        weight = sum(edges[0])
-                        # We have to write                     
-                        # outfile <<"K± e" << ep << ", " << points.size() << ", " << name << ", " << weight << ", "<< duration << ", " << prob << std::endl;
-                        f_out.write(f"K± e{epsilon}, {data.shape[0]}, {path}, {weight}, {elapsed_time}, {delta}\n")
-                    f_out.flush()
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--path", help="Dataset filename to process (optional)")
+    args = parser.parse_args()
+
+    if args.path:
+        paths = [args.path]
+
+    for path in paths:
+        # Load dataset via new API and keep the same PCA behavior for PAMAP2
+        stem = Path(path).stem
+        _, data = panna.datasets.load(name=stem, pca_dimensions=4 if 'pamap2' in stem.lower() else None)
+        data = np.array(data).astype(np.float32)[:1000]
+
+        out_lines = []
+        for delta in deltas:
+            emst = panna.EMST(data, delta=delta, epsilon=0, family="lattice")
+            start_time = perf_counter()
+            edges = emst.find_mst()
+            end_time = perf_counter()
+            elapsed_time = end_time - start_time
+            weight = sum(edges[0])
+            out_lines.append(f"K+, {data.shape[0]}, {path}, {weight}, {elapsed_time}, {delta}\n")
+
+            for epsilon in eps:
+                emst = panna.EMST(data, delta=delta, epsilon=epsilon, family="lattice")
+                start_time = perf_counter()
+                edges = emst.find_mst()
+                end_time = perf_counter()
+                elapsed_time = end_time - start_time
+                weight = sum(edges[0])
+                out_lines.append(f"K± e{epsilon}, {data.shape[0]}, {path}, {weight}, {elapsed_time}, {delta}\n")
+
+        # Append results under a file lock to avoid races between parallel jobs
+        lock_path = os.path.join(results_folder, "weight_results.csv.lock")
+        out_path = os.path.join(results_folder, "weight_results.csv")
+        with FileLock(lock_path):
+            with open(out_path, "a+") as f_out:
+                for l in out_lines:
+                    f_out.write(l)
+                f_out.flush()
                 
                 

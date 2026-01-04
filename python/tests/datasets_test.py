@@ -11,6 +11,8 @@ import os
 sys.path.append(os.path.join(Path(__file__).resolve().parents[2]))
 
 import panna
+import argparse
+from filelock import FileLock
 
 if __name__ == "__main__":
     paths = [
@@ -28,49 +30,41 @@ if __name__ == "__main__":
             "9_census.npz",
             "PAMAP2_Dataset.zip",
     ]
-    path_prefix = Path(__file__).resolve().parents[1]
+    path_prefix = Path(__file__).resolve().parents[2]
 
     dataset_folder = os.path.join(path_prefix, "datasets")
     results_folder = os.path.join(path_prefix, "results")
-    
-    with open(os.path.join(results_folder, "scalability_results.csv"), "a+") as f_out:
-        for path in paths:
-            data = []
-            if path.endswith(".hdf5"):
-                with h5py.File(os.path.join(dataset_folder, path), "r") as f:
-                    data = f["train"][:].astype(np.float32)
-            elif path.endswith(".dat") or path.endswith(".txt"):
-                data = pd.read_csv(os.path.join(dataset_folder, path), delim_whitespace=True)
-                data = data.to_numpy().astype(np.float32)
-                data = np.nan_to_num(data)
-            elif path.endswith(".npz"):
-                loaded = np.load(os.path.join(dataset_folder, path))
-                data = loaded["X"].astype(np.float32)
-            elif path.endswith(".zip"):
-                with zipfile.ZipFile(os.path.join(dataset_folder, path), 'r') as zip_ref:
-                    arr = []
-                    for i in range(1,10):
-                        zfn = f"PAMAP2_Dataset/Protocol/subject10{i}.dat"
-                        zf = zip_ref.open(zfn)
-                        for line in zf:
-                            line = line.decode()
-                            l = list(map(float, line.strip().split()))
-                            # remove timestamp
-                            arr.append(l[1:])
-                    X = np.nan_to_num(np.array(arr)) # many NaNs in data, replace them with 0.
-                    data = PCA(n_components=4).fit_transform(X) # PCA of first four components
-              
-            emst = panna.EMST(data, delta= 0.01, epsilon=0)
-            start_time = perf_counter()
-            emst.find_mst()
-            end_time = perf_counter()
-            elapsed_time = end_time - start_time
-            f_out.write(f"K+, {data.shape[0]}, {path}, 0, {elapsed_time}\n")
-            
-            emst = panna.EMST(data, delta= 0.01, epsilon=0.2)
-            start_time = perf_counter()
-            emst.find_mst()
-            end_time = perf_counter()
-            elapsed_time = end_time - start_time
-            f_out.write(f"K± e0.2, {data.shape[0]}, {path}, 0, {elapsed_time}\n")
-            f_out.flush()
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--path", help="Dataset filename to process (optional)")
+    args = parser.parse_args()
+
+    if args.path:
+        paths = [args.path]
+
+    for path in paths:
+        # Use new dataset loader API. Pass pca_dimensions=4 for PAMAP2-like datasets.
+        stem = Path(path).stem
+        _, data = panna.datasets.load(name=stem, pca_dimensions=4 if 'pamap2' in stem.lower() else None)
+        data = np.array(data).astype(np.float32)
+
+        emst = panna.EMST(data, delta=0.01, epsilon=0, family="lattice")
+        start_time = perf_counter()
+        emst.find_mst()
+        end_time = perf_counter()
+        elapsed_time = end_time - start_time
+
+        emst = panna.EMST(data, delta=0.01, epsilon=0.2, family="lattice")
+        start_time = perf_counter()
+        emst.find_mst()
+        end_time = perf_counter()
+        elapsed_time2 = end_time - start_time
+
+        # Write both results under a single file lock to avoid races from parallel jobs
+        lock_path = os.path.join(results_folder, "scalability_results.csv.lock")
+        out_path = os.path.join(results_folder, "scalability_results.csv")
+        with FileLock(lock_path):
+            with open(out_path, "a+") as f_out:
+                f_out.write(f"K+, {data.shape[0]}, {path}, 0, {elapsed_time}\n")
+                f_out.write(f"K± e0.2, {data.shape[0]}, {path}, 0, {elapsed_time2}\n")
+                f_out.flush()

@@ -160,6 +160,7 @@
               scipy
               matplotlib
               certifi
+              filelock
             ]);
 
         container = pkgs.singularity-tools.buildImage {
@@ -193,6 +194,7 @@
                   pandas
                   matplotlib
                   seaborn
+                  filelock
                   tornado
                   umap-learn
                   h5py
