@@ -8,7 +8,7 @@ from pathlib import Path
 from time import perf_counter
 import sys
 import os
-sys.path.append(os.path.join(Path(__file__).resolve().parents[2]))
+sys.path.append(os.path.join(Path(__file__).resolve().parents[1]))
 
 import panna
 import argparse
@@ -59,6 +59,7 @@ if __name__ == "__main__":
         emst.find_mst()
         end_time = perf_counter()
         elapsed_time2 = end_time - start_time
+        print(f"Finished dataset {path}. Times: K+ {elapsed_time}, K± e0.2 {elapsed_time2}")
 
         # Write both results under a single file lock to avoid races from parallel jobs
         lock_path = os.path.join(results_folder, "scalability_results.csv.lock")

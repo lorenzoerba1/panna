@@ -78,10 +78,10 @@ if __name__ == "__main__":
                 _, data = panna.datasets.load(name=path, pca_dimensions=4 if path == "pamap2" else None)
                 data = data[:1000]
                 
-                tree_weights, tree_edges = panna.EMST(data, epsilon=0, delta=0.001).find_mst()
+                tree_weights, tree_edges = panna.EMST(data, epsilon=0, delta=0.001, family="lattice").find_mst()
 
                 
-                emst_approx = panna.EMST(data, epsilon=0.1, delta=0.001).find_mst()
+                emst_approx = panna.EMST(data, epsilon=0.1, delta=0.001, family="lattice").find_mst()
                 tree_weights_approx, tree_edges_approx = emst_approx
                 
                 tree1 = edges_to_bracket_notation_tree(tree_weights, tree_edges)

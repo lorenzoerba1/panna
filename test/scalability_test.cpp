@@ -4,6 +4,7 @@
 #include "panna/lsh/euclidean.hpp"
 #include "panna/lsh/crosspolytope.hpp"
 #include "panna/lsh/simhash.hpp"
+#include "panna/lsh/lattice.hpp"
 #include "panna/distance.hpp"
 #include "panna/data.hpp"
 #include "panna/rand.hpp"
@@ -21,13 +22,13 @@ int main () {
     const std::vector<size_t> lenghts = {10000, 100000, 1000000};
     using Point = NormedPoints; // UnitNormPoints or NormedPoints
     using Distance = EuclideanDistance; // EuclideanDistance or AngularDistance or CosineDistance
-    using Hasher = E2LSH<conc, Point, Distance>;
-    //using Hasher = CrossPolytope<conc, Point, Distance, rotations>;
+    using Hasher = LatticeLSH<4, Point, Distance>;
+    // using Hasher = CrossPolytope<conc, Point, Distance, rotations>;
     std::ofstream outfile("results/weight_results.csv", std::ios_base::app);
 
     for (const auto& n : lenghts){
         for (const auto& dimension: dimensions) {
-        E2LSHBuilder<conc, NormedPoints, Distance> builder ( dimension );
+        // Use LatticeLSH (K=4) as the hasher; no explicit builder needed here
 
         std::vector<std::vector<float>> points;
         for ( size_t i = 0; i < n; i++ ) {
@@ -36,8 +37,8 @@ int main () {
         }
 
         // Exact computation
-        EMST<Point, Hasher, Distance> tree( dimension, rep, builder, points, 0 );
-        EMST<Point, Hasher, Distance> approx_tree( dimension, rep, builder, points, 0.1 );
+        EMST<Point, Hasher, Distance> tree( dimension, rep, points, 0 );
+        EMST<Point, Hasher, Distance> approx_tree( dimension, rep, points, 0.1 );
         // auto start = std::chrono::high_resolution_clock::now();
         // float weight = tree.exact_tree();
         // auto end = std::chrono::high_resolution_clock::now();

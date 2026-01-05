@@ -25,7 +25,7 @@ if __name__ == "__main__":
          "sift-128-euclidean.hdf5",
          "deep-image-96-angular.hdf5"
     ]
-    path_prefix = Path(__file__).resolve().parents[2]
+    path_prefix = Path(__file__).resolve().parents[1]
 
     dataset_folder = os.path.join(path_prefix, "datasets")
     results_folder = os.path.join(path_prefix, "results")
@@ -41,7 +41,7 @@ if __name__ == "__main__":
         # Load dataset via new API and keep the same PCA behavior for PAMAP2
         stem = Path(path).stem
         _, data = panna.datasets.load(name=stem, pca_dimensions=4 if 'pamap2' in stem.lower() else None)
-        data = np.array(data).astype(np.float32)[:1000]
+        data = np.array(data).astype(np.float32)[:5000]
 
         out_lines = []
         for delta in deltas:
@@ -65,8 +65,7 @@ if __name__ == "__main__":
         # Append results under a file lock to avoid races between parallel jobs
         lock_path = os.path.join(results_folder, "weight_results.csv.lock")
         out_path = os.path.join(results_folder, "weight_results.csv")
-        with FileLock(lock_path):
-            with open(out_path, "a+") as f_out:
+        with open(out_path, "a+") as f_out:
                 for l in out_lines:
                     f_out.write(l)
                 f_out.flush()
