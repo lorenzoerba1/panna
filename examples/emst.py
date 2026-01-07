@@ -4,7 +4,7 @@ import numpy as np
 from icecream import ic
 import time
 
-_, data = panna.datasets.load("census")
+_, data = panna.datasets.load("ht")
 # data = data[:10000]
 n = data.shape[0]
 ic(data.shape)

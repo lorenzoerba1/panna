@@ -72,12 +72,14 @@ def _load_ht(path: Path):
     with zipfile.ZipFile(path, 'r') as zip_ref:
         zip_ref.extractall(path.parent)
         # Unzip the inner file "HT_Sensor_dataset.zip"
-        inner_zip_path = path.parent / "gas+sensors+for+home+activity+monitoring/HT_Sensor_dataset.zip"
+        inner_zip_path = path.parent / "HT_Sensor_dataset.zip"
         with zipfile.ZipFile(inner_zip_path, 'r') as inner_zip_ref:
-            inner_zip_ref.extractall(path.parent / "gas+sensors+for+home+activity+monitoring")
+            inner_zip_ref.extractall(path.parent)
     # Load data
-    data_path = path.parent / "gas+sensors+for+home+activity+monitoring/HT_Sensor_dataset/HT_Sensor_dataset.dat"
-    data = pd.read_csv(data_path, sep=r'\s+', header=None).to_numpy().astype(np.float32)
+    data_path = path.parent / "HT_Sensor_dataset.dat"
+    data = pd.read_csv(data_path, sep=r'\s+')
+    del data["id"]
+    data = data.to_numpy().astype(np.float32)
     data = np.nan_to_num(data)
     return data, None, None
 
