@@ -198,6 +198,7 @@ def load(name: str, pca_dimensions=None, center_mean=False, load_queries=False, 
     if load_queries:
         return distance, train, test, distances
     else:
+        train = np.unique(train, axis=0)
         return distance, train
 
 
