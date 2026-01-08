@@ -4,7 +4,7 @@ import numpy as np
 from icecream import ic
 import time
 
-_, data = panna.datasets.load("ht")
+_, data = panna.datasets.load("nytimes-256-angular")
 # data = data[:10000]
 n = data.shape[0]
 ic(data.shape)

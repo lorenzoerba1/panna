@@ -418,7 +418,7 @@ namespace panna {
                     max_weight,
                     [&]( uint32_t x ) { return filter.cfind( x ); },
                     [&]( std::vector<Edge>& scratch ) {
-                        LOG_INFO( "msg", "building tree on batch", "logger", "worker", "batch_size", scratch.size() );
+                        LOG_DEBUG( "msg", "building tree on batch", "logger", "worker", "batch_size", scratch.size() );
                         scratch.insert( scratch.end(),
                                         std::make_move_iterator( local_tree.begin() ),
                                         std::make_move_iterator( local_tree.end() ) );
@@ -621,7 +621,7 @@ namespace panna {
             num_collisions = count_collisions;
 
             // This is just a sanity check to see if dsu works as intended
-            is_connected( tree );
+            expect(is_connected( tree ));
             LOG_INFO( "msg", "EMST finished", "distances_computed", distances_computed, "num_collisions", num_collisions, "num_total_pairs", ((size_t)num_data -1) *(size_t) num_data/ 2 );
             return { tree_weight, tree };
         }
