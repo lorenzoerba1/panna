@@ -81,3 +81,4 @@ if __name__ == "__main__":
 
         
     plt.show()
+    plt.savefig("results/error_plot.pdf", dpi=300, bbox_inches="tight", format="pdf")

@@ -379,10 +379,9 @@ nb::tuple emst_theory_of_computing( nb::ndarray<float, nb::c_contig>& data_in, n
     }
     LOG_INFO("nrows", nrows, "dimensionality", dimensionality);
 
-    const size_t K = 3; // using a larger value entails using way too many repetitions in the last iterations
     using Distance = panna::EuclideanDistance;
-    using Hasher = panna::E2LSH<K, panna::NormedPoints, Distance>;
-    Hasher::Builder builder( 0.0, dimensionality );
+    using Hasher = panna::LatticeLSH<4, panna::NormedPoints, Distance>;
+    Hasher::Builder builder( dimensionality );
 
     auto res =
         panna::baselines::emst_theory_of_computing<panna::NormedPoints, Hasher::Builder, Distance>(

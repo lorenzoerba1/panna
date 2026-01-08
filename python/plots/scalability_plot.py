@@ -77,8 +77,8 @@ if __name__ == "__main__":
     )
 
     plt.tight_layout()
-    plt.show()
-    fig.savefig("results/dimensionality_scalability_plot.png", dpi=300, bbox_inches="tight")
+    #plt.show()
+    fig.savefig("results/dimensionality_scalability_plot.pdf", dpi=300, bbox_inches="tight", format="pdf")
     plt.close(fig)
 
     # LENGTH SCALABILITY PLOT
@@ -113,7 +113,7 @@ if __name__ == "__main__":
         for alg in subset["Algorithm"].unique():
             alg_data = subset[subset["Algorithm"] == alg]
             max_n = alg_data["n"].max()
-            if max_n < 10**7 and alg_data["Time (s)"].max() < timeout:
+            if max_n < 10**6 and alg_data["Time (s)"].max() < timeout:
                 ax.plot(
                     [max_n, max_n * 10],
                     [alg_data["Time (s)"].max(), timeout],
@@ -160,6 +160,6 @@ if __name__ == "__main__":
     )
 
     plt.tight_layout()
-    plt.show()
-    fig.savefig("results/length_scalability_plot.png", dpi=600, bbox_inches="tight")
+    #plt.show()
+    fig.savefig("results/length_scalability_plot.pdf", dpi=600, bbox_inches="tight", format="pdf")
     plt.close(fig)
