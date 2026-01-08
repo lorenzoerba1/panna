@@ -4,6 +4,7 @@
 #include "panna/lsh/euclidean.hpp"
 #include "panna/lsh/crosspolytope.hpp"
 #include "panna/lsh/simhash.hpp"
+#include "panna/lsh/lattice.hpp"
 #include "panna/distance.hpp"
 #include "panna/data.hpp"
 #include "panna/rand.hpp"
@@ -32,24 +33,24 @@ int main()  {
         float eps[6] = { 0.2, 0.5, 1.0, 5.0, 10.0, 20.0 };
         float probs[4] = {0.01, 0.05, 0.1, 0.2};
         std::vector<float> weigths; 
-        using Point = NormedPoints; // UnitNormPoints or NormedPoints
+        using Dataset = NormedPoints; // UnitNormPoints or NormedPoints
         using Distance = EuclideanDistance; // EuclideanDistance or AngularDistance or CosineDistance
-        using Hasher = E2LSH<conc, Point, Distance>;
-        // using Hasher = CrossPolytope<conc, Point, Distance, rotations>;
+        using Hasher = LatticeLSH<4, Dataset, Distance>;
+        //using Hasher = E2LSH<conc, Dataset, Distance>;
+        // using Hasher = CrossPolytope<conc, Dataset, Distance, rotations>;
         std::ofstream outfile("weight_results.csv", std::ios_base::app);
 
         for (const auto& prob: probs) {
             for (const auto& ep: eps) {
                 seed_global_rng( 360 );
-                E2LSHBuilder<conc, NormedPoints, Distance> builder(dimensions[index]);
                 H5Easy::File file(name, H5Easy::File::ReadOnly);
                 std::vector<std::vector<float>> points =
                     H5Easy::load<std::vector<std::vector<float>>>(file, "/train");
                 if (points.size() > 10000)
                     points.resize(1000); // Limit to 1000 points for testing
 
-                    EMST<Point, Hasher, Distance> tree(dimensions[index], 500, builder, points, prob, 0);
-                    EMST<Point, Hasher, Distance> tree_approx(dimensions[index], 500, builder, points, prob, ep);
+                    EMST<Dataset, Hasher, Distance> tree(dimensions[index], 500, points, prob, 0);
+                    EMST<Dataset, Hasher, Distance> tree_approx(dimensions[index], 500, points, prob, ep);
                     float weight;
                     double duration;
 

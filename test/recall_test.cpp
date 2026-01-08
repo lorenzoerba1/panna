@@ -4,6 +4,7 @@
 #include "panna/lsh/euclidean.hpp"
 #include "panna/lsh/crosspolytope.hpp"
 #include "panna/lsh/simhash.hpp"
+#include "panna/lsh/lattice.hpp"
 #include "panna/distance.hpp"
 #include "panna/data.hpp"
 #include "panna/rand.hpp"
@@ -35,14 +36,15 @@ int main()  {
         const size_t dimensions[4] = { 784, 100, 256, 960 };
         size_t reps[2] = { 300, 500 };
         std::vector<float> weigths; 
-        using Point = NormedPoints; // UnitNormPoints or NormedPoints
+        using Dataset = NormedPoints; // UnitNormPoints or NormedPoints
         using Distance = EuclideanDistanceNoSqrt; // EuclideanDistance or AngularDistance or CosineDistance
-        using Hasher = E2LSH<conc, Point, Distance>;
+        using Hasher = LatticeLSH<4, Dataset, Distance>;
+        // using Hasher = E2LSH<conc, Point, Distance>;
         // using Hasher = CrossPolytope<conc, Point, Distance, rotations>;
 
         for (const auto& rep: reps) {
             for (size_t i = 0; i < 3; i++) {
-                E2LSHBuilder<conc, NormedPoints, Distance> builder(dimensions[index]);
+                // E2LSHBuilder<conc, NormedPoints, Distance> builder(dimensions[index]);
                 // CrossPolytopeBuilder<conc, Point, Distance, rotations> builder( dimensions[index] );
 
                 H5Easy::File file(name, H5Easy::File::ReadOnly);
@@ -51,7 +53,7 @@ int main()  {
                 // if (points.size() > 100000)
                 //     points.resize(100000); // Limit to 1000 points for testing
 
-                EMST<Point, Hasher, Distance> tree(dimensions[index], rep, builder, points);
+                EMST<Dataset, Hasher, Distance> tree(dimensions[index], rep, points);
 
                 const auto& [weight, _] = tree.find_tree();
                 weigths.push_back(weight);
