@@ -1,3 +1,4 @@
+import pathlib
 import panna
 import panna.datasets
 import numpy as np
@@ -6,6 +7,7 @@ from icecream import ic
 import csv
 import logging
 import matplotlib.pyplot as plt
+import h5py
 
 
 MEM = joblib.Memory(".cache")
@@ -19,19 +21,24 @@ def compute_flexibility(tree, epsilon, diameter):
         cost += w
         lower_bound = remaining * w
         upper_bound = remaining * diameter
-        # if cost + remaining * diameter <= (1 + epsilon) * total_cost:
-        # if upper_bound - lower_bound <= epsilon * (cost + lower_bound):
         if upper_bound <= epsilon * cost:
-            ic(cost, remaining, upper_bound, diameter)
             return remaining
     return 0
 
 
 def compute_edge_mass(weights, counts, threshold):
-    ic(threshold)
     idx = np.searchsorted(weights, threshold, side="right")
-    ic(idx)
-    return ic(counts[idx])
+    return counts[idx]
+
+
+def estimate_contrast(edge_mass, bounds, cumulative_counts, diameter):
+    def find(mass):
+        idx = np.searchsorted(cumulative_counts, mass)
+        if idx >= len(bounds):
+            return diameter
+        ic(mass, idx, bounds[idx])
+        return bounds[idx]
+    return find(2*edge_mass) / find(edge_mass)
 
 
 def compute_cumulative_distance_distribution(
@@ -40,110 +47,91 @@ def compute_cumulative_distance_distribution(
     n = data.shape[0]
     num_pairs = n * (n - 1) // 2
     samples = int(min(1e9, num_pairs * sample_fraction))
-    counts, bounds = panna.distance_histogram(data, num_buckets, min_distance, max_distance, samples)
-    ic(bounds)
+    counts, bounds = panna.distance_histogram(
+        data, num_buckets, min_distance, max_distance, samples
+    )
+    mean_weight = np.average(bounds, weights=counts)
     counts = np.cumsum(counts)
-    return bounds, counts
+    return bounds, counts, mean_weight
 
 
-class UnionFind:
-    def __init__(self, size):
-        # Initially, each element is its own parent (self root)
-        self.parent = list(range(size))
-        # Rank used for union by rank optimization
-        self.rank = [0] * size
-
-    def find(self, x):
-        # Path compression heuristic
-        if self.parent[x] != x:
-            self.parent[x] = self.find(self.parent[x])
-        return self.parent[x]
-
-    def union(self, x, y):
-        # Union by rank heuristic
-        rootX = self.find(x)
-        rootY = self.find(y)
-
-        if rootX != rootY:
-            if self.rank[rootX] > self.rank[rootY]:
-                self.parent[rootY] = rootX
-            elif self.rank[rootX] < self.rank[rootY]:
-                self.parent[rootX] = rootY
-            else:
-                self.parent[rootY] = rootX
-                self.rank[rootX] += 1
-
-    def connected(self, x, y):
-        # Check if two elements are in the same set
-        return self.find(x) == self.find(y)
-
-
-def exact_emst(data):
-    n = data.shape[0]
-    edges = []
-    for i in range(n):
-        for j in range(i):
-            edges.append((np.linalg.norm(data[i] - data[j]), i, j))
-
-    tree = []
-    edges = sorted(edges)
-    uf = UnionFind(n)
-    for edge in edges:
-        if not uf.connected(edge[1], edge[2]):
-            uf.union(edge[1], edge[2])
-            tree.append(edge)
-
-    diameter = edges[-1][0]
-
-    return tree, edges, diameter
-
-
-@MEM.cache
-def cached_emst(data):
-    emst_algo = panna.EMST(data, epsilon=0.0, delta=0.1)
+def compute_emst(data):
+    emst_algo = panna.EMST(data, epsilon=0.0, delta=0.1, repetitions=2048)
     emst = emst_algo.find_mst()
-    ic(emst_algo.stats())
     return emst
 
 
 def compute_stats_csv():
     logging.basicConfig(level=logging.INFO)
 
-    outfile = "examples/emst_stats.csv"
-    with open(outfile, "w") as fp:
-        out = csv.writer(fp)
-        out.writerow(("dataset", "epsilon", "flexibility", "mass", "num_pairs", "mass_fraction"))
+    outfile = pathlib.Path("emst_stats.csv")
+    if not outfile.is_file():
+        with open(outfile, "w") as fp:
+            out = csv.writer(fp)
+            out.writerow(
+                ("dataset", "epsilon", "flexibility", "mass", "contrast", "num_pairs", "mass_fraction")
+            )
 
     datasets = panna.datasets.available_datasets()
     for dataset in datasets:
-        if dataset != "fashion-mnist-784-euclidean":
+        if dataset in ["chem", "deep-image-96-angular"]:
             continue
         ic(dataset)
-        pca_dimensions = 4 if dataset == "pamap2" else None
-        _, data = panna.datasets.load(dataset, pca_dimensions=pca_dimensions, normalize = "angular" in dataset)
-        n = data.shape[0]
-        num_pairs = n * (n - 1) // 2
-        weights, _edges = cached_emst(data)
+        oname = pathlib.Path(f"{dataset}-stats.hdf5")
+        if not oname.is_file():
+            pca_dimensions = 4 if dataset == "pamap2" else None
+            _, data = panna.datasets.load(
+                dataset, pca_dimensions=pca_dimensions, normalize="angular" in dataset
+            )
+            n = data.shape[0]
+            num_pairs = n * (n - 1) // 2
+            weights, edges = compute_emst(data)
+            ic(edges)
+            diameter = panna.approximate_diameter(data)
+            bounds, counts, mean_weight = compute_cumulative_distance_distribution(
+                data, weights.min(), diameter
+            )
+
+            with h5py.File(oname, "w") as hfp:
+                hfp["/tree"] = edges
+                hfp["/tree-weights"] = weights
+                hfp["/weight-distribution/cumulative"] = counts
+                hfp["/weight-distribution/bounds"] = bounds
+                hfp.attrs["diameter"] = diameter
+                hfp.attrs["mean_weight"] = mean_weight
+                hfp.attrs["num_pairs"] = num_pairs
+                hfp.attrs["num_points"] = n
+
+        with h5py.File(oname) as hfp:
+            edges = hfp["/tree"][:]
+            weights = hfp["/tree-weights"][:]
+            counts = hfp["/weight-distribution/cumulative"][:]
+            bounds = hfp["/weight-distribution/bounds"][:]
+            diameter = hfp.attrs["diameter"]
+            num_pairs = hfp.attrs["num_pairs"]
+            n = hfp.attrs["num_points"]
+            mean_weight = hfp.attrs["mean_weight"]
+
         weights = np.sort(weights)
-        diameter = panna.approximate_diameter(data)
-        ic(diameter)
-        bounds, counts = compute_cumulative_distance_distribution(data, weights[0], diameter)
+        ic(mean_weight, diameter)
 
         plt.figure()
         plt.title(dataset)
         plt.plot(bounds, counts)
-        
-        # plt.plot(weights, [0.01]*len(weights), '|', color='k')
+
         with open(outfile, "a") as fp:
             out = csv.writer(fp)
             for epsilon in [0, 0.01, 0.1]:
                 flexibility = compute_flexibility(weights, epsilon, diameter)
-                max_rigid_weight = weights[-flexibility-1]
-                mass = compute_edge_mass(bounds, counts, max_rigid_weight)
+                threshold = weights[-flexibility - 1]
+                mass = compute_edge_mass(bounds, counts, threshold)
+                contrast = estimate_contrast(mass, bounds, counts, diameter)
                 plt.axhline(mass, linestyle="dotted")
-                plt.axvline(max_rigid_weight, linestyle="dotted")
+                plt.axvline(threshold, linestyle="dotted")
                 plt.annotate(f"ε={epsilon}", (0, mass))
-                out.writerow((dataset, epsilon, flexibility, mass, num_pairs, mass/num_pairs))
+                out.writerow(
+                    (dataset, epsilon, flexibility, mass, contrast, num_pairs, mass / num_pairs)
+                )
         plt.savefig(f"examples/cumdist-{dataset}.png", dpi=300)
 
 
