@@ -1,6 +1,7 @@
 #pragma once
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <iostream>
 #include <iterator>
 #include <limits>
@@ -320,6 +321,25 @@ namespace panna {
             return num_collisions;
         }
 
+        /// Complete the given forest with arbitrary edges so that it becomes a connected tree
+        size_t complete_arbitrarily(std::vector<Edge> & forest) const {
+            DSU dsu(num_data);
+            for (const auto & e : forest) {
+                dsu.union_sets(e.a, e.b);
+            }
+            // now connect the tree containing `0` with all the other trees
+            size_t added_cnt = 0;
+            const uint32_t root = 0;
+            for (uint32_t i=1; i < num_data && forest.size() < num_data - 1; i++) {
+                if (dsu.union_sets(root, i)) {
+                    const float weight = table.get_distance(root, i);
+                    forest.emplace_back(weight, root, i);
+                    added_cnt++;
+                }
+            }
+            return added_cnt;
+        }
+
         /// @brief Computes the exact MST with Kruskal's algorithm in a naive way
         /// @return weight of the exact MST
         std::pair<float, std::vector<Edge>> exact_tree() {
@@ -558,6 +578,16 @@ namespace panna {
                     update.clear();
                     LOG_INFO("logger", "collector", "tree-size", tree.size(), "completed-repetitions", completed_repetitions);
 
+                    const auto start = std::chrono::steady_clock::now();
+                    const size_t added_edges = complete_arbitrarily(tree);
+                    const auto end = std::chrono::steady_clock::now();
+                    const double elapsed_ms =
+                        std::chrono::duration_cast<std::chrono::milliseconds>( end - start )
+                            .count();
+                    if (added_edges > 0) {
+                        LOG_INFO( "msg", "completed tree with arbitrary edges", "elapsed_ms", elapsed_ms, "added_edges", added_edges);
+                    }
+
                     if ( tree.size() == num_data - 1 ) {
                         StoppingConditionInfo stop = stopping_condition( tree, prefix, completed_repetitions );
                         float weight_lower_bound =
@@ -611,6 +641,9 @@ namespace panna {
                 }
                 LOG_INFO( "msg", "completed prefix", "prefix", prefix );
             }
+
+            // TODO: brute force the remaining edges
+            expect(found.load());
 
             std::vector<Edge> tree(running_result.read()->tree);
             tree_weight = 0;
@@ -681,7 +714,7 @@ namespace panna {
                     DSU filter(num_data);
                     std::vector<Edge> update = std::move( *local_tree );
                     // clang-format off
-                    LOG_INFO( "logger", "collector", "msg", "received update", "update-size", update.size(), "stash-size", stash.size());
+                    LOG_DEBUG( "logger", "collector", "msg", "received update", "update-size", update.size(), "stash-size", stash.size());
                     // clang-format: on
                     update.insert(update.end(), stash.begin(), stash.end());
 
@@ -698,6 +731,17 @@ namespace panna {
                     // clang-format off
                     LOG_INFO( "logger", "collector", "tree-size", tree.size(), "completed-repetitions", completed_repetitions , "stash-size", stash.size());
                     // clang-format on
+
+                    // complete the tree with arbitrary edges
+                    const auto start = std::chrono::steady_clock::now();
+                    const size_t added_edges = complete_arbitrarily(tree);
+                    const auto end = std::chrono::steady_clock::now();
+                    const double elapsed_ms =
+                        std::chrono::duration_cast<std::chrono::milliseconds>( end - start )
+                            .count();
+                    if (added_edges > 0) {
+                        LOG_INFO( "msg", "completed tree with arbitrary edges", "elapsed_ms", elapsed_ms, "added_edges", added_edges);
+                    }
 
                     if ( tree.size() == num_data - 1 ) {
                         StoppingConditionInfo stop =

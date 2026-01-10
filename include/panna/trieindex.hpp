@@ -447,7 +447,7 @@ namespace panna {
         }
 
         // FIXME: I don't think this belongs here, form an API standpoint
-        float get_distance( size_t a, size_t b ) {
+        float get_distance( size_t a, size_t b ) const {
             PointHandle x = dataset[a];
             PointHandle y = dataset[b];
             return Distance::compute( x, y );
