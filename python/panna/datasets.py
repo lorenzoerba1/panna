@@ -167,7 +167,14 @@ def available_datasets():
     return list(_DATASETS_INFO.keys())
 
 
-def load(name: str, pca_dimensions=None, center_mean=False, load_queries=False, normalize=False):
+def load(
+    name: str,
+    pca_dimensions=None,
+    center_mean=False,
+    load_queries=False,
+    normalize=False,
+    standardize=False,
+):
     if name not in available_datasets():
         raise KeyError(
             f"Dataset `{name}` not available. Pick one of {available_datasets()}"
@@ -180,8 +187,8 @@ def load(name: str, pca_dimensions=None, center_mean=False, load_queries=False, 
     _download(url, local_name)
     train, test, distances = loader(local_name)
 
-    if center_mean:
-        scaler = StandardScaler(with_std=False)
+    if center_mean or standardize:
+        scaler = StandardScaler(with_std=standardize)
         train = scaler.fit_transform(train)
         if test is not None:
             test = scaler.transform(test)
