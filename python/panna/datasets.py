@@ -45,8 +45,8 @@ def _load_pamap(path: Path):
                 for line in zf:
                     line = line.decode()
                     l = list(map(float, line.strip().split()))
-                    # remove timestamp
-                    arr.append(l[1:])
+                    # remove timestamp and activity ID
+                    arr.append(l[2:])
             X = np.nan_to_num(np.array(arr))  # many NaNs in data, replace them with 0.
             return X.astype(np.float32)
 
