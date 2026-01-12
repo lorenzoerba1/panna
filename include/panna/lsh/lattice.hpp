@@ -114,6 +114,7 @@ namespace panna {
 
         std::vector<float> data_offset;
         float scaling_factor;
+        size_t dimensions;
         size_t repetitions;
         Dataset random_vectors;
         std::vector<float> offsets;
@@ -153,6 +154,7 @@ namespace panna {
                     std::mt19937_64& rng ):
             data_offset( offset ),
             scaling_factor( scaling_factor ),
+            dimensions( dimensions ),
             repetitions( repetitions ),
             random_vectors( dimensions ),
             corrections() {
@@ -163,6 +165,62 @@ namespace panna {
                 offsets.push_back( sample_random_01(rng) );
                 corrections.push_back( dot_product(dir, data_offset) / scaling_factor );
             }
+        }
+
+        /// Re-initializes the hash functions so that points at `distance` collide
+        /// at least once with probability 1-`delta`.
+        void rebuild_for( const float distance, const float delta ) {
+            // TODO: accept a list of edges on which to apply the union bound
+            const size_t repetitions = this->repetitions;
+            auto fail_prob = [distance, repetitions]( const float scale ) {
+                const float d = Distance::to_euclidean( distance ) / scale;
+                if (d >= panna::lattice_lsh::MAX_DISTANCE) {
+                    return 1.0;
+                }
+                size_t idx = std::floor( d / panna::lattice_lsh::DISTANCE_STEP );
+                if ( idx < panna::lattice_lsh::NUM_ESTIMATES ) {
+                    const float p_collision = panna::lattice_lsh::PROBABILITIES[idx];
+                    return std::pow( 1 - p_collision, repetitions );
+                } else {
+                    return 1.0;
+                }
+            };
+            LOG_INFO( "msg", "rebuilding LSH functions", "old-scale", scaling_factor,
+                      "failure-probability", fail_prob(scaling_factor),
+                      "target-failure-probability", delta );
+
+            float low = scaling_factor;
+            float high = 2.0*scaling_factor;
+            while ( fail_prob( high ) > delta ) {
+                high *= 2.0;
+            }
+            LOG_INFO("low", low, "high", high);
+
+            for (size_t i=0; i<50 && (high - low) > 1e-4; i++) {
+                const float mid = (low + high) / 2.0;
+                const float fp = fail_prob(mid);
+                LOG_INFO("low", low, "high", high, "scale-factor", mid, "failure_probability", fp);
+                if (fp > delta) {
+                    low = mid;
+                } else {
+                    high = mid;
+                }
+            }
+            scaling_factor = high;
+
+            auto &rng = get_global_rng();
+            corrections.clear();
+            random_vectors.clear();
+            offsets.clear();
+            for ( size_t vec_idx = 0; vec_idx < repetitions * K * LATTICE_DIMENSIONS; vec_idx++ ) {
+                std::vector<float> dir = sample_random_normal_vector( dimensions, rng );
+                rescale( dir, 1.0 / std::sqrt( LATTICE_DIMENSIONS ) );
+                random_vectors.push_back( dir.begin(), dir.end() );
+                offsets.push_back( sample_random_01(rng) );
+                corrections.push_back( dot_product(dir, data_offset) / scaling_factor );
+            }
+            
+            LOG_INFO("new-scale", scaling_factor);
         }
 
         template <typename Archive>

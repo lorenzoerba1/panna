@@ -2,6 +2,7 @@
 #include <limits>
 #include <optional>
 #include <random>
+#include <stdexcept>
 #include <vector>
 
 #include "panna/expect.hpp"
@@ -49,6 +50,12 @@ namespace panna {
                 random_vectors.push_back( dir.begin(), dir.end() );
                 offsets.push_back( uniform( rng ) );
             }
+        }
+
+        /// Re-initializes the hash functions so that points at `distance` collide
+        /// at least once with probability 1-`delta`.
+        void rebuild_for(const float distance, const float delta) {
+            throw std::logic_error("not yet implemented");
         }
 
         template <typename Archive>

@@ -721,6 +721,15 @@ namespace panna {
             parallel_rebuilding_data.resize( max_threads );
         }
 
+        void clear() {
+            indices.clear();
+            hashes.clear();
+            for (auto &dat : parallel_rebuilding_data) {
+                dat.clear();
+            }
+            rebuild();
+        }
+
         template <typename Archive>
         void serialize( Archive& ar ) {
             ar( indices, hashes );

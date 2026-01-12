@@ -527,123 +527,144 @@ namespace panna {
             const size_t max_threads = ( hardware_concurrency > 1 ) ? hardware_concurrency - 1 : 1;
 
             std::atomic_bool found( false );
-            for ( size_t prefix = max_hashbits; prefix > 0 && !found; prefix-- ) {
-                // Set up work to distribute among threads: each worker thread will pull
-                // repetition indices from this
-                Channel<size_t> work( max_repetitions );
-                for ( size_t repetition = 0; repetition < max_repetitions; repetition++ ) {
-                    work.send( std::move( repetition ) );
-                }
-                // Close the channel, so that workers do not wait indefinitely for new repetitions
-                work.close();
+            while ( !found.load() ) {
+                for ( size_t prefix = max_hashbits; prefix > 0 && !found; prefix-- ) {
+                    // Set up work to distribute among threads: each worker thread will pull
+                    // repetition indices from this
+                    Channel<size_t> work( max_repetitions );
+                    for ( size_t repetition = 0; repetition < max_repetitions; repetition++ ) {
+                        work.send( std::move( repetition ) );
+                    }
+                    // Close the channel, so that workers do not wait indefinitely for new
+                    // repetitions
+                    work.close();
 
-                // Set up the channel to collect partial results
-                Channel<std::vector<Edge>> partials( max_repetitions );
+                    // Set up the channel to collect partial results
+                    Channel<std::vector<Edge>> partials( max_repetitions );
 
-                // spawn the threads to carry out the work
-                std::vector<std::thread> workers;
-                for ( size_t tid = 0; tid < max_threads; tid++ ) {
-                    std::thread worker( EMST::worker_fun,
-                                        tid,
-                                        prefix,
-                                        std::ref(table),
-                                        std::ref(running_result),
-                                        std::ref(found),
-                                        std::ref(max_weight),
-                                        std::ref(count_distances),
-                                        std::ref(count_collisions),
-                                        std::ref(work),
-                                        std::ref(partials) );
-                    workers.push_back( std::move( worker ) );
-                }
-
-                // collect the results from the worker threads
-                size_t completed_repetitions = 0;
-                for ( std::optional<std::vector<Edge>> local_tree = partials.receive();
-                      local_tree.has_value() && !found && completed_repetitions < max_repetitions;
-                      local_tree = partials.receive() ) {
-                    std::vector<Edge> update = std::move( *local_tree );
-                    LOG_INFO("logger", "collector", "msg", "received update", "update-size", update.size());
-
-                    completed_repetitions++;
-
-                    std::vector<Edge> tree( running_result.read()->tree );
-                    DSU filter(num_data);
-                    update.insert( update.end(),
-                                   std::make_move_iterator( tree.begin() ),
-                                   std::make_move_iterator( tree.end() ) );
-                    std::sort( update.begin(), update.end() );
-                    tree.clear();
-                    kruskal( filter, update, tree );
-                    update.clear();
-                    LOG_INFO("logger", "collector", "tree-size", tree.size(), "completed-repetitions", completed_repetitions);
-
-                    const auto start = std::chrono::steady_clock::now();
-                    const size_t added_edges = complete_arbitrarily(tree);
-                    const auto end = std::chrono::steady_clock::now();
-                    const double elapsed_ms =
-                        std::chrono::duration_cast<std::chrono::milliseconds>( end - start )
-                            .count();
-                    if (added_edges > 0) {
-                        LOG_INFO( "msg", "completed tree with arbitrary edges", "elapsed_ms", elapsed_ms, "added_edges", added_edges);
+                    // spawn the threads to carry out the work
+                    std::vector<std::thread> workers;
+                    for ( size_t tid = 0; tid < max_threads; tid++ ) {
+                        std::thread worker( EMST::worker_fun,
+                                            tid,
+                                            prefix,
+                                            std::ref( table ),
+                                            std::ref( running_result ),
+                                            std::ref( found ),
+                                            std::ref( max_weight ),
+                                            std::ref( count_distances ),
+                                            std::ref( count_collisions ),
+                                            std::ref( work ),
+                                            std::ref( partials ) );
+                        workers.push_back( std::move( worker ) );
                     }
 
-                    if ( tree.size() == num_data - 1 ) {
-                        StoppingConditionInfo stop = stopping_condition( tree, prefix, completed_repetitions );
-                        float weight_lower_bound =
-                            stop.confirmed_weight +
-                            stop.edges_to_confirm * stop.heaviest_confirmed_edge;
-                        LOG_INFO("weight-lower-bound", weight_lower_bound);
-                        bool should_stop =
-                            stop.total_weight <= ( 1 + epsilon ) * weight_lower_bound;
+                    // collect the results from the worker threads
+                    size_t completed_repetitions = 0;
+                    for ( std::optional<std::vector<Edge>> local_tree = partials.receive();
+                          local_tree.has_value() && !found &&
+                          completed_repetitions < max_repetitions;
+                          local_tree = partials.receive() ) {
+                        std::vector<Edge> update = std::move( *local_tree );
                         // clang-format off
                         LOG_INFO( "logger", "collector",
-                                  "stop.total_weight", stop.total_weight,
-                                  "stop.confirmed_weight", stop.confirmed_weight,
-                                  "stop.heaviest_confirmed_edge", stop.heaviest_confirmed_edge,
-                                  "stop.edges_to_confirm", stop.edges_to_confirm,
-                                  "heaviest_edge", tree.at(num_data-2).weight,
-                                  "weight_lower_bound", weight_lower_bound,
-                                  "should_stop", should_stop );
+                                  "msg", "received update",
+                                  "update-size", update.size() );
                         // clang-format on
-                        max_weight = tree.back().weight;
-                        LOG_INFO("logger", "collector", "max-weight", max_weight.load());
 
-                        // stop if we are done
-                        if ( should_stop ) {
-                            LOG_INFO("msg", "tree found, signalling stop");
-                            found = true;
-                            tree_weight = stop.total_weight;
-                        }
-                        // Fill the DSU filter with just the confirmed edges
-                        filter.reset();
-                        for ( size_t idx = 0; idx < stop.confirmed_edges; idx++ ) {
-                            auto edge = tree.at(idx);
-                            filter.union_sets( edge.a, edge.b );
-                        }
-                    } else {
-                        filter.reset();
-                    }
-                    // publish the new running result
-                    filter.compress_all();
-                    running_result.update(
-                        RunningResult( std::move( tree ), std::move( filter ) ) );
+                        completed_repetitions++;
 
-                    if (completed_repetitions >= max_repetitions) {
-                        // we are done with this prefix
-                        break;
+                        std::vector<Edge> tree( running_result.read()->tree );
+                        DSU filter( num_data );
+                        update.insert( update.end(),
+                                       std::make_move_iterator( tree.begin() ),
+                                       std::make_move_iterator( tree.end() ) );
+                        std::sort( update.begin(), update.end() );
+                        tree.clear();
+                        kruskal( filter, update, tree );
+                        update.clear();
+                        // clang-format off
+                        LOG_INFO( "logger", "collector",
+                                  "tree-size", tree.size(),
+                                  "completed-repetitions", completed_repetitions );
+                        // clang-format on
+
+                        const auto start = std::chrono::steady_clock::now();
+                        const size_t added_edges = complete_arbitrarily( tree );
+                        const auto end = std::chrono::steady_clock::now();
+                        const double elapsed_ms =
+                            std::chrono::duration_cast<std::chrono::milliseconds>( end - start )
+                                .count();
+                        if ( added_edges > 0 ) {
+                            // clang-format off
+                            LOG_INFO( "msg", "completed tree with arbitrary edges",
+                                      "elapsed_ms", elapsed_ms,
+                                      "added_edges", added_edges );
+                            // clang-format on
+                        }
+
+                        if ( tree.size() == num_data - 1 ) {
+                            StoppingConditionInfo stop =
+                                stopping_condition( tree, prefix, completed_repetitions );
+                            float weight_lower_bound =
+                                stop.confirmed_weight +
+                                stop.edges_to_confirm * stop.heaviest_confirmed_edge;
+                            LOG_INFO( "weight-lower-bound", weight_lower_bound );
+                            bool should_stop =
+                                stop.total_weight <= ( 1 + epsilon ) * weight_lower_bound;
+                            // clang-format off
+                            LOG_INFO( "logger", "collector",
+                                      "stop.total_weight", stop.total_weight,
+                                      "stop.confirmed_weight", stop.confirmed_weight,
+                                      "stop.heaviest_confirmed_edge", stop.heaviest_confirmed_edge,
+                                      "stop.edges_to_confirm", stop.edges_to_confirm,
+                                      "heaviest_edge", tree.at(num_data-2).weight,
+                                      "weight_lower_bound", weight_lower_bound,
+                                      "should_stop", should_stop );
+                            // clang-format on
+                            max_weight = tree.back().weight;
+                            LOG_INFO( "logger", "collector", "max-weight", max_weight.load() );
+
+                            // stop if we are done
+                            if ( should_stop ) {
+                                LOG_INFO( "msg", "tree found, signalling stop" );
+                                found = true;
+                                tree_weight = stop.total_weight;
+                            }
+                            // Fill the DSU filter with just the confirmed edges
+                            filter.reset();
+                            for ( size_t idx = 0; idx < stop.confirmed_edges; idx++ ) {
+                                auto edge = tree.at( idx );
+                                filter.union_sets( edge.a, edge.b );
+                            }
+                        } else {
+                            filter.reset();
+                        }
+                        // publish the new running result
+                        filter.compress_all();
+                        running_result.update(
+                            RunningResult( std::move( tree ), std::move( filter ) ) );
+
+                        if ( completed_repetitions >= max_repetitions ) {
+                            // we are done with this prefix
+                            break;
+                        }
                     }
+
+                    // Wait for workers to finish
+                    for ( auto&& worker : workers ) {
+                        worker.join();
+                    }
+                    LOG_INFO( "msg", "completed prefix", "prefix", prefix );
                 }
 
-                // Wait for workers to finish
-                for ( auto&& worker : workers ) {
-                    worker.join();
+                if (!found.load()) {
+                    const float heaviest_edge = running_result.read()->tree.back().weight;
+                    table.rehash_for( heaviest_edge, delta / num_data );
                 }
-                LOG_INFO( "msg", "completed prefix", "prefix", prefix );
             }
 
-            // TODO: brute force the remaining edges
-            expect(found.load());
+            expect( found.load() );
 
             std::vector<Edge> tree(running_result.read()->tree);
             tree_weight = 0;
