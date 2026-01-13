@@ -32,12 +32,16 @@ include_directories("external")
 # FetchContent_MakeAvailable(dbg_macro)
 
 # Get the current git commit hash
-execute_process(
-  COMMAND git rev-parse --short HEAD
-  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  OUTPUT_VARIABLE GIT_COMMIT_HASH
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-)
+if(NOT DEFINED ENV{GIT_COMMIT_HASH})
+  execute_process(
+    COMMAND git rev-parse --short HEAD
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_COMMIT_HASH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+else()
+  set(GIT_COMMIT_HASH "$ENV{GIT_COMMIT_HASH}")
+endif()
 
 # Configure a header file to pass the git hash to the source code
 configure_file(

@@ -115,6 +115,7 @@
           version = "0.0.1";
           pyproject = true;
           src = ./.;
+          GIT_COMMIT_HASH = self.rev or "dirty";
 
           # as stated here, one should disable the cmake setup:
           # https://discourse.nixos.org/t/building-python-package-with-scikit-build-core-and-cmake-dependencies-die-python/69665/2
