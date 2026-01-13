@@ -6,7 +6,6 @@
 #include <iterator>
 #include <limits>
 #include <random>
-#include <unistd.h>
 #include <vector>
 #include <thread>
 
@@ -956,18 +955,6 @@ namespace panna {
                 return !( threshold_low <= edge.weight && edge.weight <= threshold_up );
             } );
             updates.erase(erase_from, updates.end());
-        }
-
-        /// @brief Generate a random spanning tree to have an initial solution
-        void dirty_start( std::vector<Edge>& clean ) {
-            std::vector<unsigned int> vertices( num_data );
-            std::iota( vertices.begin(), vertices.end(), 0 );
-            std::shuffle(
-                vertices.begin(), vertices.end(), std::mt19937{ std::random_device{}() } );
-            for ( size_t i = 1; i < vertices.size(); i++ ) {
-                clean.emplace_back( table.get_distance( vertices.at(i - 1), vertices.at(i) ),
-                                    std::make_pair( vertices.at(i - 1), vertices.at(i) ) );
-            }
         }
 
         StoppingConditionInfo stopping_condition( std::vector<Edge> tree, size_t i, size_t j ) {
