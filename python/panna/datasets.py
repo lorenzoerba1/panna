@@ -73,8 +73,10 @@ def _load_ht(path: Path):
         zip_ref.extractall(path.parent)
         # Unzip the inner file "HT_Sensor_dataset.zip"
         inner_zip_path = path.parent / "HT_Sensor_dataset.zip"
-        with zipfile.ZipFile(inner_zip_path, 'r') as inner_zip_ref:
-            inner_zip_ref.extractall(path.parent)
+        # if there is an inner zip file, extract it
+        if inner_zip_path.is_file():
+            with zipfile.ZipFile(inner_zip_path, 'r') as inner_zip_ref:
+                inner_zip_ref.extractall(path.parent)
     # Load data
     data_path = path.parent / "HT_Sensor_dataset.dat"
     data = pd.read_csv(data_path, sep=r'\s+')
@@ -91,6 +93,8 @@ def _load_chem(path: Path):
     data_path = path.parent / "gas+sensor+array+under+dynamic+gas+mixtures/ethylene_CO.txt"
     data = pd.read_csv(data_path, sep=r'\s+').to_numpy().astype(np.float32)
     data = np.nan_to_num(data)
+    # Remove duplicate rows
+    data = np.unique(data, axis=0)
     return data, None, None
         
 
