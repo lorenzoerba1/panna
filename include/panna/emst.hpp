@@ -14,6 +14,7 @@
 #include "panna/dsu.hpp"
 #include "panna/logging.hpp"
 #include "panna/rand.hpp"
+#include "panna/timer.hpp"
 #include "panna/trieindex.hpp"
 #include "panna/git_version.hpp"
 
@@ -423,6 +424,7 @@ namespace panna {
                   orepetition = work.receive() ) {
                 size_t repetition = *orepetition;
                 LOG_INFO( "tid", tid, "repetition", repetition, "prefix", prefix, "logger", "worker" );
+                Timer _timer("worker-repetition");
                 if ( found ) {
                     // Return if the tree was found
                     LOG_INFO( "tid", tid, "logger", "worker", "msg", "tree found, stopping worker" );
