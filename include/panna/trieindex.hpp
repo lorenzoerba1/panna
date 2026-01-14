@@ -16,6 +16,7 @@
 #include "panna/logging.hpp"
 #include "panna/lsh/predicates.hpp"
 #include "panna/prefixmap.hpp"
+#include "panna/timer.hpp"
 
 namespace panna {
     static std::atomic<size_t> g_collisions( 0 );
@@ -171,26 +172,17 @@ namespace panna {
             hashed_points = dataset.size();
         }
 
-        /// Rehash the index with a more permissive LSH family, for the
-        /// families that allow it (e.g. LatticeLSH). This allow to restart
-        /// the search with more colliding pairs. In particular, this method
-        /// rehashes the data structure so that a pair of points at `distance`
-        /// collides in at least one out of L repetitions with probability 1-`delta`
-        /// on prefixes of length 1.
-        void rehash_for(const float distance, const float delta) {
-            LOG_INFO("msg", "rehashing", "target-distance", distance, "failure-probability", delta);
-            auto start = std::chrono::steady_clock::now();
-            expect(hasher.has_value());
-            hasher->rebuild_for(distance, delta);
-
-            hashed_points = 0;
-            for ( size_t rep = 0; rep < lsh_maps.size(); rep++ ) {
-                lsh_maps.at( rep ).clear();
+        /// Rehash the index so that at the longest prefix there is a reasonable number of
+        /// collisions of points from different groups.
+        void rehash( std::function<uint32_t( uint32_t )> group_fun ) {
+            Timer timer("reshashing");
+            builder.fit(dataset, group_fun);
+            hasher = builder.build( repetitions );
+            for (auto & map : lsh_maps) {
+                map.clear();
             }
+            hashed_points = 0;
             rebuild();
-            auto end = std::chrono::steady_clock::now();
-            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-            LOG_INFO("msg", "rehashing completed", "elapsed_ms", elapsed);
         }
 
         template <typename Iter>

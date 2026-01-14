@@ -5,7 +5,6 @@
 #include <iostream>
 #include <iterator>
 #include <limits>
-#include <random>
 #include <vector>
 #include <thread>
 
@@ -449,6 +448,10 @@ namespace panna {
                         kruskal( dsu, scratch, local_tree );
                         return found.load(); // early stop if the solution has been found in the meantime
                     } );
+                // clang-format off
+                LOG_INFO("logger", "worker", "tid", tid, "repetition", repetition, "prefix", prefix,
+                          "cnt_distances", cnt_dist, "cnt_collisions", cnt_collisions);
+                // clang-format on
                 count_distances += cnt_dist;
                 count_collisions += cnt_collisions;
                 // OPTIMIZE: do not send the edges that
@@ -529,6 +532,7 @@ namespace panna {
 
             std::atomic_bool found( false );
             while ( !found.load() ) {
+                // FIXME: Are we resetting the tree?
                 for ( size_t prefix = max_hashbits; prefix > 0 && !found; prefix-- ) {
                     // Set up work to distribute among threads: each worker thread will pull
                     // repetition indices from this
@@ -587,6 +591,7 @@ namespace panna {
                         // clang-format off
                         LOG_INFO( "logger", "collector",
                                   "tree-size", tree.size(),
+                                  "prefix", prefix,
                                   "completed-repetitions", completed_repetitions );
                         // clang-format on
 
@@ -660,8 +665,10 @@ namespace panna {
                 }
 
                 if (!found.load()) {
-                    const float heaviest_edge = running_result.read()->tree.back().weight;
-                    table.rehash_for( heaviest_edge, delta / num_data );
+                    auto rr = running_result.read();
+                    LOG_INFO("msg", "triggering rehash",
+                             "num-connected-components", rr->filter.num_connected_components());
+                    table.rehash( [&]( uint32_t x ) { return rr->filter.cfind( x ); } );
                 }
             }
 
@@ -751,7 +758,11 @@ namespace panna {
                     // stash the edges that might be useful in the future
                     stash = std::move(update);
                     // clang-format off
-                    LOG_INFO( "logger", "collector", "tree-size", tree.size(), "completed-repetitions", completed_repetitions , "stash-size", stash.size());
+                    LOG_INFO( "logger", "collector",
+                              "tree-size", tree.size(),
+                              "prefix", prefix,
+                              "completed-repetitions", completed_repetitions ,
+                              "stash-size", stash.size());
                     // clang-format on
 
                     // complete the tree with arbitrary edges

@@ -167,62 +167,6 @@ namespace panna {
             }
         }
 
-        /// Re-initializes the hash functions so that points at `distance` collide
-        /// at least once with probability 1-`delta`.
-        void rebuild_for( const float distance, const float delta ) {
-            // TODO: accept a list of edges on which to apply the union bound
-            const size_t repetitions = this->repetitions;
-            auto fail_prob = [distance, repetitions]( const float scale ) {
-                const float d = Distance::to_euclidean( distance ) / scale;
-                if (d >= panna::lattice_lsh::MAX_DISTANCE) {
-                    return 1.0;
-                }
-                size_t idx = std::floor( d / panna::lattice_lsh::DISTANCE_STEP );
-                if ( idx < panna::lattice_lsh::NUM_ESTIMATES ) {
-                    const float p_collision = panna::lattice_lsh::PROBABILITIES[idx];
-                    return std::pow( 1 - p_collision, repetitions );
-                } else {
-                    return 1.0;
-                }
-            };
-            LOG_INFO( "msg", "rebuilding LSH functions", "old-scale", scaling_factor,
-                      "failure-probability", fail_prob(scaling_factor),
-                      "target-failure-probability", delta );
-
-            float low = scaling_factor;
-            float high = 2.0*scaling_factor;
-            while ( fail_prob( high ) > delta ) {
-                high *= 2.0;
-            }
-            LOG_INFO("low", low, "high", high);
-
-            for (size_t i=0; i<50 && (high - low) > 1e-4; i++) {
-                const float mid = (low + high) / 2.0;
-                const float fp = fail_prob(mid);
-                LOG_INFO("low", low, "high", high, "scale-factor", mid, "failure_probability", fp);
-                if (fp > delta) {
-                    low = mid;
-                } else {
-                    high = mid;
-                }
-            }
-            scaling_factor = high;
-
-            auto &rng = get_global_rng();
-            corrections.clear();
-            random_vectors.clear();
-            offsets.clear();
-            for ( size_t vec_idx = 0; vec_idx < repetitions * K * LATTICE_DIMENSIONS; vec_idx++ ) {
-                std::vector<float> dir = sample_random_normal_vector( dimensions, rng );
-                rescale( dir, 1.0 / std::sqrt( LATTICE_DIMENSIONS ) );
-                random_vectors.push_back( dir.begin(), dir.end() );
-                offsets.push_back( sample_random_01(rng) );
-                corrections.push_back( dot_product(dir, data_offset) / scaling_factor );
-            }
-            
-            LOG_INFO("new-scale", scaling_factor);
-        }
-
         template <typename Archive>
         void serialize( Archive& ar ) {
             ar( data_offset, scaling_factor, repetitions, random_vectors, offsets, corrections );
@@ -337,6 +281,58 @@ namespace panna {
                 }
             }
             LOG_INFO("scaling-factor", scaling_factor);
+        }
+
+        void fit( Dataset& points, std::function<uint32_t( uint32_t )> group_fun ) {
+            const float old_scaling_factor = scaling_factor;
+            scaling_factor = 0.0;
+            const size_t n = points.size();
+            offset = mean_point( points );
+            const float diameter = approximate_diameter<Distance>( points );
+            const size_t sample_repetitions = 4;
+            LOG_INFO( "diameter", diameter );
+
+            auto compute_avg_collisions = [&]( float scale ) -> float {
+                std::vector<PrefixMap<typename Output::Value>> pmaps( sample_repetitions );
+                Output hasher( offset, scale, dimensions, sample_repetitions );
+                PrefixMap<typename Output::Value>::populate_from( pmaps, points, hasher );
+
+                size_t collisions = 0;
+                for ( auto& pmap : pmaps ) {
+                    auto cursor = pmap.create_pair_cursor_grouped(
+                        hasher.get_concatenations(), std::nullopt, group_fun );
+                    collisions += cursor.total_collisions();
+                }
+                return static_cast<float>( collisions ) / pmaps.size();
+            };
+
+            // TODO: make these configurable to handle different scenarios
+            const float threshold_low = std::sqrt(n) / 2.0;
+            const float threshold_high = std::sqrt(n) * 2.0;
+            LOG_INFO( "threshold-low", threshold_low, "threshold_high", threshold_high );
+
+            float low = 0.0, high = diameter;
+            const size_t MAX_ITER = 40;
+            bool found = false;
+            for ( size_t iter = 0; iter < MAX_ITER; iter++ ) {
+                float scale = ( low + high ) / 2.0;
+                float avg_collisions = compute_avg_collisions( scale );
+                LOG_INFO( "scale", scale, "avg-collisions", avg_collisions );
+                if ( threshold_low <= avg_collisions && avg_collisions <= threshold_high ) {
+                    scaling_factor = scale;
+                    found = true;
+                    break;
+                } else if ( avg_collisions < threshold_low ) {
+                    low = scale;
+                } else {
+                    high = scale;
+                }
+            }
+            if (!found) {
+                scaling_factor = diameter;
+            }
+            LOG_INFO( "scaling-factor", scaling_factor );
+            expect(scaling_factor > old_scaling_factor);
         }
 
         Output build( size_t repetitions ) const {

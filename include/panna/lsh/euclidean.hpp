@@ -52,12 +52,6 @@ namespace panna {
             }
         }
 
-        /// Re-initializes the hash functions so that points at `distance` collide
-        /// at least once with probability 1-`delta`.
-        void rebuild_for(const float distance, const float delta) {
-            throw std::logic_error("not yet implemented");
-        }
-
         template <typename Archive>
         void serialize( Archive& ar ) {
             ar( quantization_width, repetitions, random_vectors, offsets );
@@ -216,6 +210,10 @@ namespace panna {
             // }
 
             LOG_INFO("msg", "Quantization width set to", "quantization_width", quantization_width);
+        }
+
+        void fit( Dataset& points, std::function<uint32_t( uint32_t )> group_fun ) {
+            throw std::logic_error("unimplemented");
         }
 
 

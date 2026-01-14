@@ -110,6 +110,10 @@ namespace panna {
             }
             return true;
         }
+        size_t num_pairs() const {
+            const size_t n = end - begin;
+            return (n - 1) * n / 2;
+        }
     };
 
     //! Given two integer ranges, loops a pair of indices through the cartesian product
@@ -146,6 +150,10 @@ namespace panna {
             }
             return std::optional(ret);
         }
+
+        size_t num_pairs() const {
+            return (end_i - begin_i) * (end_j - begin_j);
+        }
     };
 
     //! Index that chains multiple indices together, for example chains multiple CartesianIndices together
@@ -169,6 +177,18 @@ namespace panna {
             }
             // all indices are exhausted
             return std::nullopt;
+        }
+
+        size_t num_pairs() const {
+            size_t total = 0;
+            for (auto &idx : inner) {
+                total += idx.num_pairs();
+            }
+            return total;
+        }
+
+        size_t num_subs() const {
+            return inner.size();
         }
     };
 
@@ -498,6 +518,7 @@ namespace panna {
             }
             // Schedule the indices for consumption
             idx = ChainedIndex(index_chain);
+            // LOG_INFO("chained_index_subs", idx.num_subs(), "chained_index_size", idx.num_pairs());
 
             return true;
         }
@@ -565,14 +586,9 @@ namespace panna {
         //! The total number of collisions, _including_ the ones on longer prefixes
         size_t total_collisions() {
             size_t cnt = 0;
-            while ( true ) {
-                size_t bucket_size = range_end - range_start;
-                cnt += (bucket_size - 1) * bucket_size / 2;
-                if ( !next_hash() ) {
-                    // there are no more buckets
-                    break;
-                }
-            }
+            do {
+                cnt += idx.num_pairs();
+            } while (!next_hash());
             return cnt;
         }
     };

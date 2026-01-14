@@ -26,6 +26,16 @@ namespace panna {
             std::fill( rank.begin(), rank.end(), 0 );
         }
 
+        uint32_t num_connected_components() const {
+            size_t cnt = 0;
+            for (size_t i=0; i<size(); i++) {
+                if (i == cfind(i)) {
+                    cnt++;
+                }
+            }
+            return cnt;
+        }
+
         /// @brief Return the parent of the set containing x
         /// @param x, the element to find
         /// @return the parent of the set containing x
@@ -80,15 +90,6 @@ namespace panna {
                 parent.at(rootY) = rootX;
                 rank.at(rootX)++;
             }
-            // Union by size
-            // if (rank.at(rootX) < rank.at(rootY)) {
-            //     uint32_t temp = rootX;
-            //     rootX = rootY;
-            //     rootY = temp;
-            // }
-
-            // parent.at(rootY) = rootX;
-            // rank.at(rootX) += rank.at(rootY);
             return true;
         }
     };
