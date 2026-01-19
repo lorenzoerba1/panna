@@ -15,6 +15,7 @@
 #include "panna/baselines/toc_emst.hpp"
 #include "panna/trieindex.hpp"
 #include "panna/emst.hpp"
+#include "panna/git_version.hpp"
 #include "panna/logging.hpp"
 
 namespace nb = nanobind;
@@ -469,6 +470,7 @@ approximate_diameter( nb::ndarray<float, nb::c_contig>& data_in ) {
 }
 
 NB_MODULE( _panna_impl, m ) {
+    m.attr( "git_version" ) = GIT_COMMIT_HASH;
     m.def( "set_seed",
            &panna::seed_global_rng,
            "Set the seed of the global random number generato used by the panna module." );
