@@ -336,6 +336,7 @@ namespace panna {
                     added_cnt++;
                 }
             }
+            std::sort(forest.begin(), forest.end());
             return added_cnt;
         }
 
@@ -629,7 +630,13 @@ namespace panna {
                                       "should_stop", should_stop );
                             // clang-format on
                             max_weight = tree.back().weight;
-                            LOG_INFO( "logger", "collector", "max-weight", max_weight.load() );
+                            float mean_weight = 0.0;
+                            for (auto & e : tree) {
+                                mean_weight += e.weight;
+                            }
+                            mean_weight /= tree.size();
+                            LOG_INFO( "logger", "collector", "max-weight", max_weight.load(),
+                                     "mean-weight", mean_weight );
 
                             // stop if we are done
                             if ( should_stop ) {
@@ -977,6 +984,7 @@ namespace panna {
             while ( idx < tree.size() ) {
                 const float w = tree.at(idx).weight;
                 const float fp = table.fail_probability( w, i, j );
+                LOG_INFO("logger", "stopping_condition", "w", w, "fp", fp, "cumulative-fp", prob + fp);
 
                 if ( prob + fp > delta ) {
                     break;
