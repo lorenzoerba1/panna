@@ -471,6 +471,7 @@ namespace panna {
                 // clang-format on
                 count_distances += cnt_dist;
                 count_collisions += cnt_collisions;
+                expect(cnt_dist == cnt_collisions);
                 // OPTIMIZE: do not send the edges that
                 // we know are already in the best tree found so far
                 partials.send( std::move( local_tree ) );
@@ -690,7 +691,9 @@ namespace panna {
                 if (!found.load()) {
                     auto rr = running_result.read();
                     LOG_INFO("msg", "triggering rehash",
-                             "num-connected-components", rr->filter.num_connected_components());
+                             "num-connected-components", rr->filter.num_connected_components(),
+                             "distances-computed", count_distances.load(),
+                             "num_collisions", count_collisions.load());
                     table.rehash( [&]( uint32_t x ) { return rr->filter.cfind( x ); } );
                 }
             }

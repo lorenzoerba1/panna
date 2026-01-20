@@ -213,7 +213,55 @@ namespace panna {
         }
 
         void fit( Dataset& points, std::function<uint32_t( uint32_t )> group_fun ) {
-            throw std::logic_error("unimplemented");
+            const float old_quantization_width = quantization_width;
+            quantization_width = 0.0;
+            const size_t n = points.size();
+            const float diameter = approximate_diameter<Distance>( points );
+            const size_t sample_repetitions = 4;
+            LOG_INFO( "diameter", diameter );
+
+            auto compute_avg_collisions = [&]( float qwidth ) -> float {
+                std::vector<PrefixMap<typename Output::Value>> pmaps( sample_repetitions );
+                Output hasher(qwidth, dimensions, sample_repetitions);
+                PrefixMap<typename Output::Value>::populate_from( pmaps, points, hasher );
+
+                size_t collisions = 0;
+                for ( auto& pmap : pmaps ) {
+                    auto cursor = pmap.create_pair_cursor_grouped(
+                        hasher.get_concatenations(), std::nullopt, group_fun );
+                    collisions += cursor.total_collisions();
+                }
+                return static_cast<float>( collisions ) / pmaps.size();
+            };
+
+            // TODO: make these configurable to handle different scenarios
+            const float threshold_low = std::sqrt(n) / 2.0;
+            const float threshold_high = n * 10.0;
+            LOG_INFO( "threshold-low", threshold_low, "threshold_high", threshold_high );
+
+            float low = 2 * old_quantization_width, high = diameter;
+            expect( low < high );
+            const size_t MAX_ITER = 40;
+            bool found = false;
+            for ( size_t iter = 0; iter < MAX_ITER; iter++ ) {
+                float qwidth = ( low + high ) / 2.0;
+                float avg_collisions = compute_avg_collisions( qwidth );
+                LOG_INFO( "qwidth", qwidth, "avg-collisions", avg_collisions );
+                if ( threshold_low <= avg_collisions && avg_collisions <= threshold_high ) {
+                    quantization_width = qwidth;
+                    found = true;
+                    break;
+                } else if ( avg_collisions < threshold_low ) {
+                    low = qwidth;
+                } else {
+                    high = qwidth;
+                }
+            }
+            if (!found) {
+                quantization_width = low;
+            }
+            LOG_INFO( "quantization-width", quantization_width );
+            expect(quantization_width > old_quantization_width);
         }
 
 
