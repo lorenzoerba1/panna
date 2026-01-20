@@ -588,7 +588,7 @@ namespace panna {
             size_t cnt = 0;
             do {
                 cnt += idx.num_pairs();
-            } while (!next_hash());
+            } while ( next_hash() );
             return cnt;
         }
     };

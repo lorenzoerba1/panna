@@ -430,6 +430,8 @@ namespace panna {
                     LOG_INFO( "tid", tid, "logger", "worker", "msg", "tree found, stopping worker" );
                     return;
                 }
+                float sum_distances = 0.0, min_distance = std::numeric_limits<float>::infinity(), max_distance = 0.0;
+                float count_distances = 0.0;
                 DSU filter = running_result.read()->filter;
                 DSU dsu( filter );
                 auto [cnt_dist, cnt_collisions] = table.search_pairs_different_groups(
@@ -440,6 +442,16 @@ namespace panna {
                     [&]( uint32_t x ) { return filter.cfind( x ); },
                     [&]( std::vector<Edge>& scratch ) {
                         LOG_DEBUG( "msg", "building tree on batch", "logger", "worker", "batch_size", scratch.size() );
+                        for ( auto& e : scratch ) {
+                            sum_distances += e.weight;
+                            if (e.weight < min_distance) {
+                                min_distance = e.weight;
+                            }
+                            if (e.weight > max_distance) {
+                                max_distance = e.weight;
+                            }
+                        }
+                        count_distances += scratch.size();
                         scratch.insert( scratch.end(),
                                         std::make_move_iterator( local_tree.begin() ),
                                         std::make_move_iterator( local_tree.end() ) );
@@ -449,9 +461,13 @@ namespace panna {
                         kruskal( dsu, scratch, local_tree );
                         return found.load(); // early stop if the solution has been found in the meantime
                     } );
+                float avg_distance = sum_distances / count_distances;
                 // clang-format off
                 LOG_INFO("logger", "worker", "tid", tid, "repetition", repetition, "prefix", prefix,
-                          "cnt_distances", cnt_dist, "cnt_collisions", cnt_collisions);
+                          "cnt_distances", cnt_dist, "cnt_collisions", cnt_collisions,
+                          "average_distance", avg_distance,
+                          "min_distance", min_distance,
+                          "max_distance", max_distance);
                 // clang-format on
                 count_distances += cnt_dist;
                 count_collisions += cnt_collisions;
@@ -984,7 +1000,7 @@ namespace panna {
             while ( idx < tree.size() ) {
                 const float w = tree.at(idx).weight;
                 const float fp = table.fail_probability( w, i, j );
-                LOG_INFO("logger", "stopping_condition", "w", w, "fp", fp, "cumulative-fp", prob + fp);
+                // LOG_INFO("logger", "stopping_condition", "w", w, "fp", fp, "cumulative-fp", prob + fp);
 
                 if ( prob + fp > delta ) {
                     break;

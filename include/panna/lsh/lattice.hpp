@@ -262,7 +262,7 @@ namespace panna {
 
             // TODO: make these configurable to handle different scenarios
             const float threshold_low = n / 2.0;
-            const float threshold_high = n * 2.0;
+            const float threshold_high = n * 10.0;
             LOG_INFO("threshold-low", threshold_low, "threshold_high", threshold_high);
 
             float low=0.0, high=diameter;
@@ -308,10 +308,11 @@ namespace panna {
 
             // TODO: make these configurable to handle different scenarios
             const float threshold_low = std::sqrt(n) / 2.0;
-            const float threshold_high = std::sqrt(n) * 2.0;
+            const float threshold_high = n * 10.0;
             LOG_INFO( "threshold-low", threshold_low, "threshold_high", threshold_high );
 
-            float low = 0.0, high = diameter;
+            float low = 2 * old_scaling_factor, high = diameter;
+            expect( low < high );
             const size_t MAX_ITER = 40;
             bool found = false;
             for ( size_t iter = 0; iter < MAX_ITER; iter++ ) {
@@ -329,7 +330,7 @@ namespace panna {
                 }
             }
             if (!found) {
-                scaling_factor = diameter;
+                scaling_factor = low;
             }
             LOG_INFO( "scaling-factor", scaling_factor );
             expect(scaling_factor > old_scaling_factor);
