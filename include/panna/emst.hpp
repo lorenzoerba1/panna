@@ -431,7 +431,7 @@ namespace panna {
                     return;
                 }
                 float sum_distances = 0.0, min_distance = std::numeric_limits<float>::infinity(), max_distance = 0.0;
-                float count_distances = 0.0;
+                float avg_denom = 0.0;
                 DSU filter = running_result.read()->filter;
                 DSU dsu( filter );
                 auto [cnt_dist, cnt_collisions] = table.search_pairs_different_groups(
@@ -461,7 +461,7 @@ namespace panna {
                         kruskal( dsu, scratch, local_tree );
                         return found.load(); // early stop if the solution has been found in the meantime
                     } );
-                float avg_distance = sum_distances / count_distances;
+                float avg_distance = sum_distances / avg_denom;
                 // clang-format off
                 LOG_INFO("logger", "worker", "tid", tid, "repetition", repetition, "prefix", prefix,
                           "cnt_distances", cnt_dist, "cnt_collisions", cnt_collisions,
