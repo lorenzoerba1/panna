@@ -860,7 +860,7 @@ namespace panna {
             distances_computed = count_distances;
             num_collisions = count_collisions;
             // This is just a sanity check to see if dsu works as intended
-            is_connected( tree );
+            expect( is_connected( tree ) );
             LOG_INFO( "msg",
                       "EMST finished",
                       "distances_computed",
