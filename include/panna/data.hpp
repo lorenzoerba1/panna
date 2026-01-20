@@ -508,9 +508,9 @@ namespace panna {
         // find the farthest from arbitrary point
         float maxdist = 0.0;
         size_t maxdist_idx = 0;
-        for(size_t i=0; i<n; i++) {
-            float d = Distance::compute(dataset[root], dataset[i]);
-            if (d > maxdist) {
+        for ( size_t i = 0; i < n; i++ ) {
+            float d = Distance::compute( dataset[root], dataset[i] );
+            if ( d > maxdist ) {
                 maxdist = d;
                 maxdist_idx = i;
             }
@@ -518,42 +518,14 @@ namespace panna {
 
         // find the farthest from the previously found point
         maxdist = 0.0;
-        for (size_t i=0; i<n; i++) {
-            float d = Distance::compute(dataset[maxdist_idx], dataset[i]);
-            if (d > maxdist) {
+        for ( size_t i = 0; i < n; i++ ) {
+            float d = Distance::compute( dataset[maxdist_idx], dataset[i] );
+            if ( d > maxdist ) {
                 maxdist = d;
             }
         }
 
-        // now sample pairs, to see if we pick one at larger distance
-        const size_t num_pairs = n * (n-1) / 2;
-        std::uniform_int_distribution<size_t> random_id( 0, n - 1 );
-        float sampled_maxdist = 0.0;
-        const size_t sample_size = static_cast<size_t>(std::min(0.01 * num_pairs, 1e9));
-
-#pragma omp parallel
-        {
-            static std::mt19937_64 rng( omp_get_thread_num() );
-            float private_max_dist_found = 0.0;
-#pragma omp for
-            for ( size_t sample = 0; sample < sample_size; sample++ ) {
-                const size_t a = random_id( rng );
-                const size_t b = random_id( rng );
-                const float dist = Distance::compute( dataset[a], dataset[b] );
-                if (dist > private_max_dist_found) {
-                    private_max_dist_found = dist;
-                }
-            }
-
-#pragma omp critical
-            {
-                if (private_max_dist_found> sampled_maxdist) {
-                    sampled_maxdist = private_max_dist_found ;
-                }
-            }
-        }
-        
-        return std::max(sampled_maxdist, maxdist);
+        return maxdist;
     }
 
     template <typename Distance, typename Dataset>
