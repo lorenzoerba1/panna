@@ -314,12 +314,12 @@ namespace panna {
                     // no new pairs
                     break;
                 }
-                LOG_DEBUG( "repetition",
-                           repetition,
-                           "prefix",
-                           concatenations,
-                           "num_new_pairs",
-                           scratch.size() );
+                // clang-format off
+                LOG_DEBUG( "repetition", repetition,
+                           "prefix", concatenations,
+                           "num_new_pairs", scratch.size() );
+                // clang-format on
+                size_t write_head = 0;
                 for ( size_t i = 0; i < scratch.size(); i++ ) {
                     uint32_t a_idx = scratch.at(i).a;
                     uint32_t b_idx = scratch.at(i).b;
@@ -334,13 +334,16 @@ namespace panna {
                     PointHandle b = dataset[b_idx];
                     collision_cnt++;
                     float distance = Distance::compute( a, b );
-                    scratch.at(i).weight = distance;
                     distance_cnt++;
-                    if ( distance > weight_filter ) {
-                        continue;
+                    if ( distance <= weight_filter ) {
+                        scratch.at(write_head++) = {
+                            .weight = distance,
+                            .a = a_idx,
+                            .b = b_idx
+                        };
                     }
-                    // output.emplace_back( distance, a_idx, b_idx );
                 }
+                scratch.resize(write_head);
                 if (batch_output(scratch)) {
                     // early return if the callback says so
                     break;
