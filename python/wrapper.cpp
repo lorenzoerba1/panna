@@ -195,11 +195,11 @@ EuclideanHashFamily string_to_family(std::string s) {
 }
 
 struct EMST_exposed {
-    using LatticeHasher = panna::LatticeLSH<4, panna::NormedPoints, panna::EuclideanDistance>;
-    using E2LSHHasher = panna::E2LSH<12, panna::NormedPoints, panna::EuclideanDistance>;
+    using LatticeHasher = panna::LatticeLSH<4, panna::EuclideanPoints, panna::EuclideanDistance>;
+    using E2LSHHasher = panna::E2LSH<12, panna::EuclideanPoints, panna::EuclideanDistance>;
     using Variants = std::variant<
-        panna::EMST<panna::NormedPoints, LatticeHasher, panna::EuclideanDistance>,
-        panna::EMST<panna::NormedPoints, E2LSHHasher, panna::EuclideanDistance>
+        panna::EMST<panna::EuclideanPoints, LatticeHasher, panna::EuclideanDistance>,
+        panna::EMST<panna::EuclideanPoints, E2LSHHasher, panna::EuclideanDistance>
     >;
 
     Variants inner;
@@ -240,12 +240,12 @@ struct EMST_exposed {
         switch ( family ) {
         case Lattice:
             inner
-                .emplace<panna::EMST<panna::NormedPoints, LatticeHasher, panna::EuclideanDistance>>(
+                .emplace<panna::EMST<panna::EuclideanPoints, LatticeHasher, panna::EuclideanDistance>>(
                     dimensions, repetitions, data_cpp, delta, epsilon );
             break;
         case E2LSH:
             inner
-                .emplace<panna::EMST<panna::NormedPoints, E2LSHHasher, panna::EuclideanDistance>>(
+                .emplace<panna::EMST<panna::EuclideanPoints, E2LSHHasher, panna::EuclideanDistance>>(
                     dimensions, repetitions, data_cpp, delta, epsilon );
             break;
         }
