@@ -78,9 +78,6 @@ namespace panna {
         /// the information about neighbors. For each point we
         /// maintain num_neighbors neighbors
         std::vector<std::pair<float, uint32_t>> neighbors;
-        /// the maximum distance between each point and
-        /// its current farthest neighbor
-        std::vector<float> max_distances;
 
         void do_update( uint32_t src, uint32_t dst, float dist ) {
             // Given the typical small value for num_neighbors,
@@ -91,47 +88,34 @@ namespace panna {
             if ( num_neighbors == 0 ) {
                 return;
             }
-            if ( dist < max_distances.at(src) ) {
-                size_t offset = src * num_neighbors;
-                // Handle special case of num_neighbors and == 1
-                if ( num_neighbors == 1 ) {
-                    if ( dist < neighbors.at(offset).first ) {
-                        neighbors.at(offset) = { dist, dst };
-                        max_distances.at(src) = dist;
-                    }
-                    return;
-                }
-
-                size_t ifmax = offset; // index of first maximum
-                float fmax = -std::numeric_limits<float>::infinity();
-                float smax = -std::numeric_limits<float>::infinity();
-                for ( size_t i = offset; i < offset + num_neighbors; i++ ) {
-                    if ( neighbors.at(i).first > fmax ) {
-                        smax = fmax;
-                        fmax = neighbors.at(i).first;
-                        ifmax = i;
+            const size_t offset = src * num_neighbors;
+            const float max_distance = neighbors.at( offset ).first;
+            if ( dist < max_distance ) {
+                const auto begin = neighbors.begin() + offset;
+                const auto end = neighbors.begin() + offset + num_neighbors;
+                // remove duplicates
+                for (auto i=begin; i!=end; i++) {
+                    if (i->second == dst) {
+                        return;
                     }
                 }
-                // replace the farthest point
-                neighbors.at(ifmax) = { dist, dst };
-                // update the maximum distance
-                if ( dist > smax ) {
-                    max_distances.at(src) = dist;
-                } else {
-                    max_distances.at(src) = smax;
-                }
+                std::pop_heap( begin, end );
+                neighbors.at( offset + num_neighbors - 1 ) = { dist, dst };
+                std::push_heap( begin, end );
             }
         }
 
-
     public:
+        using Iterator = std::vector<std::pair<float, uint32_t>>::const_iterator;
+                
         explicit CoreDistances(): CoreDistances( 0, 0 ) {
         }
         explicit CoreDistances( size_t num_points, size_t num_neighbors ):
             num_points( num_points ),
             num_neighbors( num_neighbors ),
-            neighbors( num_points * num_neighbors ),
-            max_distances( num_points, std::numeric_limits<float>::infinity() ) {
+            neighbors(
+                num_points * num_neighbors,
+                { std::numeric_limits<float>::infinity(), std::numeric_limits<uint32_t>::max() } ) {
         }
 
         template <typename Dataset, typename Distance>
@@ -158,7 +142,13 @@ namespace panna {
                         neighbor_idx++;
                     }
                 }
-                self.max_distances.at(a) = farthest;
+            }
+
+            for ( size_t a = 0; a < self.num_points; a++ ) {
+                const size_t offset = a * num_neighbors;
+                auto begin = self.neighbors.begin() + offset;
+                auto end = self.neighbors.begin() + offset + num_neighbors;
+                std::make_heap(begin, end);
             }
             return self;
         }
@@ -167,14 +157,29 @@ namespace panna {
             return num_points;
         }
 
+        size_t get_num_neighbors() const {
+            return num_neighbors;
+        }
+
         std::vector<uint32_t> get_neighbors(const uint32_t v) const {
             std::vector<uint32_t> nn;
             nn.reserve(num_neighbors);
-                size_t offset = v* num_neighbors;
+            size_t offset = v * num_neighbors;
             for ( size_t i = offset; i < offset + num_neighbors; i++ ) {
                 nn.push_back(neighbors.at(i).second);
             }
             return nn;
+        }
+
+        const std::vector<std::pair<float, uint32_t>>& all() const {
+            return neighbors;
+        }
+
+        std::pair<Iterator, Iterator> neighbors_view(const uint32_t v) const {
+            size_t offset = v * num_neighbors;
+            Iterator begin = neighbors.begin() + offset;
+            Iterator end = neighbors.begin() + offset + num_neighbors;
+            return {begin, end};
         }
 
         /// update the neighborhood of both a and b, with dist being
@@ -188,10 +193,15 @@ namespace panna {
             update( edge.a, edge.b, edge.weight );
         }
 
+        bool can_improve(const Edge & edge) const {
+            return edge.weight <= core_distance( edge.a ) || edge.weight <= core_distance( edge.b );
+        }
+
         /// the distance of the farthest among the num_points
         /// neighbors we keep track of
         float core_distance( uint32_t a ) const {
-            return max_distances.at(a);
+            const size_t offset = a * num_neighbors;
+            return neighbors.at(offset).first;
         }
 
         /// The current best guess of the mutual reachability
@@ -511,19 +521,19 @@ namespace panna {
                     repetition,
                     prefix,
                     10 * filter.size(), // buffer size
-                    max_weight,
+                    max_weight, // TODO: watch out this line
                     [&]( uint32_t x ) { return filter.cfind( x ); },
                     [&]( std::vector<Edge>& updates ) {
+                        // add to the possibly useful edges only if they would
+                        // improve the local copy of the core distances
+                        for (auto & e : updates) {
+                            if (neighborhoods.can_improve(e)) {
+                                possibly_useful_edges.push_back(e);
+                            }
+                        }
                         update_tree( local_tree, updates, neighborhoods );
                         expect( local_tree.size() > 0 );
-                        // keep track of the edges that might still be useful
-                        // add the potentially useful updates to the stash. Note that
-                        // updates are filtered in the `update_tree` call
-                        possibly_useful_edges.insert( possibly_useful_edges.end(),
-                                                      std::make_move_iterator( updates.begin() ),
-                                                      std::make_move_iterator( updates.end() ) );
                         // early stop if the solution has been found in the meantime
-                        // TODO: send all the edges that might improve the core distances
                         return found.load();
                     } );
                 count_distances += cnt_dist;
@@ -782,7 +792,12 @@ namespace panna {
                     }
                     update_tree(tree, update, core_distances);
                     // stash the edges that might be useful in the future
-                    stash = std::move(update);
+                    stash.clear();
+                    for (auto e : update) {
+                        if (e.weight <= core_distances.mutual_reachability_distance(e)) {
+                            stash.push_back(e);
+                        }
+                    }
                     // clang-format off
                     LOG_INFO( "logger", "collector",
                               "tree-size", tree.size(),
@@ -791,20 +806,9 @@ namespace panna {
                               "stash-size", stash.size());
                     // clang-format on
 
-                    // complete the tree with arbitrary edges
-                    const auto start = std::chrono::steady_clock::now();
-                    const size_t added_edges = complete_arbitrarily(tree);
-                    const auto end = std::chrono::steady_clock::now();
-                    const double elapsed_ms =
-                        std::chrono::duration_cast<std::chrono::milliseconds>( end - start )
-                            .count();
-                    if (added_edges > 0) {
-                        LOG_INFO( "msg", "completed tree with arbitrary edges", "elapsed_ms", elapsed_ms, "added_edges", added_edges);
-                    }
-
                     if ( tree.size() == num_data - 1 ) {
                         StoppingConditionInfo stop =
-                            stopping_condition( tree, prefix, completed_repetitions );
+                            stopping_condition( tree, prefix, completed_repetitions, core_distances );
                         float weight_lower_bound =
                             stop.confirmed_weight +
                             stop.edges_to_confirm * stop.heaviest_confirmed_edge;
@@ -982,26 +986,33 @@ namespace panna {
                     if (e.lower_bound > threshold_low) {
                         threshold_low = e.lower_bound;
                     }
+                    auto edge = e.as_edge();
+                    expect( edge.a != edge.b );
+                    expect( edge.weight > 0 );
                     tree.push_back( e.as_edge() );
                 } else {
-                    // FIXME: we might be stashing some duplicates
+                    // OPTIMIZE: we might be stashing some duplicates
                     updates.push_back( e.as_edge() );
                 }
             }
-            expect(threshold_up >= 0);
-            expect(threshold_low >= 0);
-            auto erase_from = std::remove_if( updates.begin(), updates.end(), [&]( Edge edge ) {
-                return !( threshold_low <= edge.weight && edge.weight <= threshold_up );
-            } );
-            updates.erase(erase_from, updates.end());
+            // expect(threshold_up >= 0);
+            // expect(threshold_low >= 0);
+            // auto erase_from = std::remove_if( updates.begin(), updates.end(), [&]( Edge edge ) {
+            //     return !( threshold_low <= edge.weight && edge.weight <= threshold_up );
+            // } );
+            // updates.erase(erase_from, updates.end());
         }
 
         StoppingConditionInfo stopping_condition( std::vector<Edge> tree, size_t i, size_t j ) {
             float prob = 0.0f;
             float weight = 0.0f;
             size_t idx = 0;
+            float min = std::numeric_limits<float>::infinity();
+            float max = 0.0;
             while ( idx < tree.size() ) {
                 const float w = tree.at(idx).weight;
+                if (w > max) {max = w;}
+                if (w < min) {min= w;}
                 const float fp = table.fail_probability( w, i, j );
                 // LOG_INFO("logger", "stopping_condition", "w", w, "fp", fp, "cumulative-fp", prob + fp);
 
@@ -1009,6 +1020,52 @@ namespace panna {
                     break;
                 }
                 prob += fp;
+                weight += w;
+                idx += 1;
+            }
+
+            size_t edges_to_confirm = tree.size() - idx;
+
+            float total_weight = weight;
+            for (size_t jj=idx; jj<tree.size(); jj++) {
+                float w =  tree.at(jj).weight ;
+                if (w > max) {max = w;}
+                if (w < min) {min= w;}
+                total_weight += w;
+            }
+            LOG_INFO("minimum-weight", min, "maximum-weight", max);
+
+            return StoppingConditionInfo{ .total_weight = total_weight,
+                                          .confirmed_weight = weight,
+                                          .heaviest_confirmed_edge =
+                                              ( idx > 0 ) ?  tree.at(idx - 1).weight  : 0.0f,
+                                          .edges_to_confirm = edges_to_confirm,
+                                          .confirmed_edges = idx };
+        }
+
+        StoppingConditionInfo stopping_condition( std::vector<Edge> tree,
+                                                  size_t i,
+                                                  size_t j,
+                                                  const CoreDistances& core_distances ) {
+            float prob = 0.0f;
+            float weight = 0.0f;
+            size_t idx = 0;
+            while ( idx < tree.size() ) {
+                const float w = tree.at(idx).weight;
+                const float fp = table.fail_probability( w, i, j );
+                float cd_fp = 0.0;
+                // auto a_neighs = core_distances.neighbors_view( tree.at( idx ).a );
+                // for (auto it=a_neighs.first; it != a_neighs.second; it++) {
+                //     cd_fp += table.fail_probability(it->first, i, j);
+                // }
+                // auto b_neighs = core_distances.neighbors_view( tree.at( idx ).b );
+                // for (auto it=b_neighs.first; it != b_neighs.second; it++) {
+                //     cd_fp += table.fail_probability(it->first, i, j);
+                // }
+                if ( prob + fp + cd_fp > delta ) {
+                    break;
+                }
+                prob += fp + cd_fp;
                 weight += w;
                 idx += 1;
             }
@@ -1028,7 +1085,6 @@ namespace panna {
                                           .edges_to_confirm = edges_to_confirm,
                                           .confirmed_edges = idx };
         }
-
         /// @brief Clear the data structures from previous runs
         void clear() {
             distances_computed = 0;
