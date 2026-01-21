@@ -724,7 +724,7 @@ namespace panna {
             running_result.update(
                 MRRunningResult( std::vector<Edge>(), DSU( num_data ), std::move( cs ) ) );
 
-            std::atomic<float> max_weight( std::numeric_limits<float>::infinity() );
+           std::atomic<float> max_weight( std::numeric_limits<float>::infinity() );
             std::atomic_size_t count_distances( 0 ), count_collisions( 0 );
             const size_t hardware_concurrency = std::thread::hardware_concurrency();
             const size_t max_threads = ( hardware_concurrency > 1 ) ? hardware_concurrency - 1 : 1;
