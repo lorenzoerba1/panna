@@ -462,7 +462,7 @@ namespace panna {
                                 max_distance = e.weight;
                             }
                         }
-                        count_distances += scratch.size();
+                        avg_denom += scratch.size();
                         scratch.insert( scratch.end(),
                                         std::make_move_iterator( local_tree.begin() ),
                                         std::make_move_iterator( local_tree.end() ) );
