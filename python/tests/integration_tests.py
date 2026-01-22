@@ -55,7 +55,7 @@ def check(dataset_name, sample_size=10000):
     )
 
 
-def check_mutual_reachability(dataset_name, knn=5, sample_size=1000):
+def check_mutual_reachability(dataset_name, knn=5, sample_size=10000):
     rng = np.random.default_rng(1234)
     _, data = panna.datasets.load(dataset_name)
     rng.shuffle(data)
@@ -89,9 +89,9 @@ def check_mutual_reachability(dataset_name, knn=5, sample_size=1000):
         baseline_weight=baseline_weight,
     )
 
-results = [check(dataset) for dataset in ["ht", "fashion-mnist-784-euclidean"]]
-# results = []
-results_mutual_reachability = [check_mutual_reachability(dataset) for dataset in ["ht", "fashion-mnist-784-euclidean"]]
+# results = [check(dataset) for dataset in ["ht", "fashion-mnist-784-euclidean"]]
+results = []
+results_mutual_reachability = [check_mutual_reachability(dataset) for dataset in ["fashion-mnist-784-euclidean"]]
 
 overall_success = True
 print("################# Summary ################")

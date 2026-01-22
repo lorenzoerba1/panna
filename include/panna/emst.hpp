@@ -120,6 +120,7 @@ namespace panna {
 
         template <typename Dataset, typename Distance>
         static CoreDistances random( const Dataset& data, size_t num_neighbors ) {
+            Timer _timer("random core distances");
             CoreDistances self( data.size(), num_neighbors );
             std::vector<size_t> pivots = sample_k( data.size() - 1, num_neighbors + 1 );
 
@@ -793,11 +794,12 @@ namespace panna {
                     update_tree(tree, update, core_distances);
                     // stash the edges that might be useful in the future
                     stash.clear();
-                    for (auto e : update) {
-                        if (e.weight <= core_distances.mutual_reachability_distance(e)) {
-                            stash.push_back(e);
-                        }
-                    }
+                    // for (auto e : update) {
+                    //     // FIXME: there are possibly duplicates here
+                    //     if (e.weight <= core_distances.mutual_reachability_distance(e)) {
+                    //         stash.push_back(e);
+                    //     }
+                    // }
                     // clang-format off
                     LOG_INFO( "logger", "collector",
                               "tree-size", tree.size(),
