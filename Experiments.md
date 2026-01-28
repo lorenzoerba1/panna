@@ -17,8 +17,8 @@ census,,
 ht,,
 pamap2,,
 chem,,
-fashion,,
-nytimes,,
+fashion,221.79,7.66
+nytimes,4293.34,312.10
 glove,,
 sift,,
 gist,,
@@ -28,7 +28,7 @@ imagenet,,
 ```
 
 ### Result
-[still running]
+Yes we do, the rehashes are too costly [still running]
 
 
 
@@ -53,7 +53,7 @@ nytimes,2794.01,164.72
 glove,,
 sift,1861.01,245.68
 gist,,
-simplewiki,,
+simplewiki,13615.06,996.67
 landmark,4368.69,153.68
 imagenet,,
 ```
