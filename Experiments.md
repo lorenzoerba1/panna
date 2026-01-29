@@ -50,16 +50,16 @@ pamap2,,
 chem,,
 fashion,31.59,9.21
 nytimes,2794.01,164.72
-glove,,
+glove,FAILED,
 sift,1861.01,245.68
-gist,,
+gist,FAILED,
 simplewiki,13615.06,996.67
 landmark,4368.69,153.68
 imagenet,,
 ```
 
 ### Result
-[still running]
+Fails on gist, glove
 
 ## Bloom Filter to avoid duplicate comparisons
 - **Date**: 2026-01-27
