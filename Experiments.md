@@ -1,5 +1,35 @@
 # Expertiments Register
 
+## So there's this old version
+- **Date**: 2026-01-29
+- **Git Hash**: `7bbcd6ee171154af87b1bcf13a9659183892d750`
+- **Command**: `sbatch jobfile.slurm`
+- **Logs Prefix**: `monaco/logs/azitromicina`
+
+### Motivation
+Bisect to see where the performance degradation started
+
+### Data
+```csv
+dataset,exact,approx
+census,,
+ht,,
+pamap2,,
+chem,,
+fashion,32.93,5.78
+nytimes,1709.60,370.79
+glove,,
+sift,5126.96,165.68
+gist,,
+simplewiki,,
+landmark,,
+imagenet,,
+```
+
+### Result
+ [still running]
+
+
 ## Do we really need 1000 repetitions?
 - **Date**: 2026-01-28
 - **Git Hash**: `66bae24a855027aa0159ce7e08d2979b31f1ba13`
