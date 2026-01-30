@@ -12,14 +12,14 @@ Bisect to see where the performance degradation started
 ### Data
 ```csv
 dataset,exact,approx
-census,,
-ht,,
-pamap2,,
+census,25.14,26.22
+ht,134.58,131.85
+pamap2,371.82,365.28
 chem,,
 fashion,15.26,8.25
-nytimes,,
+nytimes,1758.25,118.59
 glove,,
-sift,,
+sift,2323.33,142.49
 gist,,
 simplewiki,,
 landmark,,
