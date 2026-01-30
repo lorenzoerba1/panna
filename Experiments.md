@@ -18,7 +18,7 @@ pamap2,,
 chem,,
 fashion,32.93,5.78
 nytimes,1709.60,370.79
-glove,,
+glove,TIMEOUT,
 sift,5126.96,165.68
 gist,,
 simplewiki,,
@@ -27,7 +27,7 @@ imagenet,,
 ```
 
 ### Result
- [still running]
+Bad version again
 
 
 ## Do we really need 1000 repetitions?
