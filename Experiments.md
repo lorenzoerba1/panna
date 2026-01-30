@@ -1,5 +1,35 @@
 # Expertiments Register
 
+## So there's this very old version
+- **Date**: 2026-01-30
+- **Git Hash**: `66f47413d136228bbbc1d6d173c864f8c1e32d91`
+- **Command**: `sbatch jobfile.slurm`
+- **Logs Prefix**: `monaco/logs/cefixima`
+
+### Motivation
+Bisect to see where the performance degradation started
+
+### Data
+```csv
+dataset,exact,approx
+census,,
+ht,,
+pamap2,,
+chem,,
+fashion,15.26,8.25
+nytimes,,
+glove,,
+sift,,
+gist,,
+simplewiki,,
+landmark,,
+imagenet,,
+```
+
+### Result
+[still running]
+
+
 ## So there's this old version
 - **Date**: 2026-01-29
 - **Git Hash**: `7bbcd6ee171154af87b1bcf13a9659183892d750`
@@ -21,7 +51,7 @@ nytimes,1709.60,370.79
 glove,TIMEOUT,
 sift,5126.96,165.68
 gist,,
-simplewiki,,
+simplewiki,15747.65,1221.39
 landmark,,
 imagenet,,
 ```
