@@ -1,5 +1,35 @@
 # Expertiments Register
 
+## Changes on old code
+- **Date**: 2026-02-12
+- **Git Hash**: `fd5b2273ad7f51e50a5432a1154c757561650753`
+- **Command**: `sbatch jobfile.slurm`
+- **Logs Prefix**: `monaco/logs/frollino`
+
+### Motivation
+Implemented the lookup of the last hash prefix to avoid comparisons in the rehashes, plus some small random tweaks
+
+### Data
+```csv
+dataset,exact,approx
+census,74.48,11.63
+ht,638.34,555.61
+pamap2,,
+chem,,
+fashion,6.14,4.54
+nytimes,22.19,14.33
+glove,321.78,97.14
+sift,93.32,35.29
+gist,,
+simplewiki,83.02,26.93
+landmark,260.61,53.42
+imagenet,238.27,70.62
+```
+
+### Result
+Great results, running now with an expect on (is_connected) to see if it actually works
+
+
 ## Some modifications to the code
 - **Date**: 2026-02-12
 - **Git Hash**: `d79309db26925ed8e7aa6eadf057e8bea54ed02c`
