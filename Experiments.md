@@ -27,7 +27,7 @@ imagenet,238.27,70.62
 ```
 
 ### Result
-Great results, running now with an expect on (is_connected) to see if it actually works
+Great results, assertion fails on some datasets
 
 
 ## Some modifications to the code
