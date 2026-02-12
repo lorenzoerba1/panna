@@ -1,5 +1,34 @@
 # Expertiments Register
 
+## Some modifications to the code
+- **Date**: 2026-02-12
+- **Git Hash**: `d79309db26925ed8e7aa6eadf057e8bea54ed02c`
+- **Command**: `sbatch jobfile.slurm`
+- **Logs Prefix**: `monaco/logs/spring`
+
+### Motivation
+Implemented the lookup of the last hash prefix to avoid comparisons in the rehashes, plus some small random tweaks
+
+### Data
+```csv
+dataset,exact,approx
+census,344.30,119.68
+ht,589.74,587.32
+pamap2,3103.90,1723.80
+chem,,
+fashion,41.23,6.17
+nytimes,1809.88,106.79
+glove,11481.90,7344.73
+sift,1443.00,1001.30
+gist,,
+simplewiki,16654.59,1001.30
+landmark,3061.66,464.62
+imagenet,1443.00,162.48
+```
+
+### Result
+It's finally working on all datasets, but it's kinda slow
+
 ## So there's this very old version
 - **Date**: 2026-01-30
 - **Git Hash**: `66f47413d136228bbbc1d6d173c864f8c1e32d91`
