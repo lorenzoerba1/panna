@@ -152,6 +152,7 @@
             with ppkgs; [
               numpy
               pandas
+              polars
               h5py
               panna-python
               fast-hdbscan
@@ -170,6 +171,7 @@
           contents = [
             python-interpreter
             pkgs.cacert
+            pkgs.	coreutils-full
           ];
           diskSize = 1024 * 3; # necessary to fit the packages, otherwise the build fails
         };
@@ -193,6 +195,7 @@
                   build
                   numpy
                   pandas
+                  polars
                   matplotlib
                   seaborn
                   filelock

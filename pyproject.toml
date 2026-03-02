@@ -8,6 +8,7 @@ authors = [
     { name = "Matteo Ceccarello", email = "matteo.ceccarello@unipd.it" },
 ]
 classifiers = []
+dependencies = []
 
 [project.urls]
 Homepage = "https://github.com/Cecca/panna"
