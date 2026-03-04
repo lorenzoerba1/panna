@@ -40,6 +40,84 @@ namespace panna {
         }
     };
 
+    /// Simulate a run of Kruskal's algorithm, assuming both input vectors are sorted.
+    /// Report in the output vector the edges from `new_edges` that would be
+    /// part of the updated tree.
+    static void kruskal_new_edges( const std::vector<Edge>& old_edges,
+                                   const std::vector<Edge>& new_edges,
+                                   DSU& union_find,
+                                   std::vector<Edge>& out ) {
+        expect( std::is_sorted( old_edges.begin(), old_edges.end() ) );
+        expect( std::is_sorted( new_edges.begin(), new_edges.end() ) );
+
+        union_find.reset();
+        size_t asize = old_edges.size();
+        size_t bsize = new_edges.size();
+        size_t aidx = 0;
+        size_t bidx = 0;
+
+        while ( aidx < asize && bidx < bsize ) {
+            if ( old_edges.at( aidx ) < new_edges.at( bidx ) ) {
+                auto e = old_edges.at(aidx++);
+                union_find.union_sets( e.a, e.b );
+            } else {
+                auto e = new_edges.at(bidx++);
+                if ( union_find.union_sets( e.a, e.b ) ) {
+                    out.push_back( e );
+                }
+            }
+        }
+        while ( aidx < asize ) {
+            auto e = old_edges.at(aidx++);
+            union_find.union_sets( e.a, e.b );
+        }
+        while ( bidx < bsize ) {
+            auto e = new_edges.at(bidx++);
+            if ( union_find.union_sets( e.a, e.b ) ) {
+                out.push_back( e );
+            }
+        }
+    }
+
+    /// implementation of Kruskal's algorithm that picks updates from two sorted
+    /// vectors. Avoids having to sort both their concatenation.
+    static void kruskal_merge( const std::vector<Edge>& old_edges,
+                                   const std::vector<Edge>& new_edges,
+                                   DSU& union_find,
+                                   std::vector<Edge>& out ) {
+        expect( std::is_sorted( old_edges.begin(), old_edges.end() ) );
+        expect( std::is_sorted( new_edges.begin(), new_edges.end() ) );
+
+        union_find.reset();
+        size_t asize = old_edges.size();
+        size_t bsize = new_edges.size();
+        size_t aidx = 0;
+        size_t bidx = 0;
+
+        while ( aidx < asize && bidx < bsize ) {
+            Edge e;
+            if ( old_edges.at( aidx ) < new_edges.at( bidx ) ) {
+                e = old_edges.at(aidx++);
+            } else {
+                e = new_edges.at(bidx++);
+            }
+            if ( union_find.union_sets( e.a, e.b ) ) {
+                out.push_back( e );
+            }
+        }
+        while ( aidx < asize ) {
+            auto e = old_edges.at(aidx++);
+            if ( union_find.union_sets( e.a, e.b ) ) {
+                out.push_back( e );
+            }
+        }
+        while ( bidx < bsize ) {
+            auto e = new_edges.at(bidx++);
+            if ( union_find.union_sets( e.a, e.b ) ) {
+                out.push_back( e );
+            }
+        }
+    }
 
     /// A mutual-reachability distance edge, keeping track of the lower
     /// bound on the distance
@@ -417,6 +495,7 @@ namespace panna {
             );
             return {tree_weight, tree};
         }
+
         /// the worker function in find_tree
         static void worker_fun( const size_t tid,
                                 const size_t prefix,
@@ -445,6 +524,7 @@ namespace panna {
                 float avg_denom = 0.0;
                 DSU filter = running_result.read()->filter;
                 DSU dsu( filter );
+                std::vector<Edge> output;
                 auto [cnt_dist, cnt_collisions] = table.search_pairs_different_groups(
                     repetition,
                     prefix,
@@ -463,13 +543,8 @@ namespace panna {
                             }
                         }
                         avg_denom += scratch.size();
-                        scratch.insert( scratch.end(),
-                                        std::make_move_iterator( local_tree.begin() ),
-                                        std::make_move_iterator( local_tree.end() ) );
                         std::sort( scratch.begin(), scratch.end() );
-                        local_tree.clear();
-                        dsu.reset();
-                        kruskal( dsu, scratch, local_tree );
+                        kruskal_new_edges(local_tree, scratch, dsu, output);
                         return found.load(); // early stop if the solution has been found in the meantime
                     } );
                 float avg_distance = sum_distances / avg_denom;
@@ -483,9 +558,8 @@ namespace panna {
                 count_distances += cnt_dist;
                 count_collisions += cnt_collisions;
                 expect(cnt_dist == cnt_collisions);
-                // OPTIMIZE: do not send the edges that
-                // we know are already in the best tree found so far
-                partials.send( std::move( local_tree ) );
+                std::sort(output.begin(), output.end());
+                partials.send( std::move(output) );
             }
         }
 
@@ -610,13 +684,18 @@ namespace panna {
 
                         std::vector<Edge> tree( running_result.read()->tree );
                         DSU filter( num_data );
-                        update.insert( update.end(),
-                                       std::make_move_iterator( tree.begin() ),
-                                       std::make_move_iterator( tree.end() ) );
-                        std::sort( update.begin(), update.end() );
-                        tree.clear();
-                        kruskal( filter, update, tree );
+                        // update.insert( update.end(),
+                        //                std::make_move_iterator( tree.begin() ),
+                        //                std::make_move_iterator( tree.end() ) );
+                        // std::sort( update.begin(), update.end() );
+                        // tree.clear();
+                        // kruskal( filter, update, tree );
+                        std::vector<Edge> new_tree;
+                        new_tree.reserve(num_data - 1);
+                        kruskal_merge(tree, update, filter, new_tree);
                         update.clear();
+                        tree.clear();
+                        tree = std::move( new_tree );
                         // clang-format off
                         LOG_INFO( "logger", "collector",
                                   "tree-size", tree.size(),
