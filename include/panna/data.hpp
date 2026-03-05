@@ -190,6 +190,16 @@ namespace panna {
             return sq_norm;
         }
 
+        void into_vec( std::vector<float>& vec ) const {
+            // in some cases (like cross polytope) the output vector holds more
+            // elements than the dimensions
+            expect( vec.size() >= inner.dimensions );
+            inner.into_vec(vec);
+            for (size_t i=0; i<inner.dimensions; i++) {
+                vec.at(i) *= sq_norm;
+            }
+        }
+
         friend std::ostream& operator<<( std::ostream& os, const NormedPointHandle& handle ) {
             std::vector<float> vec( handle.inner.dimensions );
             handle.inner.into_vec( vec );
@@ -273,6 +283,15 @@ namespace panna {
     struct EuclideanPointHandle {
         const size_t dimensions;
         const float * vector;
+
+        void into_vec( std::vector<float>& vec ) const {
+            // in some cases (like cross polytope) the output vector holds more
+            // elements than the dimensions
+            expect( vec.size() >= dimensions );
+            for (size_t i=0; i<dimensions; i++) {
+                vec.at(i) = vector[i];
+            }
+        }
 
         friend std::ostream& operator<<( std::ostream& os, const EuclideanPointHandle& handle ) {
             std::vector<float> vec( handle.dimensions );

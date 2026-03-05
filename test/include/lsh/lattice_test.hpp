@@ -41,7 +41,7 @@ namespace panna {
 
         const size_t dimensions = 8;
         EuclideanPoints pts(dimensions);
-        for(size_t i=0; i<10000; i++) {
+        for(size_t i=0; i<1000; i++) {
             pts.push_back_random();
         }
 
@@ -53,7 +53,7 @@ namespace panna {
     TEST_CASE( "LatticeLSH empirical collision probabilities" ) {
         using HashFamily = LatticeLSH<1, EuclideanPoints, EuclideanDistance>;
         const float scaling_factor = 1.0;
-        const size_t samples = 1e5;
+        const size_t samples = 1e4;
 
         for (size_t dimensions : {8, 16, 128}) {
             LOG_INFO("msg", "new test", "dimension", dimensions);
@@ -87,20 +87,24 @@ namespace panna {
                     }
                 }
                 float empirical_p = ( (float)collisions ) / repetitions;
+                float expected_p = lsh.collision_probability( d );
+                float absolute_error = std::abs(empirical_p - expected_p) ;
+                float relative_error = absolute_error / expected_p;
                 float e2lsh_p = e2lsh.collision_probability( d );
                 float rho = std::log( prev_p ) / std::log( empirical_p );
                 float rho_e2lsh = std::log( prev_e2lsh ) / std::log( e2lsh_p );
-                LOG_INFO( "d",
-                          d,
-                          "empirical",
-                          empirical_p,
-                          "e2lsh",
-                          e2lsh_p,
-                          "rho",
-                          rho,
-                          "rho-e2lsh",
-                          rho_e2lsh
-                          );
+                // clang-format off
+                LOG_INFO( "d", d,
+                          "empirical", empirical_p,
+                          "expected", expected_p,
+                          "absolute_error", absolute_error,
+                          "relative_error", relative_error,
+                          "e2lsh", e2lsh_p,
+                          "rho", rho,
+                          "rho-e2lsh", rho_e2lsh
+                );
+                // clang-format on
+                REQUIRE( absolute_error <= 5e-2 );
                 distance *= 2;
                 prev_p = empirical_p;
                 prev_e2lsh = e2lsh_p;

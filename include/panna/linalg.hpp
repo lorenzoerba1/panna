@@ -197,25 +197,28 @@ namespace panna {
 
     // Perform the dot product with many random vetors at once using the
     // Fast Hadamard Transform
-    template <uint8_t ROTATIONS = 3>
     class RandomDotProducts {
         size_t num_products;
         size_t log_num_products;
-        std::vector<float> random_signs;
+        std::vector<float> random_signs[3];
 
     public:
         RandomDotProducts() {}
 
         RandomDotProducts( size_t num_products ):
-            num_products( num_products ), log_num_products( ceil_log( num_products ) ) {
+            num_products( 1 << ceil_log( num_products ) ),
+            log_num_products( ceil_log( num_products ) ) {
 
-            int random_signs_len = ROTATIONS * ( 1 << log_num_products );
-            random_signs.reserve( random_signs_len );
+            random_signs[0].reserve(1 << log_num_products);
+            random_signs[1].reserve(1 << log_num_products);
+            random_signs[2].reserve(1 << log_num_products);
 
-            std::uniform_int_distribution<int8_t> sign_distribution( 0, 1 );
+            std::uniform_int_distribution<int8_t> bernoulli( 0, 1 );
             auto& generator = get_global_rng();
-            for ( int i = 0; i < random_signs_len; i++ ) {
-                random_signs.push_back( sign_distribution( generator ) * 2 - 1 );
+            for ( size_t i = 0; i < 1 << log_num_products; i++ ) {
+                random_signs[0].push_back( bernoulli( generator ) ? 1.0 : -1.0 );
+                random_signs[1].push_back( bernoulli( generator ) ? 1.0 : -1.0 );
+                random_signs[2].push_back( bernoulli( generator ) ? 1.0 : -1.0 );
             }
         }
 
@@ -224,27 +227,33 @@ namespace panna {
             ar( num_products, log_num_products, random_signs );
         }
 
-        friend bool operator==( const RandomDotProducts<ROTATIONS>& a,
-                                const RandomDotProducts<ROTATIONS>& b ) {
+        friend bool operator==( const RandomDotProducts& a,
+                                const RandomDotProducts& b ) {
             return a.num_products == b.num_products && a.log_num_products == b.log_num_products &&
-                   a.random_signs == b.random_signs;
+                   a.random_signs[0] == b.random_signs[0] &&
+                   a.random_signs[1] == b.random_signs[1] && a.random_signs[2] == b.random_signs[2];
         }
+
         std::vector<float> allocate_scratch() const {
-            std::vector<float> scratch;
-            scratch.resize( 1 << log_num_products );
+            std::vector<float> scratch(1 << log_num_products, 0.0);
             return scratch;
         }
 
-        void compute( std::vector<float>& in_out ) const {
-            for ( uint8_t rotation = 0; rotation < ROTATIONS; rotation++ ) {
+        void compute( std::vector<float>& in_out, float additional_scaling = 1.0 ) const {
+            expect( in_out.size() == num_products );
+            // float norm_factor = std::sqrt(num_products) / (num_products * std::sqrt(static_cast<double>(num_products)));
+            float norm_factor = additional_scaling / static_cast<float>(num_products);
+            for ( uint8_t diagonal = 0; diagonal < 3; diagonal++ ) {
                 // Multiply by a diagonal +-1 matrix.
-                size_t base_idx = rotation * ( 1 << log_num_products );
                 for ( size_t i = 0; i < ( 1 << log_num_products ); i++ ) {
                     // OPTIMIZE use simd, this takes half as much time as the fht transform below
-                    in_out.at(i) *= random_signs.at(base_idx + i);
+                    in_out.at(i) *= random_signs[diagonal].at(i);
                 }
                 // Apply the fast hadamard transform
                 fht( in_out.data(), log_num_products );
+            }
+            for ( size_t i = 0; i < num_products; i++ ) {
+                in_out.at( i ) *= norm_factor;
             }
         }
     };

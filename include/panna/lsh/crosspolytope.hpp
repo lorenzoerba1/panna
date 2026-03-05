@@ -108,20 +108,20 @@ namespace panna {
         }
     };
 
-    template <uint8_t K, typename Dataset, typename Distance, uint8_t ROTATIONS = 3>
+    template <uint8_t K, typename Dataset, typename Distance>
     class CrossPolytopeBuilder;
 
-    template <uint8_t K, typename Dataset, typename Distance, uint8_t ROTATIONS = 3>
+    template <uint8_t K, typename Dataset, typename Distance>
     class CrossPolytope {
     public:
         //! The datatype of the output
         using Value = ShortLshValue<K>;
-        using Builder = CrossPolytopeBuilder<K, Dataset, Distance, ROTATIONS>;
+        using Builder = CrossPolytopeBuilder<K, Dataset, Distance>;
 
     private:
         size_t repetitions;
         size_t dimensions;
-        std::vector<RandomDotProducts<ROTATIONS>> random_dots;
+        std::vector<RandomDotProducts> random_dots;
         // scratch space
         std::vector<std::vector<float>> tl_rotated_vectors;
         CrossPolytopeCollisionEstimates estimates;
@@ -179,8 +179,8 @@ namespace panna {
             ar( repetitions, dimensions, random_dots, tl_rotated_vectors, estimates );
         }
 
-        friend bool operator==( const CrossPolytope<K, Dataset, Distance, ROTATIONS>& a,
-                                const CrossPolytope<K, Dataset, Distance, ROTATIONS>& b ) {
+        friend bool operator==( const CrossPolytope<K, Dataset, Distance>& a,
+                                const CrossPolytope<K, Dataset, Distance>& b ) {
             return a.repetitions == b.repetitions && a.dimensions == b.dimensions &&
                    a.random_dots == b.random_dots && a.estimates == b.estimates;
         }
@@ -210,14 +210,14 @@ namespace panna {
         }
     };
 
-    template <uint8_t K, typename Dataset, typename Distance, uint8_t ROTATIONS>
+    template <uint8_t K, typename Dataset, typename Distance>
     class CrossPolytopeBuilder {
         size_t dimensions = 0;
         size_t estimation_repetitions = 1024;
         float estimation_eps = 5e-3;
 
     public:
-        using Output = CrossPolytope<K, Dataset, Distance, ROTATIONS>;
+        using Output = CrossPolytope<K, Dataset, Distance>;
 
         CrossPolytopeBuilder() {
         }
@@ -239,13 +239,13 @@ namespace panna {
         }
 
         Output build( size_t repetitions ) const {
-            return CrossPolytope<K, Dataset, Distance, ROTATIONS>(
+            return CrossPolytope<K, Dataset, Distance>(
                 dimensions, repetitions, estimation_repetitions, estimation_eps );
         }
 
         std::string describe() const {
             std::stringstream sstream;
-            sstream << "CrossPolytope(rotations=" << static_cast<size_t>(ROTATIONS) << ")";
+            sstream << "CrossPolytope";
             return sstream.str();
         }
     };

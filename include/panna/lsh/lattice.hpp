@@ -116,11 +116,14 @@ namespace panna {
         float scaling_factor;
         size_t dimensions;
         size_t repetitions;
-        Dataset random_vectors;
+        Dataset random_vectors; // TODO: remove
+        RandomDotProducts random_dots;
         std::vector<float> offsets;
         // the corrections to apply to projections so that
         // they behave like the input vector was first offset and scaled
         std::vector<float> corrections;
+        // scratch space
+        std::vector<std::vector<float>> tl_scratch;
 
         std::array<float, LATTICE_DIMENSIONS> project( typename Dataset::PointHandle point,
                                                        size_t concatenation,
@@ -132,6 +135,30 @@ namespace panna {
             for (size_t i=0; i<LATTICE_DIMENSIONS; i++) {
                 out[i] = dot_product(point, random_vectors[start+i]) / scaling_factor - corrections.at(start+i) + offsets.at(start+i);
             }
+            // std::cout << "[ ";
+            // for(size_t i=0; i<LATTICE_DIMENSIONS; i++) {
+            //     std::cout << out[i] << " ";
+            // }
+            // std::cout << "]\n";
+            return out;
+        }
+
+        std::array<float, LATTICE_DIMENSIONS> project( const std::vector<float> & projections,
+                                                       size_t concatenation,
+                                                       size_t repetition ) const {
+            std::array<float, LATTICE_DIMENSIONS> out;
+            const size_t start = repetition * LATTICE_DIMENSIONS * K + concatenation * LATTICE_DIMENSIONS;
+            const size_t end = start + LATTICE_DIMENSIONS;
+            expect(end <= random_vectors.size());
+            for (size_t i=0; i<LATTICE_DIMENSIONS; i++) {
+                out.at(i) = projections.at(start + i) / scaling_factor - corrections.at( start + i ) +
+                         offsets.at( start + i );
+            }
+            // std::cout << "[ ";
+            // for(size_t i=0; i<LATTICE_DIMENSIONS; i++) {
+            //     std::cout << out[i] << " ";
+            // }
+            // std::cout << "]\n";
             return out;
         }
 
@@ -157,6 +184,7 @@ namespace panna {
             dimensions( dimensions ),
             repetitions( repetitions ),
             random_vectors( dimensions ),
+            random_dots( std::max( dimensions, repetitions * K * LATTICE_DIMENSIONS ) ),
             corrections() {
             for ( size_t vec_idx = 0; vec_idx < repetitions * K * LATTICE_DIMENSIONS; vec_idx++ ) {
                 std::vector<float> dir = sample_random_normal_vector( dimensions, rng );
@@ -164,6 +192,11 @@ namespace panna {
                 random_vectors.push_back( dir.begin(), dir.end() );
                 offsets.push_back( sample_random_01(rng) );
                 corrections.push_back( dot_product(dir, data_offset) / scaling_factor );
+            }
+
+            // prepare thread local scratch space
+            for ( int i = 0; i < omp_get_max_threads(); i++ ) {
+                tl_scratch.push_back( random_dots.allocate_scratch() );
             }
         }
 
@@ -180,13 +213,20 @@ namespace panna {
             return repetitions;
         }
 
-        void hash( typename Dataset::PointHandle point, std::vector<Value>& output ) const {
-            // TODO: for simplicity, offset and rescale here
+        void hash( typename Dataset::PointHandle point, std::vector<Value>& output ) {
+            auto& scratch = tl_scratch.at(omp_get_thread_num());
+            std::fill(scratch.begin(), scratch.end(), 0.0);
+            point.into_vec(scratch);
             output.clear();
+            // compute all projections in one go, scaling by the factor required to make
+            // the hashing work
+            random_dots.compute( scratch, 1.0 / std::sqrt( LATTICE_DIMENSIONS ) );
+            // use the projections
             for ( size_t rep = 0; rep < repetitions; rep++ ) {
                 Value cur;
                 for ( size_t concat = 0; concat < K; concat++ ) {
-                    auto prj = project( point, concat, rep );
+                    // auto prj = project( point, concat, rep );
+                    auto prj = project( scratch, concat, rep );
                     auto decoded = decode_e8(prj);
                     int64_t code = to_int64(to_integer_coords(decoded));
                     cur.set( concat, code );
