@@ -135,7 +135,56 @@ namespace panna {
         }
     }
 
-    
+    inline static float euclidean_naive( const float* a, const float* b, std::size_t n ) {
+        float d = 0;
+        for ( size_t i = 0; i < n; i++ ) {
+            float diff = a[i] - b[i];
+            d += diff * diff;
+        }
+        return std::sqrt( d );
+    }
+
+#ifdef __AVX2__
+    inline static float euclidean_avx2( const float* a, const float* b, std::size_t n ) {
+        if ( n == 0 ) {
+            return 0.0f;
+        }
+
+        // --- AVX2 + FMA vectorised loop (8 floats / iteration) ---
+        __m256 acc = _mm256_setzero_ps(); // accumulator: 8 x float, init to 0
+
+        std::size_t i = 0;
+        for ( ; i + 8 <= n; i += 8 ) {
+            __m256 va = _mm256_loadu_ps( a + i );  // load 8 floats from a (unaligned)
+            __m256 vb = _mm256_loadu_ps( b + i );  // load 8 floats from b (unaligned)
+            __m256 diff = _mm256_sub_ps( va, vb ); // diff = a - b
+
+            // FMA: acc = diff * diff + acc  (single rounding, no extra temp register)
+            acc = _mm256_fmadd_ps( diff, diff, acc );
+        }
+
+        // --- Horizontal reduction of the 8-lane accumulator ---
+        // Fold high 128 bits into low 128 bits.
+        __m128 lo = _mm256_castps256_ps128( acc );   // lanes 0-3
+        __m128 hi = _mm256_extractf128_ps( acc, 1 ); // lanes 4-7
+        __m128 sum = _mm_add_ps( lo, hi );           // pairwise sum → 4 lanes
+
+        // Fold 4 lanes → 2 → 1
+        sum = _mm_add_ps( sum, _mm_movehl_ps( sum, sum ) );     // add lanes [2,3] into [0,1]
+        sum = _mm_add_ss( sum, _mm_shuffle_ps( sum, sum, 1 ) ); // add lane 1 into lane 0
+
+        float result = _mm_cvtss_f32( sum ); // extract scalar sum
+
+        // --- Scalar tail loop (handles n % 8 remaining elements) ---
+        for ( ; i < n; ++i ) {
+            float diff = a[i] - b[i];
+            result += diff * diff;
+        }
+
+        return std::sqrt( result );
+    }
+#endif
+
     template <typename T>
     static float euclidean( T a, T b );
 
@@ -147,32 +196,29 @@ namespace panna {
 
     template <>
     float euclidean( EuclideanPointHandle a, EuclideanPointHandle b ) {
-        float d = 0;
-        for (size_t i=0; i<a.dimensions; i++) {
-            float diff = a.vector[i] - b.vector[i];
-            d += diff*diff;
-        }
-        return std::sqrt(d);
+#ifdef __AVX2__
+        return euclidean_avx2( a.vector, b.vector, a.dimensions );
+#else
+        return euclidean_naive( a.vector, b.vector, a.dimensions );
+#endif
     }
 
     template <>
     float euclidean(std::vector<float> a, std::vector<float> b) {
-        float d = 0;
-        for (size_t i=0; i<a.size(); i++) {
-            float diff = a.at(i) - b.at(i);
-            d += diff*diff;
-        }
-        return std::sqrt(d);
+#ifdef __AVX2__
+        return euclidean_avx2( a.data(), b.data(), a.size() );
+#else
+        return euclidean_naive( a.data(), b.data(), a.size() );
+#endif
     }
 
     template <size_t D>
     float euclidean(std::array<float, D> a, std::array<float, D> b) {
-        float d = 0;
-        for (size_t i=0; i<a.size(); i++) {
-            float diff = a.at(i) - b.at(i);
-            d += diff*diff;
-        }
-        return std::sqrt(d);
+#ifdef __AVX2__
+        return euclidean_avx2( a.data(), b.data(), D );
+#else
+        return euclidean_naive( a.data(), b.data(), D );
+#endif
     }
 
     template <size_t D>
@@ -184,6 +230,7 @@ namespace panna {
         }
         return std::sqrt(d);
     }
+
 
     constexpr static unsigned int ceil_log( unsigned int value ) {
         unsigned int log = 0;

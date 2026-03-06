@@ -28,6 +28,22 @@ namespace panna {
         }
     }
 
+    TEST_CASE( "euclidean distance" ) {
+        size_t reps = 100;
+        for ( size_t dims : { 50, 100, 128, 200, 256, 784 } ) {
+            for ( unsigned i = 0; i < reps; i++ ) {
+                std::vector<float> a = sample_random_normal_vector(dims);
+                std::vector<float> b = sample_random_normal_vector(dims);
+
+                float simple = euclidean_naive( a.data(), b.data(), dims );
+#ifdef __AVX2__
+                float avx2 = euclidean_avx2( a.data(), b.data(), dims );
+                REQUIRE( std::abs( simple - avx2 ) <= 1e-4 );
+#endif
+            }
+        }
+    }
+
     TEST_CASE( "pseudorandom rotations" ) {
 
         int d = 100;     // Input vector dimension
