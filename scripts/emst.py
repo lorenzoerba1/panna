@@ -272,21 +272,23 @@ def run_experiments(datasets=None):
         datasets = panna.datasets.available_datasets()
 
     for dataset in datasets:
-        for sample_frac in [0.01, 0.1]:
+        for sample_frac in [0.01, 0.1, 0.2, None]:
             print(f"Running experiments on {dataset} at sample fraction {sample_frac}")
-            run_single(
-                "k+",
-                dataset,
-                {"epsilon": 0.0, "delta": 0.1, "family": "lattice", "repetitions": 1024},
-                sample_frac=sample_frac
-            )
+            for epsilon in [0.0, 0.1, 0.2, 0.5, 1.0]:
+                run_single(
+                    "k+",
+                    dataset,
+                    {"epsilon": epsilon, "delta": 0.1, "family": "lattice", "repetitions": 512},
+                    sample_frac=sample_frac
+                )
 
-            run_single(
-                "tutte",
-                dataset,
-                {},
-                sample_frac=sample_frac
-            )
+            if sample_frac is not None:
+                run_single(
+                    "tutte",
+                    dataset,
+                    {},
+                    sample_frac=sample_frac
+                )
 
 
 def show_results():
