@@ -120,6 +120,46 @@ def data_sha(array: np.ndarray) -> str:
     return hashlib.sha512(array.tobytes()).hexdigest()
 
 
+def compute_flexibility(tree, epsilon, diameter):
+    total_cost = sum(tree)
+    cost = 0
+    for i, w in enumerate(tree):
+        remaining = len(tree) - i
+        cost += w
+        lower_bound = remaining * w
+        upper_bound = remaining * diameter
+        if upper_bound <= epsilon * cost:
+            return remaining
+    return 0
+
+
+def compute_edge_mass(weights, counts, threshold):
+    idx = np.searchsorted(weights, threshold, side="right")
+    return counts[idx]
+
+
+def estimate_contrast(edge_mass, bounds, cumulative_counts, diameter):
+    def find(mass):
+        idx = np.searchsorted(cumulative_counts, mass)
+        if idx >= len(bounds):
+            return diameter
+        ic(mass, idx, bounds[idx])
+        return bounds[idx]
+    return find(2*edge_mass) / find(edge_mass)
+
+def compute_cumulative_distance_distribution(
+    data, min_distance, max_distance, num_buckets=10000, sample_fraction=0.01
+):
+    n = data.shape[0]
+    num_pairs = n * (n - 1) // 2
+    samples = int(min(1e9, num_pairs * sample_fraction))
+    counts, bounds = panna.distance_histogram(
+        data, num_buckets, min_distance, max_distance, samples
+    )
+    mean_weight = np.average(bounds, weights=counts)
+    counts = np.cumsum(counts)
+    return bounds, counts, mean_weight
+
 @dataclass
 class Entry(object):
     version: str
@@ -169,7 +209,7 @@ def tree_weight(data, edges):
     xs = data[edges[:, 0]]
     ys = data[edges[:, 1]]
     ws = np.linalg.norm(xs - ys, axis=1)
-    return float(ws.sum())
+    return float(ws.sum()), ws
 
 
 def _run_ours(data, params):
@@ -187,18 +227,44 @@ def _run_tutte(data, params):
     return res[0].astype(np.int64), dict()
 
 
-def worker(fn, data, params, queue):
+def worker(fn, data, params, queue, emst_stats=False):
     start = time.time()
     res, detail = fn(data, params)
     end = time.time()
     peak_memory_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    weight = tree_weight(data, res)
+    weight, tree_weights = tree_weight(data, res)
     print(f"algorithm completed, taking {end - start} seconds and {peak_memory_kb} kb")
+    if emst_stats:
+        diameter = panna.approximate_diameter(data)
+        n = data.shape[0]
+        npairs = n * (n - 1) // 2
+        detail |= dict(diameter=float(diameter))
+        bounds, counts, _mean_weight = compute_cumulative_distance_distribution(
+            data, tree_weights.min(), diameter
+        )
+        for epsilon in [0.0, 0.01, 0.1, 0.2]:
+            flexibility = compute_flexibility(tree_weights, epsilon, diameter)
+            threshold = tree_weights[-flexibility - 1]
+            mass = compute_edge_mass(bounds, counts, threshold)
+            contrast = estimate_contrast(mass, bounds, counts, diameter)
+            detail |= {
+                f"flexibility@{epsilon}": float(flexibility),
+                f"mass@{epsilon}": float(mass),
+                f"mass-frac@{epsilon}": float(mass / npairs),
+                f"contrast@{epsilon}": float(contrast),
+            }
+
     queue.put((weight, end - start, peak_memory_kb, detail))
-    return
 
 
-def run_single(algorithm: str, dataset: str, parameters: dict, sample_frac: float | None, sample_seed: int=1234):
+def run_single(
+    algorithm: str,
+    dataset: str,
+    parameters: dict,
+    sample_frac: float | None,
+    sample_seed: int = 1234,
+    emst_stats: bool = False,
+):
     # TODO: add the possibility to sample data, recording it to the primary key
     _, data = panna.datasets.load(
         dataset,
@@ -239,7 +305,7 @@ def run_single(algorithm: str, dataset: str, parameters: dict, sample_frac: floa
     # its memory usage. Use 'spawn' to avoid OpenMP-related fork issues.
     ctx = multiprocessing.get_context("spawn")
     queue = ctx.Queue()
-    proc = ctx.Process(target=worker, args=(runner, data, parameters, queue))
+    proc = ctx.Process(target=worker, args=(runner, data, parameters, queue, emst_stats))
     proc.start()
     proc.join(timeout=TIMEOUT_S)
     if proc.exitcode is None:
@@ -257,6 +323,7 @@ def run_single(algorithm: str, dataset: str, parameters: dict, sample_frac: floa
         entry.memory_kb = peak_memory_kb
         entry.emst_weight = emst_weight
         entry.detail = detail
+
 
     # record the results by appending to the file
     with FileLock(LOCKFILE):
@@ -278,8 +345,14 @@ def run_experiments(datasets=None):
                 run_single(
                     "k+",
                     dataset,
-                    {"epsilon": epsilon, "delta": 0.1, "family": "lattice", "repetitions": 512},
-                    sample_frac=sample_frac
+                    {
+                        "epsilon": epsilon,
+                        "delta": 0.1,
+                        "family": "lattice",
+                        "repetitions": 512,
+                    },
+                    sample_frac=sample_frac,
+                    emst_stats=sample_frac is None and epsilon == 0.0,
                 )
 
             if sample_frac is not None:
