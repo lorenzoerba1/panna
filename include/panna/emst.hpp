@@ -18,6 +18,9 @@
 #include "panna/git_version.hpp"
 
 namespace panna {
+    // Increment this to signal fundamental changes to
+    // the underlying algorithm/implementation
+    const std::string EMST_VERSION = "0";
 
     struct StoppingConditionInfo {
         const float total_weight;

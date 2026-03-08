@@ -501,6 +501,7 @@ NB_MODULE( _panna_impl, m ) {
     nb::class_<EMST_exposed>( m, "EMST")
         .def(nb::init<const nb::ndarray<float, nb::c_contig>&, nb::kwargs>(),
              "Constructs the EMST index from a NumPy array of data points.")
+        .def_ro_static("version", &panna::EMST_VERSION)
         // Bind the find_mst method
         .def("find_mst_dbscan", &EMST_exposed::find_mst_dbscan, nb::arg("k") = 5,
             "Find the minimum spanning tree (MST) and the k-NNs for each node.")

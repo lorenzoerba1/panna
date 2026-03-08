@@ -49,7 +49,7 @@ def get_version(algorithm: str):
     from importlib.metadata import version
 
     if algorithm == "k+":
-        return dict(version="0", git_version=get_git_version())
+        return dict(version=panna.EMST.version, git_version=get_git_version())
     elif algorithm == "tutte":
         return dict(version=version("fast_hdbscan"), git_version="")
 
@@ -79,12 +79,17 @@ def get_processor_name():
 
 
 def get_machine_info() -> dict:
+    nodename = platform.node()
+    if "lovelace" in nodename:
+        # Consider all nodes of the lovelace cluster the same,
+        # for the purpose of building a primary key
+        nodename = "lovelace"
     return {
         "processor": get_processor_name(),
         "machine": platform.machine(),
         "platform": platform.platform(),
         "system": platform.system(),
-        "node_name": platform.node(),
+        "node_name": nodename,
     }
 
 
@@ -140,7 +145,6 @@ class Entry(object):
     def primary_key(self):
         return {
             "version": self.version,
-            "git_version": self.git_version,
             "algorithm": self.algorithm,
             "parameters": self.parameters,
             "machine": self.machine,
@@ -363,7 +367,6 @@ def merge_results(other_file: Path):
         # From Entry.primary_key()
         primary_keys = [
             "version",
-            "git_version",
             "algorithm",
             "parameters",
             "machine",
