@@ -20,7 +20,11 @@
 namespace panna {
     // Increment this to signal fundamental changes to
     // the underlying algorithm/implementation
-    const std::string EMST_VERSION = "0";
+    //
+    // Changelog:
+    // 1: collect additional metrics (memory index and execution profile)
+    //    that are available through Python wrapper
+    const std::string EMST_VERSION = "1";
 
     struct StoppingConditionInfo {
         const float total_weight;
@@ -309,6 +313,19 @@ namespace panna {
         }
     };
 
+    /// For each step of the algorithm, record some stats
+    struct ExecutionProfileElement {
+        long elapsed_ms = 0;
+        size_t prefix = 0;
+        size_t repetition = 0;
+        float emst_confirmed_weight = 0.0;
+        float emst_weight_lower_bound = 0.0;
+        float emst_max_weight = 0.0;
+        float emst_max_confirmed_weight = 0.0;
+        float emst_total_weight = 0.0;
+        size_t emst_num_confirmed = 0.0;
+    };
+
     struct MRRunningResult {
         std::vector<Edge> tree;
         DSU filter;
@@ -334,6 +351,8 @@ namespace panna {
         const float epsilon{ 0.2 };
         size_t distances_computed = 0;
         size_t num_collisions = 0;
+        size_t index_size_bytes = 0;
+        std::vector<ExecutionProfileElement> profile;
 
     public:
         EMST() {}
@@ -366,7 +385,9 @@ namespace panna {
             num_data( data_in.size() ),
             epsilon( epsilon ),
             distances_computed( 0 ),
-            num_collisions( 0 ) {
+            num_collisions( 0 ),
+            index_size_bytes(0),
+            profile() {
             LOG_INFO("git-version", GIT_COMMIT_HASH);
 
             // Get info on the index
@@ -375,13 +396,13 @@ namespace panna {
             delta = delta_in;// / num_data;
 
             // Measure the size of the index
-            double index_size = table.memory_usage();
+            index_size_bytes = table.memory_usage();
             LOG_INFO("msg", "Index constructed",
                      "L", max_repetitions,
                      "K", max_hashbits,
                      "num_data", num_data,
                      "delta", delta,
-                     "index_size_Gbytes", index_size);
+                     "index_size_Gbytes", ((double)index_size_bytes )/ (1 << 30));
         };
 
         /// @brief Destructor
@@ -410,6 +431,14 @@ namespace panna {
         /// @brief the number of collisions seen by the algorithm
         size_t get_collisions_count() const {
             return num_collisions;
+        }
+
+        size_t get_index_size_bytes() const {
+            return index_size_bytes;
+        }
+
+        std::vector<ExecutionProfileElement> get_profile() const {
+            return profile;
         }
 
         /// Complete the given forest with arbitrary edges so that it becomes a connected tree
@@ -626,6 +655,7 @@ namespace panna {
         /// find the minimum spanning tree, using channels to handle parallelism
         std::pair<float, std::vector<Edge>> find_tree() {
             clear();
+            const auto find_start_t = std::chrono::steady_clock::now();
 
             Billboard<RunningResult> running_result;
             running_result.update( RunningResult( std::vector<Edge>(), DSU( num_data ) ) );
@@ -747,6 +777,18 @@ namespace panna {
                             mean_weight /= tree.size();
                             LOG_INFO( "logger", "collector", "max-weight", max_weight.load(),
                                      "mean-weight", mean_weight );
+                            profile.push_back( ExecutionProfileElement{
+                                .elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                                  std::chrono::steady_clock::now() - find_start_t )
+                                                  .count(),
+                                .prefix = prefix,
+                                .repetition = completed_repetitions,
+                                .emst_confirmed_weight = stop.confirmed_weight,
+                                .emst_weight_lower_bound = weight_lower_bound,
+                                .emst_max_weight = max_weight,
+                                .emst_max_confirmed_weight = stop.heaviest_confirmed_edge,
+                                .emst_total_weight = stop.total_weight,
+                                .emst_num_confirmed = num_data - 1 - stop.edges_to_confirm } );
 
                             // stop if we are done
                             if ( should_stop ) {
@@ -1173,6 +1215,7 @@ namespace panna {
         void clear() {
             distances_computed = 0;
             num_collisions = 0;
+            profile.clear();
         }
     }; // closes class
 } // namespace panna

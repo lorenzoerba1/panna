@@ -14,6 +14,7 @@ import hashlib
 import numpy as np
 import time
 import json
+import tempfile
 from filelock import FileLock
 from datetime import datetime
 import argparse
@@ -218,7 +219,9 @@ def _run_ours(data, params):
     elapsed_index_s = time.time() - start
     _, tree = algo.find_mst()
     elapsed_discovery_s = time.time() - start - elapsed_index_s
-    return tree, dict(index_s=elapsed_index_s, discovery_s=elapsed_discovery_s)
+    detail = dict(index_s=elapsed_index_s, discovery_s=elapsed_discovery_s)
+    detail |= algo.stats()
+    return tree, detail
 
 
 def _run_tutte(data, params):
@@ -254,7 +257,13 @@ def worker(fn, data, params, queue, emst_stats=False):
                 f"contrast@{epsilon}": float(contrast),
             }
 
-    queue.put((weight, end - start, peak_memory_kb, detail))
+    _, detail_file_name = tempfile.mkstemp()
+    with open(detail_file_name, "w") as fp:
+        json.dump(detail, fp)
+
+    # we have to pass back a file with the serialized detail, otherwise
+    # the queue gets deadlocked because the size of the data is too large
+    queue.put((weight, end - start, peak_memory_kb, detail_file_name))
 
 
 def run_single(
@@ -317,7 +326,10 @@ def run_single(
         entry.running_time_s = -TIMEOUT_S
     else:
         print("Process joined")
-        emst_weight, elapsed_s, peak_memory_kb, detail = queue.get()
+        emst_weight, elapsed_s, peak_memory_kb, detail_file_name = queue.get()
+        with open(detail_file_name) as fp:
+            detail = json.load(fp)
+        Path(detail_file_name).unlink()
         # record the results
         entry.running_time_s = elapsed_s
         entry.memory_kb = peak_memory_kb

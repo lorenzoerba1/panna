@@ -76,7 +76,7 @@ namespace panna {
             return dataset;
         }
 
-        double memory_usage() const {
+        size_t memory_usage() const {
             size_t total_size = sizeof( *this );
             total_size += dataset.size() * sizeof( PointHandle );
             total_size += lsh_maps.size() * sizeof( PrefixMap<THashValue> );
@@ -84,8 +84,7 @@ namespace panna {
                 // indices is a private member, so we cannot access it directly
                 total_size += map.memory_usage();
             }
-            // Return in Gigabytes
-            return static_cast<double>(total_size) / (1024.0 * 1024.0 * 1024.0);
+            return total_size;
         }
 
         size_t num_concatenations() const {

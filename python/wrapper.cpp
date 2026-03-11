@@ -255,12 +255,26 @@ struct EMST_exposed {
         nb::dict ret;
         std::visit(
             [&]( auto& index ) {
+                nb::list profile;
+                for (auto el : index.get_profile()) {
+                    nb::dict elpy;
+                    elpy["elapsed_ms"] = el.elapsed_ms;
+                    elpy["prefix"] = el.prefix;
+                    elpy["repetition"] = el.repetition;
+                    elpy["emst_confirmed_weight"] = el.emst_confirmed_weight;
+                    elpy["emst_weight_lower_bound"] = el.emst_weight_lower_bound;
+                    elpy["emst_max_weight"] = el.emst_max_weight;
+                    elpy["emst_max_confirmed_weight"] = el.emst_max_confirmed_weight;
+                    elpy["emst_total_weight"] = el.emst_total_weight;
+                    elpy["emst_num_confirmed"] = el.emst_num_confirmed;
+                    profile.append(elpy);
+                }
                 ret["distance_count"] = index.get_distance_count();
                 ret["collisions_count"] = index.get_collisions_count();
+                ret["index_size_bytes"] = index.get_index_size_bytes();
+                ret["profile"] = profile;
             },
             inner );
-        // ret["distance_count"] = inner->get_distance_count();
-        // ret["collisions_count"] = inner->get_collisions_count();
         return ret;
     }
 
