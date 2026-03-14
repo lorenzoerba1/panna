@@ -278,7 +278,7 @@ def run_single(
     _, data = panna.datasets.load(
         dataset,
         pca_dimensions=4 if "pamap2" in dataset else None,
-        normalize="angular" in dataset,
+        normalize=False,
     )
     if sample_frac is not None:
         sample_size = int(sample_frac * data.shape[0])
