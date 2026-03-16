@@ -5,11 +5,13 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <functional>
 #include <iostream>
 #include <limits>
 #include <optional>
 #include <stdexcept>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -19,6 +21,7 @@
 // Tree import
 #include "panna/dsu.hpp"
 #include "panna/logging.hpp"
+#include "panna/lsh/values.hpp"
 
 namespace panna {
 
@@ -191,6 +194,113 @@ namespace panna {
             return inner.size();
         }
     };
+
+    namespace detail {
+        template <typename T>
+        struct RadixSortTraits {
+            static constexpr bool kSupported = false;
+            static constexpr size_t kPasses = 0;
+            static inline uint8_t get_byte( const T&, size_t ) {
+                return 0;
+            }
+        };
+
+        template <uint8_t K>
+        struct RadixSortTraits<BitwiseLshValue<K>> {
+            static constexpr bool kSupported = true;
+            static constexpr size_t kPasses = sizeof( uint32_t );
+
+            static inline uint8_t get_byte( const BitwiseLshValue<K>& value, size_t pass ) {
+                uint32_t raw = 0;
+                std::memcpy( &raw, &value, sizeof( raw ) );
+                return static_cast<uint8_t>( ( raw >> ( pass * 8 ) ) & 0xFF );
+            }
+        };
+
+        template <typename Symbol, uint8_t K>
+        struct RadixSortTraits<SymbolLshValue<Symbol, K>> {
+            using Unsigned = std::make_unsigned_t<Symbol>;
+            static constexpr size_t kSymbolBytes = sizeof( Symbol );
+            static constexpr size_t kPasses = kSymbolBytes * K;
+            static constexpr bool kSupported =
+                sizeof( SymbolLshValue<Symbol, K> ) == sizeof( Symbol ) * K;
+
+            static inline uint8_t get_byte( const SymbolLshValue<Symbol, K>& value, size_t pass ) {
+                std::array<Symbol, K> elems;
+                std::memcpy( elems.data(), &value, sizeof( elems ) );
+
+                size_t elem_from_end = pass / kSymbolBytes;
+                size_t byte_in_elem = pass % kSymbolBytes;
+                size_t elem_index = K - 1 - elem_from_end;
+
+                Unsigned uval = static_cast<Unsigned>( elems[elem_index] );
+                if constexpr ( std::is_signed_v<Symbol> ) {
+                    Unsigned sign_mask = Unsigned( 1 ) << ( kSymbolBytes * 8 - 1 );
+                    uval ^= sign_mask;
+                }
+                return static_cast<uint8_t>( ( uval >> ( byte_in_elem * 8 ) ) & 0xFF );
+            }
+        };
+
+        template <typename THashValue>
+        void radix_sort_pairs( std::vector<std::pair<THashValue, uint32_t>>& data ) {
+            using Traits = RadixSortTraits<THashValue>;
+            if constexpr ( !Traits::kSupported ) {
+                std::sort( data.begin(), data.end() );
+                return;
+            }
+
+            if ( data.size() <= 1 ) {
+                return;
+            }
+
+            std::vector<std::pair<THashValue, uint32_t>> buffer( data.size() );
+            std::array<size_t, 256> counts;
+
+            // First sort by index to match std::pair ordering when hashes are equal.
+            for ( size_t pass = 0; pass < sizeof( uint32_t ); ++pass ) {
+                counts.fill( 0 );
+                for ( const auto& item : data ) {
+                    uint8_t byte = static_cast<uint8_t>( ( item.second >> ( pass * 8 ) ) & 0xFF );
+                    counts[byte] += 1;
+                }
+
+                size_t sum = 0;
+                for ( size_t i = 0; i < counts.size(); ++i ) {
+                    size_t c = counts[i];
+                    counts[i] = sum;
+                    sum += c;
+                }
+
+                for ( const auto& item : data ) {
+                    uint8_t byte = static_cast<uint8_t>( ( item.second >> ( pass * 8 ) ) & 0xFF );
+                    buffer[counts[byte]++] = item;
+                }
+                data.swap( buffer );
+            }
+
+            // Stable radix on the hash value (lexicographic order).
+            for ( size_t pass = 0; pass < Traits::kPasses; ++pass ) {
+                counts.fill( 0 );
+                for ( const auto& item : data ) {
+                    counts[Traits::get_byte( item.first, pass )] += 1;
+                }
+
+                size_t sum = 0;
+                for ( size_t i = 0; i < counts.size(); ++i ) {
+                    size_t c = counts[i];
+                    counts[i] = sum;
+                    sum += c;
+                }
+
+                for ( const auto& item : data ) {
+                    uint8_t byte = Traits::get_byte( item.first, pass );
+                    buffer[counts[byte]++] = item;
+                }
+                data.swap( buffer );
+            }
+        }
+    } // namespace detail
 
 
     template <typename THashValue>
@@ -820,8 +930,8 @@ namespace panna {
                 }
             }
 
-            // OPTIMIZE: use radix sort?
-            std::sort( tmp.begin(), tmp.end() );
+            // Radix sort is faster for the supported hash types; fallback to std::sort otherwise.
+            detail::radix_sort_pairs( tmp );
 
             indices.clear();
             indices.reserve( tmp.size() );
@@ -837,6 +947,33 @@ namespace panna {
             for ( auto& rd : parallel_rebuilding_data ) {
                 rd.clear();
                 rd.shrink_to_fit();
+            }
+        }
+
+        void fill_prefix_bucket_ids( uint8_t prefix, std::vector<uint32_t>& out ) const {
+            if ( hashes.empty() ) {
+                return;
+            }
+            if ( indices.size() != hashes.size() ) {
+                throw std::runtime_error( "prefix map indices/hash size mismatch" );
+            }
+            uint32_t max_idx = *std::max_element( indices.begin(), indices.end() );
+            if ( out.size() <= max_idx ) {
+                out.resize( static_cast<size_t>( max_idx ) + 1 );
+            }
+
+            uint32_t bucket_id = 0;
+            size_t start = 0;
+            while ( start < hashes.size() ) {
+                size_t end = start + 1;
+                while ( end < hashes.size() && hashes.at(start).prefix_eq( hashes.at(end), prefix ) ) {
+                    end++;
+                }
+                for ( size_t i = start; i < end; i++ ) {
+                    out.at( indices.at(i) ) = bucket_id;
+                }
+                bucket_id++;
+                start = end;
             }
         }
 
