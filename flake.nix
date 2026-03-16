@@ -142,6 +142,7 @@
             cmake
             git
             ninja
+            nanobench
           ];
         };
 
@@ -230,6 +231,7 @@
             armadillo
             hl-bin
             tree-similarity
+            nanobench
           ];
 
           NIX_ENFORCE_NO_NATIVE = false;
