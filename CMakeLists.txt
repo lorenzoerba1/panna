@@ -81,6 +81,7 @@ if (NOT SKBUILD)
   target_link_libraries(mare PRIVATE HighFive)
 
   add_executable(lattice_lsh_collision_probabilities scripts/lattice_lsh_collision_probabilties.cpp)
+  add_executable(bench test/bench.cpp)
 
   # if (HighFive_FOUND)
   #   add_executable(glove examples/glove.cpp)

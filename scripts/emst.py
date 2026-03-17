@@ -279,7 +279,7 @@ def run_single(
     _, data = panna.datasets.load(
         dataset,
         pca_dimensions=4 if "pamap2" in dataset else None,
-        normalize="angular" in dataset,
+        normalize=False,
     )
     if sample_frac is not None:
         sample_size = int(sample_frac * data.shape[0])
@@ -435,23 +435,18 @@ def show_results():
 
 
 def merge_results(other_file: Path):
+    import tempfile
+    def append(input_fn: Path, output_fn: Path):
+        with open(input_fn) as ifp:
+            with open(output_fn, "a") as ofp:
+                ofp.write(ifp.read())
+
     with FileLock(LOCKFILE):
-        if DATABASE_FILE.is_file():
-            try:
-                df_base = pl.read_ndjson(DATABASE_FILE)
-            except Exception as e:
-                print(f"Could not read {DATABASE_FILE}, creating a new one. Error: {e}")
-                df_base = pl.DataFrame()
-        else:
-            df_base = pl.DataFrame()
+        tmp = Path(tempfile.mkstemp()[1])
+        append(DATABASE_FILE, tmp)
+        append(other_file, tmp)
 
-        df_other = pl.read_ndjson(other_file)
-
-        if df_base.is_empty():
-            df_all = df_other
-        else:
-            df_all = pl.concat([df_base, df_other])
-
+        df = pl.read_ndjson(tmp)
         # From Entry.primary_key()
         primary_keys = [
             "version",
@@ -463,15 +458,10 @@ def merge_results(other_file: Path):
             "dataset_sample_seed",
             "dataset_sha",
         ]
-
-        # Polars can use struct types for uniqueness checks
-        df_unique = df_all.unique(subset=primary_keys, keep="first")
+        df_unique = df.unique(subset=primary_keys, keep="first")
 
         df_unique.write_ndjson(DATABASE_FILE)
-        print(
-            f"Merged from {other_file} into {DATABASE_FILE}. Total entries now: {len(df_unique)}"
-        )
-
+           
 
 def main():
     parser = argparse.ArgumentParser(description="EMST experiments script.")

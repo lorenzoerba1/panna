@@ -150,10 +150,70 @@ namespace panna {
             return 0.0f;
         }
 
-        // --- AVX2 + FMA vectorised loop (8 floats / iteration) ---
-        __m256 acc = _mm256_setzero_ps(); // accumulator: 8 x float, init to 0
+        // Use eight accumulators for better instruction-level parallelism.
+        __m256 acc0 = _mm256_setzero_ps();
+        __m256 acc1 = _mm256_setzero_ps();
+        __m256 acc2 = _mm256_setzero_ps();
+        __m256 acc3 = _mm256_setzero_ps();
+        __m256 acc4 = _mm256_setzero_ps();
+        __m256 acc5 = _mm256_setzero_ps();
+        __m256 acc6 = _mm256_setzero_ps();
+        __m256 acc7 = _mm256_setzero_ps();
 
         std::size_t i = 0;
+        // 8x unrolled loop processing 64 floats per iteration.
+        for ( ; i + 64 <= n; i += 64 ) {
+            __m256 va0 = _mm256_loadu_ps( a + i + 0 );
+            __m256 vb0 = _mm256_loadu_ps( b + i + 0 );
+            __m256 diff0 = _mm256_sub_ps( va0, vb0 );
+            acc0 = _mm256_fmadd_ps( diff0, diff0, acc0 );
+
+            __m256 va1 = _mm256_loadu_ps( a + i + 8 );
+            __m256 vb1 = _mm256_loadu_ps( b + i + 8 );
+            __m256 diff1 = _mm256_sub_ps( va1, vb1 );
+            acc1 = _mm256_fmadd_ps( diff1, diff1, acc1 );
+
+            __m256 va2 = _mm256_loadu_ps( a + i + 16 );
+            __m256 vb2 = _mm256_loadu_ps( b + i + 16 );
+            __m256 diff2 = _mm256_sub_ps( va2, vb2 );
+            acc2 = _mm256_fmadd_ps( diff2, diff2, acc2 );
+
+            __m256 va3 = _mm256_loadu_ps( a + i + 24 );
+            __m256 vb3 = _mm256_loadu_ps( b + i + 24 );
+            __m256 diff3 = _mm256_sub_ps( va3, vb3 );
+            acc3 = _mm256_fmadd_ps( diff3, diff3, acc3 );
+
+            __m256 va4 = _mm256_loadu_ps( a + i + 32 );
+            __m256 vb4 = _mm256_loadu_ps( b + i + 32 );
+            __m256 diff4 = _mm256_sub_ps( va4, vb4 );
+            acc4 = _mm256_fmadd_ps( diff4, diff4, acc4 );
+
+            __m256 va5 = _mm256_loadu_ps( a + i + 40 );
+            __m256 vb5 = _mm256_loadu_ps( b + i + 40 );
+            __m256 diff5 = _mm256_sub_ps( va5, vb5 );
+            acc5 = _mm256_fmadd_ps( diff5, diff5, acc5 );
+
+            __m256 va6 = _mm256_loadu_ps( a + i + 48 );
+            __m256 vb6 = _mm256_loadu_ps( b + i + 48 );
+            __m256 diff6 = _mm256_sub_ps( va6, vb6 );
+            acc6 = _mm256_fmadd_ps( diff6, diff6, acc6 );
+
+            __m256 va7 = _mm256_loadu_ps( a + i + 56 );
+            __m256 vb7 = _mm256_loadu_ps( b + i + 56 );
+            __m256 diff7 = _mm256_sub_ps( va7, vb7 );
+            acc7 = _mm256_fmadd_ps( diff7, diff7, acc7 );
+        }
+
+        // Sum the accumulators.
+        acc0 = _mm256_add_ps( acc0, acc4 );
+        acc1 = _mm256_add_ps( acc1, acc5 );
+        acc2 = _mm256_add_ps( acc2, acc6 );
+        acc3 = _mm256_add_ps( acc3, acc7 );
+        acc0 = _mm256_add_ps( acc0, acc2 );
+        acc1 = _mm256_add_ps( acc1, acc3 );
+        __m256 acc = _mm256_add_ps( acc0, acc1 );
+
+        // --- AVX2 + FMA vectorised loop (8 floats / iteration) for remaining elements ---
         for ( ; i + 8 <= n; i += 8 ) {
             __m256 va = _mm256_loadu_ps( a + i );  // load 8 floats from a (unaligned)
             __m256 vb = _mm256_loadu_ps( b + i );  // load 8 floats from b (unaligned)
