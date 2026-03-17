@@ -275,6 +275,7 @@ def run_single(
     emst_stats: bool = False,
 ):
     # TODO: add the possibility to sample data, recording it to the primary key
+    dataset = Path(dataset).stem
     _, data = panna.datasets.load(
         dataset,
         pca_dimensions=4 if "pamap2" in dataset else None,
