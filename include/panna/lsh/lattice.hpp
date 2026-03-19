@@ -1,6 +1,8 @@
 #pragma once
 
+#include <algorithm>
 #include <cmath>
+#include <numeric>
 #include <omp.h>
 #include <random>
 #include <vector>
@@ -122,6 +124,8 @@ namespace panna {
         // the corrections to apply to projections so that
         // they behave like the input vector was first offset and scaled
         std::vector<float> corrections;
+        // precomputed (offset - correction) term used in the hot hash loop
+        std::vector<float> projection_bias;
         // scratch space
         std::vector<std::vector<float>> tl_scratch;
 
@@ -185,13 +189,17 @@ namespace panna {
             repetitions( repetitions ),
             random_vectors( dimensions ),
             random_dots( std::max( dimensions, repetitions * K * LATTICE_DIMENSIONS ) ),
-            corrections() {
+            corrections(),
+            projection_bias() {
             for ( size_t vec_idx = 0; vec_idx < repetitions * K * LATTICE_DIMENSIONS; vec_idx++ ) {
                 std::vector<float> dir = sample_random_normal_vector( dimensions, rng );
                 rescale( dir, 1.0 / std::sqrt( LATTICE_DIMENSIONS ) );
                 random_vectors.push_back( dir.begin(), dir.end() );
-                offsets.push_back( sample_random_01(rng) );
-                corrections.push_back( dot_product(dir, data_offset) / scaling_factor );
+                float offset = sample_random_01(rng);
+                float correction = dot_product(dir, data_offset) / scaling_factor;
+                offsets.push_back( offset );
+                corrections.push_back( correction );
+                projection_bias.push_back( offset - correction );
             }
 
             // prepare thread local scratch space
@@ -202,7 +210,13 @@ namespace panna {
 
         template <typename Archive>
         void serialize( Archive& ar ) {
-            ar( data_offset, scaling_factor, repetitions, random_vectors, offsets, corrections );
+            ar( data_offset,
+                scaling_factor,
+                repetitions,
+                random_vectors,
+                offsets,
+                corrections,
+                projection_bias );
         }
 
         static constexpr size_t get_concatenations() {
@@ -215,24 +229,31 @@ namespace panna {
 
         void hash( typename Dataset::PointHandle point, std::vector<Value>& output ) {
             auto& scratch = tl_scratch.at(omp_get_thread_num());
-            std::fill(scratch.begin(), scratch.end(), 0.0);
             point.into_vec(scratch);
-            output.clear();
+            if ( scratch.size() > dimensions ) {
+                std::fill( scratch.begin() + dimensions, scratch.end(), 0.0f );
+            }
+            output.resize( repetitions );
             // compute all projections in one go, scaling by the factor required to make
             // the hashing work
             random_dots.compute( scratch, 1.0 / std::sqrt( LATTICE_DIMENSIONS ) );
+            const float inv_scaling_factor = 1.0f / scaling_factor;
             // use the projections
             for ( size_t rep = 0; rep < repetitions; rep++ ) {
                 Value cur;
+                const size_t rep_base = rep * LATTICE_DIMENSIONS * K;
                 for ( size_t concat = 0; concat < K; concat++ ) {
-                    // auto prj = project( point, concat, rep );
-                    auto prj = project( scratch, concat, rep );
+                    std::array<float, LATTICE_DIMENSIONS> prj;
+                    const size_t concat_base = rep_base + concat * LATTICE_DIMENSIONS;
+                    for ( size_t i = 0; i < LATTICE_DIMENSIONS; i++ ) {
+                        const size_t idx = concat_base + i;
+                        prj.at(i) = scratch.at(idx) * inv_scaling_factor + projection_bias.at(idx);
+                    }
                     auto decoded = decode_e8(prj);
                     int64_t code = to_int64(to_integer_coords(decoded));
                     cur.set( concat, code );
                 }
-                output.push_back( cur );
-                cur = Value();
+                output.at(rep) = cur;
             }
         }
 
@@ -256,6 +277,50 @@ namespace panna {
         std::vector<float> offset;
         float scaling_factor = 0.0;
         size_t dimensions = 0;
+        static constexpr float FIT_SAMPLE_RATIO = 0.2f;
+        static constexpr size_t FIT_MIN_SAMPLE_SIZE = 2048;
+
+        Dataset sample_points( const Dataset& points,
+                               std::vector<size_t>* sampled_original_indices = nullptr ) const {
+            const size_t n = points.size();
+            if ( n == 0 ) {
+                return Dataset( dimensions );
+            }
+
+            size_t target = static_cast<size_t>( n * FIT_SAMPLE_RATIO );
+            target = std::max<size_t>( 1, std::max( target, FIT_MIN_SAMPLE_SIZE ) );
+            target = std::min( target, n );
+
+            if ( target == n ) {
+                if ( sampled_original_indices ) {
+                    sampled_original_indices->resize( n );
+                    std::iota( sampled_original_indices->begin(), sampled_original_indices->end(), 0 );
+                }
+                return points;
+            }
+
+            std::vector<size_t> order( n );
+            std::iota( order.begin(), order.end(), 0 );
+            auto& rng = get_global_rng();
+            std::shuffle( order.begin(), order.end(), rng );
+
+            Dataset sampled( dimensions );
+            std::vector<float> scratch( dimensions );
+            if ( sampled_original_indices ) {
+                sampled_original_indices->clear();
+                sampled_original_indices->reserve( target );
+            }
+            for ( size_t i = 0; i < target; i++ ) {
+                size_t original_idx = order.at(i);
+                auto point = points[original_idx];
+                point.into_vec( scratch );
+                sampled.push_back( scratch.begin(), scratch.end() );
+                if ( sampled_original_indices ) {
+                    sampled_original_indices->push_back( original_idx );
+                }
+            }
+            return sampled;
+        }
 
     public:
         using Output = LatticeLSH<K, Dataset, Distance>;
@@ -280,16 +345,20 @@ namespace panna {
             if ( scaling_factor != 0.0 ) {
                 return;
             }
-            const size_t n = points.size();
-            offset = mean_point(points);
-            const float diameter = approximate_diameter<Distance>(points);
+            Dataset fit_points = sample_points( points );
+            if ( fit_points.size() == 0 ) {
+                throw std::invalid_argument( "cannot fit hash builder on an empty dataset" );
+            }
+            const size_t fit_n = fit_points.size();
+            offset = mean_point(fit_points);
+            const float diameter = approximate_diameter<Distance>(fit_points);
             const size_t sample_repetitions = 4;
             LOG_INFO("diameter", diameter);
 
             auto compute_avg_collisions = [&](float scale) -> float {
                 std::vector<PrefixMap<typename Output::Value>> pmaps(sample_repetitions);
                 Output hasher(offset, scale, dimensions, sample_repetitions);
-                PrefixMap<typename Output::Value>::populate_from(pmaps, points, hasher);
+                PrefixMap<typename Output::Value>::populate_from(pmaps, fit_points, hasher);
 
                 size_t collisions = 0;
                 for (auto& pmap : pmaps) {
@@ -301,8 +370,8 @@ namespace panna {
             };
 
             // TODO: make these configurable to handle different scenarios
-            const float threshold_low = n / 2.0;
-            const float threshold_high = n * 2.0;
+            const float threshold_low = fit_n / 2.0;
+            const float threshold_high = fit_n * 2.0;
             LOG_INFO("threshold-low", threshold_low, "threshold_high", threshold_high);
 
             float low=0.0, high=diameter;
@@ -326,33 +395,46 @@ namespace panna {
         void fit( Dataset& points, std::function<uint32_t( uint32_t )> group_fun ) {
             const float old_scaling_factor = scaling_factor;
             scaling_factor = 0.0;
-            const size_t n = points.size();
-            offset = mean_point( points );
-            const float diameter = approximate_diameter<Distance>( points );
+            std::vector<size_t> sampled_original_indices;
+            Dataset fit_points = sample_points( points, &sampled_original_indices );
+            if ( fit_points.size() == 0 ) {
+                throw std::invalid_argument( "cannot fit hash builder on an empty dataset" );
+            }
+            const size_t fit_n = fit_points.size();
+            offset = mean_point( fit_points );
+            const float diameter = approximate_diameter<Distance>( fit_points );
             const size_t sample_repetitions = 4;
             LOG_INFO( "diameter", diameter );
+
+            std::vector<uint32_t> sampled_groups( fit_n );
+            for ( size_t i = 0; i < fit_n; i++ ) {
+                sampled_groups.at(i) = group_fun( sampled_original_indices.at(i) );
+            }
 
             auto compute_avg_collisions = [&]( float scale ) -> float {
                 std::vector<PrefixMap<typename Output::Value>> pmaps( sample_repetitions );
                 Output hasher( offset, scale, dimensions, sample_repetitions );
-                PrefixMap<typename Output::Value>::populate_from( pmaps, points, hasher );
+                PrefixMap<typename Output::Value>::populate_from( pmaps, fit_points, hasher );
 
                 size_t collisions = 0;
                 for ( auto& pmap : pmaps ) {
                     auto cursor = pmap.create_pair_cursor_grouped(
-                        hasher.get_concatenations(), std::nullopt, group_fun );
+                        hasher.get_concatenations(),
+                        std::nullopt,
+                        [&]( uint32_t x ) { return sampled_groups.at(x); } );
                     collisions += cursor.total_collisions();
                 }
                 return static_cast<float>( collisions ) / pmaps.size();
             };
 
             // TODO: make these configurable to handle different scenarios
-            const float threshold_low = std::sqrt(n) / 2.0;
-            const float threshold_high = n * 2.0;
+            const float threshold_low = std::sqrt(fit_n) / 2.0;
+            const float threshold_high = fit_n * 2.0;
             LOG_INFO( "threshold-low", threshold_low, "threshold_high", threshold_high );
 
-            float low = 2 * old_scaling_factor, high = diameter;
-            expect( low < high );
+            float low = 2 * old_scaling_factor;
+            float high = std::max( diameter, low * 1.01f );
+            expect( low <= high );
             const size_t MAX_ITER = 40;
             bool found = false;
             for ( size_t iter = 0; iter < MAX_ITER; iter++ ) {

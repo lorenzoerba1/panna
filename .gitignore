@@ -32,7 +32,10 @@ emst
 mare
 recall
 scalability
+bench
 .venv/
 /dist
 *.pyc
 /.cache
+__marimo__/
+*.tex

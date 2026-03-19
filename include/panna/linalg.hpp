@@ -16,41 +16,154 @@
 namespace panna {
 
     template <typename T>
-    static T add( T &a, T &b );
+    static T add( const T& a, const T& b );
 
     template<>
-    std::vector<float> add(std::vector<float> &a, std::vector<float>&b) {
+    std::vector<float> add( const std::vector<float>& a, const std::vector<float>& b ) {
         expect(a.size() == b.size());
         std::vector<float> out(a.size());
+#ifdef __AVX2__
+        const float* pa = a.data();
+        const float* pb = b.data();
+        float* po = out.data();
+        size_t i = 0;
+        for ( ; i + 8 <= a.size(); i += 8 ) {
+            __m256 va = _mm256_loadu_ps( pa + i );
+            __m256 vb = _mm256_loadu_ps( pb + i );
+            _mm256_storeu_ps( po + i, _mm256_add_ps( va, vb ) );
+        }
+        for ( ; i < a.size(); i++ ) {
+            po[i] = pa[i] + pb[i];
+        }
+#else
         for (size_t i=0; i<a.size(); i++) {
             out.at(i) = a.at(i) + b.at(i);
         }
+#endif
         return out;
     }
 
     
 
     template <typename T>
-    static float dot_product( T a, T b );
+    static float dot_product( const T& a, const T& b );
 
     template<>
-    float dot_product( std::vector<float> a, std::vector<float> b ) {
+    float dot_product( const std::vector<float>& a, const std::vector<float>& b ) {
         assert( a.size() == b.size() );
+#ifdef __AVX2__
+        const float* pa = a.data();
+        const float* pb = b.data();
+        const size_t n = a.size();
+
+        __m256 acc0 = _mm256_setzero_ps();
+        __m256 acc1 = _mm256_setzero_ps();
+        __m256 acc2 = _mm256_setzero_ps();
+        __m256 acc3 = _mm256_setzero_ps();
+
+        size_t i = 0;
+        for ( ; i + 32 <= n; i += 32 ) {
+            __m256 a0 = _mm256_loadu_ps( pa + i + 0 );
+            __m256 b0 = _mm256_loadu_ps( pb + i + 0 );
+            acc0 = _mm256_fmadd_ps( a0, b0, acc0 );
+
+            __m256 a1 = _mm256_loadu_ps( pa + i + 8 );
+            __m256 b1 = _mm256_loadu_ps( pb + i + 8 );
+            acc1 = _mm256_fmadd_ps( a1, b1, acc1 );
+
+            __m256 a2 = _mm256_loadu_ps( pa + i + 16 );
+            __m256 b2 = _mm256_loadu_ps( pb + i + 16 );
+            acc2 = _mm256_fmadd_ps( a2, b2, acc2 );
+
+            __m256 a3 = _mm256_loadu_ps( pa + i + 24 );
+            __m256 b3 = _mm256_loadu_ps( pb + i + 24 );
+            acc3 = _mm256_fmadd_ps( a3, b3, acc3 );
+        }
+
+        __m256 acc = _mm256_add_ps( _mm256_add_ps( acc0, acc1 ), _mm256_add_ps( acc2, acc3 ) );
+        for ( ; i + 8 <= n; i += 8 ) {
+            __m256 av = _mm256_loadu_ps( pa + i );
+            __m256 bv = _mm256_loadu_ps( pb + i );
+            acc = _mm256_fmadd_ps( av, bv, acc );
+        }
+
+        __m128 lo = _mm256_castps256_ps128( acc );
+        __m128 hi = _mm256_extractf128_ps( acc, 1 );
+        __m128 sum = _mm_add_ps( lo, hi );
+        sum = _mm_add_ps( sum, _mm_movehl_ps( sum, sum ) );
+        sum = _mm_add_ss( sum, _mm_shuffle_ps( sum, sum, 1 ) );
+
+        float total = _mm_cvtss_f32( sum );
+        for ( ; i < n; ++i ) {
+            total += pa[i] * pb[i];
+        }
+        return total;
+#else
         float sum = 0.0;
         for ( size_t i = 0; i < a.size(); i++ ) {
             sum += a.at(i) * b.at(i);
         }
         return sum;
+#endif
     }
 
     template<>
-    float dot_product( EuclideanPointHandle a, EuclideanPointHandle b ) {
+    float dot_product( const EuclideanPointHandle& a, const EuclideanPointHandle& b ) {
         expect( a.dimensions == b.dimensions );
+#ifdef __AVX2__
+        const float* pa = a.vector;
+        const float* pb = b.vector;
+        const size_t n = a.dimensions;
+
+        __m256 acc0 = _mm256_setzero_ps();
+        __m256 acc1 = _mm256_setzero_ps();
+        __m256 acc2 = _mm256_setzero_ps();
+        __m256 acc3 = _mm256_setzero_ps();
+
+        size_t i = 0;
+        for ( ; i + 32 <= n; i += 32 ) {
+            __m256 a0 = _mm256_loadu_ps( pa + i + 0 );
+            __m256 b0 = _mm256_loadu_ps( pb + i + 0 );
+            acc0 = _mm256_fmadd_ps( a0, b0, acc0 );
+
+            __m256 a1 = _mm256_loadu_ps( pa + i + 8 );
+            __m256 b1 = _mm256_loadu_ps( pb + i + 8 );
+            acc1 = _mm256_fmadd_ps( a1, b1, acc1 );
+
+            __m256 a2 = _mm256_loadu_ps( pa + i + 16 );
+            __m256 b2 = _mm256_loadu_ps( pb + i + 16 );
+            acc2 = _mm256_fmadd_ps( a2, b2, acc2 );
+
+            __m256 a3 = _mm256_loadu_ps( pa + i + 24 );
+            __m256 b3 = _mm256_loadu_ps( pb + i + 24 );
+            acc3 = _mm256_fmadd_ps( a3, b3, acc3 );
+        }
+
+        __m256 acc = _mm256_add_ps( _mm256_add_ps( acc0, acc1 ), _mm256_add_ps( acc2, acc3 ) );
+        for ( ; i + 8 <= n; i += 8 ) {
+            __m256 av = _mm256_loadu_ps( pa + i );
+            __m256 bv = _mm256_loadu_ps( pb + i );
+            acc = _mm256_fmadd_ps( av, bv, acc );
+        }
+
+        __m128 lo = _mm256_castps256_ps128( acc );
+        __m128 hi = _mm256_extractf128_ps( acc, 1 );
+        __m128 sum = _mm_add_ps( lo, hi );
+        sum = _mm_add_ps( sum, _mm_movehl_ps( sum, sum ) );
+        sum = _mm_add_ss( sum, _mm_shuffle_ps( sum, sum, 1 ) );
+
+        float total = _mm_cvtss_f32( sum );
+        for ( ; i < n; ++i ) {
+            total += pa[i] * pb[i];
+        }
+        return total;
+#else
         float sum = 0.0;
         for ( size_t i = 0; i < a.dimensions; i++ ) {
             sum += a.vector[i] * b.vector[i];
         }
         return sum;
+#endif
     }
 
 #ifdef __AVX2__
@@ -97,7 +210,8 @@ namespace panna {
         return res;
     }
 
-    static inline int16_t dot_product_chunks16( UnitNormPointHandle lhs, UnitNormPointHandle rhs ) {
+    static inline int16_t dot_product_chunks16( const UnitNormPointHandle& lhs,
+                                                const UnitNormPointHandle& rhs ) {
 #ifdef __AVX2__
         return dot_product_chunks16_avx2( lhs, rhs );
 #else
@@ -108,12 +222,12 @@ namespace panna {
     }
 
     template <>
-    float dot_product( UnitNormPointHandle a, UnitNormPointHandle b ) {
+    float dot_product( const UnitNormPointHandle& a, const UnitNormPointHandle& b ) {
         return from_16bit_fixed_point( dot_product_chunks16( a, b ) );
     }
 
     template <>
-    float dot_product( NormedPointHandle a, NormedPointHandle b ) {
+    float dot_product( const NormedPointHandle& a, const NormedPointHandle& b ) {
         float inner_dot = from_16bit_fixed_point( dot_product_chunks16( a.inner, b.inner ) );
         return std::sqrt( a.squared_norm() ) * std::sqrt( b.squared_norm() ) * inner_dot;
     }
@@ -124,15 +238,42 @@ namespace panna {
             //throw std::runtime_error("Cannot normalize a zero vector");
             return;
         }
+#ifdef __AVX2__
+        float inv_norm = 1.0f / norm;
+        float* p = point.data();
+        size_t i = 0;
+        __m256 inv = _mm256_set1_ps( inv_norm );
+        for ( ; i + 8 <= point.size(); i += 8 ) {
+            __m256 v = _mm256_loadu_ps( p + i );
+            _mm256_storeu_ps( p + i, _mm256_mul_ps( v, inv ) );
+        }
+        for ( ; i < point.size(); i++ ) {
+            p[i] *= inv_norm;
+        }
+#else
         for (size_t i=0; i<point.size(); i++) {
             point.at(i) /= norm;
         }
+#endif
     }
 
     static void rescale(std::vector<float> & point, float factor) {
+#ifdef __AVX2__
+        float* p = point.data();
+        size_t i = 0;
+        __m256 scale = _mm256_set1_ps( factor );
+        for ( ; i + 8 <= point.size(); i += 8 ) {
+            __m256 v = _mm256_loadu_ps( p + i );
+            _mm256_storeu_ps( p + i, _mm256_mul_ps( v, scale ) );
+        }
+        for ( ; i < point.size(); i++ ) {
+            p[i] *= factor;
+        }
+#else
         for (size_t i=0; i<point.size(); i++) {
             point.at(i) *= factor;
         }
+#endif
     }
 
     inline static float euclidean_naive( const float* a, const float* b, std::size_t n ) {
@@ -246,16 +387,16 @@ namespace panna {
 #endif
 
     template <typename T>
-    static float euclidean( T a, T b );
+    static float euclidean( const T& a, const T& b );
 
     template <>
-    float euclidean( NormedPointHandle a, NormedPointHandle b ) {
+    float euclidean( const NormedPointHandle& a, const NormedPointHandle& b ) {
         float dot = dot_product( a, b );
         return std::sqrt( a.squared_norm() + b.squared_norm() - 2 * dot );
     }
 
     template <>
-    float euclidean( EuclideanPointHandle a, EuclideanPointHandle b ) {
+    float euclidean( const EuclideanPointHandle& a, const EuclideanPointHandle& b ) {
 #ifdef __AVX2__
         return euclidean_avx2( a.vector, b.vector, a.dimensions );
 #else
@@ -264,7 +405,7 @@ namespace panna {
     }
 
     template <>
-    float euclidean(std::vector<float> a, std::vector<float> b) {
+    float euclidean( const std::vector<float>& a, const std::vector<float>& b ) {
 #ifdef __AVX2__
         return euclidean_avx2( a.data(), b.data(), a.size() );
 #else
@@ -273,7 +414,7 @@ namespace panna {
     }
 
     template <size_t D>
-    float euclidean(std::array<float, D> a, std::array<float, D> b) {
+    float euclidean( const std::array<float, D>& a, const std::array<float, D>& b ) {
 #ifdef __AVX2__
         return euclidean_avx2( a.data(), b.data(), D );
 #else
@@ -282,7 +423,7 @@ namespace panna {
     }
 
     template <size_t D>
-    float euclidean(std::array<float, D> a, std::array<long, D> b) {
+    float euclidean( const std::array<float, D>& a, const std::array<long, D>& b ) {
         float d = 0;
         for (size_t i=0; i<a.size(); i++) {
             float diff = a.at(i) - ((float) b.at(i));
@@ -350,18 +491,46 @@ namespace panna {
             expect( in_out.size() == num_products );
             // float norm_factor = std::sqrt(num_products) / (num_products * std::sqrt(static_cast<double>(num_products)));
             float norm_factor = additional_scaling / static_cast<float>(num_products);
+            const size_t padded_size = 1u << log_num_products;
             for ( uint8_t diagonal = 0; diagonal < 3; diagonal++ ) {
                 // Multiply by a diagonal +-1 matrix.
-                for ( size_t i = 0; i < ( 1 << log_num_products ); i++ ) {
+#ifdef __AVX2__
+                const float* signs = random_signs[diagonal].data();
+                float* values = in_out.data();
+                size_t i = 0;
+                for ( ; i + 8 <= padded_size; i += 8 ) {
+                    __m256 v = _mm256_loadu_ps( values + i );
+                    __m256 s = _mm256_loadu_ps( signs + i );
+                    _mm256_storeu_ps( values + i, _mm256_mul_ps( v, s ) );
+                }
+                for ( ; i < padded_size; i++ ) {
+                    values[i] *= signs[i];
+                }
+#else
+                for ( size_t i = 0; i < padded_size; i++ ) {
                     // OPTIMIZE use simd, this takes half as much time as the fht transform below
                     in_out.at(i) *= random_signs[diagonal].at(i);
                 }
+#endif
                 // Apply the fast hadamard transform
                 fht( in_out.data(), log_num_products );
             }
+#ifdef __AVX2__
+            float* values = in_out.data();
+            __m256 scale = _mm256_set1_ps( norm_factor );
+            size_t i = 0;
+            for ( ; i + 8 <= num_products; i += 8 ) {
+                __m256 v = _mm256_loadu_ps( values + i );
+                _mm256_storeu_ps( values + i, _mm256_mul_ps( v, scale ) );
+            }
+            for ( ; i < num_products; i++ ) {
+                values[i] *= norm_factor;
+            }
+#else
             for ( size_t i = 0; i < num_products; i++ ) {
                 in_out.at( i ) *= norm_factor;
             }
+#endif
         }
     };
 
