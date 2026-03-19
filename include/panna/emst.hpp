@@ -22,6 +22,7 @@ namespace panna {
     // the underlying algorithm/implementation
     //
     // Changelog:
+    // 3: sampling on the tuning, all multiplications as AVX instructions
     // 2: unrolled Euclidean distance
     // 1: collect additional metrics (memory index and execution profile)
     //    that are available through Python wrapper
