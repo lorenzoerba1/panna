@@ -501,22 +501,26 @@ namespace panna {
             range_end = first_gt_pos( hash, prefix_length );
 
             grouped_indices.clear();
+            grouped_indices.reserve( range_end - range_start );
             for ( size_t i = range_start; i < range_end; i++ ) {
-                grouped_indices.push_back( std::make_pair( group_fun( indices.at(i) ), std::make_pair(indices.at(i), hashes.at(i)) ) );
+                grouped_indices.emplace_back(
+                    group_fun( indices.at(i) ),
+                    std::make_pair( indices.at(i), hashes.at(i) ) );
             }
             std::sort(grouped_indices.begin(), grouped_indices.end());
             // populate the chained index
             std::vector<CartesianIndex> index_chain;
+            index_chain.reserve( grouped_indices.size() );
 
             // identify the ranges
             size_t sub_start = 0;
             while ( sub_start < grouped_indices.size() ) {
                 uint32_t needle = grouped_indices.at(sub_start).first;
-                size_t sub_end = std::distance(
-                    grouped_indices.cbegin(),
-                    std::partition_point( grouped_indices.cbegin(),
-                                          grouped_indices.cend(),
-                                          [&]( const auto& group ) { return group.first <= needle; } ) );
+                size_t sub_end = sub_start + 1;
+                while ( sub_end < grouped_indices.size() &&
+                        grouped_indices.at(sub_end).first == needle ) {
+                    sub_end += 1;
+                }
                 expect(sub_start < sub_end);
                 expect(sub_end <= grouped_indices.size());
                 // we just need to compare with the preceding ones, the following ones will be taken

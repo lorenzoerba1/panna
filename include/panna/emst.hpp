@@ -444,11 +444,7 @@ namespace panna {
         }
 
         /// Complete the given forest with arbitrary edges so that it becomes a connected tree
-        size_t complete_arbitrarily(std::vector<Edge> & forest) const {
-            DSU dsu(num_data);
-            for (const auto & e : forest) {
-                dsu.union_sets(e.a, e.b);
-            }
+        size_t complete_arbitrarily(std::vector<Edge> & forest, DSU& dsu) const {
             // now connect the tree containing `0` with all the other trees
             size_t added_cnt = 0;
             const uint32_t root = 0;
@@ -461,6 +457,14 @@ namespace panna {
             }
             std::sort(forest.begin(), forest.end());
             return added_cnt;
+        }
+
+        size_t complete_arbitrarily(std::vector<Edge> & forest) const {
+            DSU dsu(num_data);
+            for (const auto & e : forest) {
+                dsu.union_sets(e.a, e.b);
+            }
+            return complete_arbitrarily(forest, dsu);
         }
 
         /// @brief Computes the exact MST with Kruskal's algorithm in a naive way
@@ -543,7 +547,6 @@ namespace panna {
                                 std::atomic_size_t &count_collisions,
                                 Channel<size_t> &work,
                                 Channel<std::vector<Edge>> &partials ) {
-            std::vector<Edge> local_tree(running_result.read()->tree);
             for ( std::optional<size_t> orepetition = work.receive(); orepetition.has_value();
                   orepetition = work.receive() ) {
                 size_t repetition = *orepetition;
@@ -556,9 +559,13 @@ namespace panna {
                 }
                 float sum_distances = 0.0, min_distance = std::numeric_limits<float>::infinity(), max_distance = 0.0;
                 float avg_denom = 0.0;
-                DSU filter = running_result.read()->filter;
+                auto rr = running_result.read();
+                std::vector<Edge> local_tree(rr->tree);
+                DSU filter = rr->filter;
                 DSU dsu( filter );
                 std::vector<Edge> output;
+                std::vector<Edge> candidates;
+                candidates.reserve( 10 * dsu.size() );
                 auto [cnt_dist, cnt_collisions] = table.search_pairs_different_groups(
                     repetition,
                     prefix,
@@ -577,10 +584,13 @@ namespace panna {
                             }
                         }
                         avg_denom += scratch.size();
-                        std::sort( scratch.begin(), scratch.end() );
-                        kruskal_new_edges(local_tree, scratch, dsu, output);
+                        candidates.insert( candidates.end(), scratch.begin(), scratch.end() );
                         return found.load(); // early stop if the solution has been found in the meantime
                     } );
+                if ( !candidates.empty() ) {
+                    std::sort( candidates.begin(), candidates.end() );
+                    kruskal_new_edges( local_tree, candidates, dsu, output );
+                }
                 float avg_distance = sum_distances / avg_denom;
                 // clang-format off
                 LOG_INFO("logger", "worker", "tid", tid, "repetition", repetition, "prefix", prefix,
@@ -739,7 +749,8 @@ namespace panna {
                         // clang-format on
 
                         const auto start = std::chrono::steady_clock::now();
-                        const size_t added_edges = complete_arbitrarily( tree );
+                        DSU completion_filter( filter );
+                        const size_t added_edges = complete_arbitrarily( tree, completion_filter );
                         const auto end = std::chrono::steady_clock::now();
                         const double elapsed_ms =
                             std::chrono::duration_cast<std::chrono::milliseconds>( end - start )
