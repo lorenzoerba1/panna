@@ -317,9 +317,17 @@ namespace panna {
 
         std::array<std::pair<Iter, Iter>, 2> get_indices() const {
             auto ranges = get_ranges();
+            auto ptr_at_or_end = [&]( size_t pos ) -> Iter {
+                expect( pos <= indices.size() );
+                if ( pos < indices.size() ) {
+                    return &indices.at( pos );
+                }
+                // One-past-end iterator without triggering at(size()) out_of_range.
+                return &indices.at( pos - 1 ) + 1;
+            };
             return {
-                std::make_pair( &indices.at(ranges[0].first), &indices.at(ranges[0].second) ),
-                std::make_pair( &indices.at(ranges[1].first), &indices.at(ranges[1].second) ),
+                std::make_pair( ptr_at_or_end( ranges[0].first ), ptr_at_or_end( ranges[0].second ) ),
+                std::make_pair( ptr_at_or_end( ranges[1].first ), ptr_at_or_end( ranges[1].second ) ),
             };
         }
 
@@ -675,6 +683,9 @@ namespace panna {
                     }
                 }
                 // Switch to the next hash
+                if ( range_end >= hashes.size() ) {
+                    break;
+                }
                 current_hash = hashes.at(range_end);
             }
 
@@ -686,31 +697,48 @@ namespace panna {
             update_range_end();
             std::vector<std::pair<Iter, Iter>> split_ranges;
 
-            current_hash = hashes.at(range_end);
             bool continue_cycle = true;
             if ( range_end >= hashes.size() ) {
                 continue_cycle = false;
+            } else {
+                current_hash = hashes.at(range_end);
             }
+            auto ptr_at_or_end = [&]( size_t pos ) -> Iter {
+                expect( pos <= indices.size() );
+                if ( pos < indices.size() ) {
+                    return &indices.at( pos );
+                }
+                // One-past-end iterator without triggering at(size()) out_of_range.
+                return &indices.at( pos - 1 ) + 1;
+            };
             // If we are at the beginning, we have to compare everything in the range
             if ( prefix_length == THashValue::get_concatenations() ) {
-                split_ranges.emplace_back( &indices.at(range_start), &indices.at(range_end) );
-                return std::make_tuple( &indices.at(range_start), &indices.at(range_end), split_ranges, continue_cycle );
+                split_ranges.emplace_back( ptr_at_or_end( range_start ), ptr_at_or_end( range_end ) );
+                return std::make_tuple(
+                    ptr_at_or_end( range_start ),
+                    ptr_at_or_end( range_end ),
+                    split_ranges,
+                    continue_cycle );
             }
             // Find the portions of the indices that are new
             // since we reduced the prefix, there is a part of comparisons that we already did
-            Iter current_range_start = &indices.at(range_start);
+            Iter current_range_start = ptr_at_or_end( range_start );
             for (size_t i = range_start + 1; i < range_end; ++i) {
                 // A split happens when the prefix of the current hash differs from the previous one
                 if (hashes.at(i - 1).prefix_less(hashes.at(i), prefix_length + 1)) {
-                    split_ranges.emplace_back(current_range_start, &indices.at(i));
-                    current_range_start = &indices.at(i);
+                    split_ranges.emplace_back( current_range_start, ptr_at_or_end( i ) );
+                    current_range_start = ptr_at_or_end( i );
                 }
             }
-            if (current_range_start != &indices.at(range_end)) {
-                split_ranges.emplace_back(current_range_start, &indices.at(range_end));
+            if (current_range_start != ptr_at_or_end( range_end )) {
+                split_ranges.emplace_back( current_range_start, ptr_at_or_end( range_end ) );
             }
 
-            return std::make_tuple( &indices.at(range_start), &indices.at(range_end), split_ranges, continue_cycle );
+            return std::make_tuple(
+                ptr_at_or_end( range_start ),
+                ptr_at_or_end( range_end ),
+                split_ranges,
+                continue_cycle );
         }
     };
 
@@ -807,16 +835,17 @@ namespace panna {
             }
 
             std::vector<std::pair<THashValue, uint32_t>> tmp;
+            tmp.reserve( hashes.size() + rebuilding_data_size );
 
             if ( hashes.size() != 0 ) {
                 // Move data to temporary vector for sorting.
                 for ( size_t i = 0; i < hashes.size(); i++ ) {
-                    tmp.push_back( std::make_pair( hashes.at(i), indices.at(i) ) );
+                    tmp.emplace_back( hashes.at(i), indices.at(i) );
                 }
             }
             for ( auto& rebuilding_data : parallel_rebuilding_data ) {
-                for ( auto pair : rebuilding_data ) {
-                    tmp.push_back( std::make_pair( pair.second, pair.first ) );
+                for ( const auto& pair : rebuilding_data ) {
+                    tmp.emplace_back( pair.second, pair.first );
                 }
             }
 
@@ -835,7 +864,6 @@ namespace panna {
 
             for ( auto& rd : parallel_rebuilding_data ) {
                 rd.clear();
-                rd.shrink_to_fit();
             }
         }
 
