@@ -277,51 +277,6 @@ namespace panna {
         std::vector<float> offset;
         float scaling_factor = 0.0;
         size_t dimensions = 0;
-        static constexpr float FIT_SAMPLE_RATIO = 0.2f;
-        static constexpr size_t FIT_MIN_SAMPLE_SIZE = 2048;
-
-        Dataset sample_points( const Dataset& points,
-                               std::vector<size_t>* sampled_original_indices = nullptr ) const {
-            const size_t n = points.size();
-            if ( n == 0 ) {
-                return Dataset( dimensions );
-            }
-
-            size_t target = static_cast<size_t>( n * FIT_SAMPLE_RATIO );
-            target = std::max<size_t>( 1, std::max( target, FIT_MIN_SAMPLE_SIZE ) );
-            target = std::min( target, n );
-
-            if ( target == n ) {
-                if ( sampled_original_indices ) {
-                    sampled_original_indices->resize( n );
-                    std::iota( sampled_original_indices->begin(), sampled_original_indices->end(), 0 );
-                }
-                return points;
-            }
-
-            std::vector<size_t> order( n );
-            std::iota( order.begin(), order.end(), 0 );
-            auto& rng = get_global_rng();
-            std::shuffle( order.begin(), order.end(), rng );
-
-            Dataset sampled( dimensions );
-            std::vector<float> scratch( dimensions );
-            if ( sampled_original_indices ) {
-                sampled_original_indices->clear();
-                sampled_original_indices->reserve( target );
-            }
-            for ( size_t i = 0; i < target; i++ ) {
-                size_t original_idx = order.at(i);
-                auto point = points[original_idx];
-                point.into_vec( scratch );
-                sampled.push_back( scratch.begin(), scratch.end() );
-                if ( sampled_original_indices ) {
-                    sampled_original_indices->push_back( original_idx );
-                }
-            }
-            return sampled;
-        }
-
     public:
         using Output = LatticeLSH<K, Dataset, Distance>;
 
@@ -345,20 +300,19 @@ namespace panna {
             if ( scaling_factor != 0.0 ) {
                 return;
             }
-            Dataset fit_points = sample_points( points );
-            if ( fit_points.size() == 0 ) {
+            if ( points.size() == 0 ) {
                 throw std::invalid_argument( "cannot fit hash builder on an empty dataset" );
             }
-            const size_t fit_n = fit_points.size();
-            offset = mean_point(fit_points);
-            const float diameter = approximate_diameter<Distance>(fit_points);
+            const size_t fit_n = points.size();
+            offset = mean_point(points);
+            const float diameter = approximate_diameter<Distance>(points);
             const size_t sample_repetitions = 4;
             LOG_INFO("diameter", diameter);
 
             auto compute_avg_collisions = [&](float scale) -> float {
                 std::vector<PrefixMap<typename Output::Value>> pmaps(sample_repetitions);
                 Output hasher(offset, scale, dimensions, sample_repetitions);
-                PrefixMap<typename Output::Value>::populate_from(pmaps, fit_points, hasher);
+                PrefixMap<typename Output::Value>::populate_from(pmaps, points, hasher);
 
                 size_t collisions = 0;
                 for (auto& pmap : pmaps) {
@@ -395,33 +349,26 @@ namespace panna {
         void fit( Dataset& points, std::function<uint32_t( uint32_t )> group_fun ) {
             const float old_scaling_factor = scaling_factor;
             scaling_factor = 0.0;
-            std::vector<size_t> sampled_original_indices;
-            Dataset fit_points = sample_points( points, &sampled_original_indices );
-            if ( fit_points.size() == 0 ) {
+            if ( points.size() == 0 ) {
                 throw std::invalid_argument( "cannot fit hash builder on an empty dataset" );
             }
-            const size_t fit_n = fit_points.size();
-            offset = mean_point( fit_points );
-            const float diameter = approximate_diameter<Distance>( fit_points );
+            const size_t fit_n = points.size();
+            offset = mean_point( points );
+            const float diameter = approximate_diameter<Distance>( points );
             const size_t sample_repetitions = 4;
             LOG_INFO( "diameter", diameter );
-
-            std::vector<uint32_t> sampled_groups( fit_n );
-            for ( size_t i = 0; i < fit_n; i++ ) {
-                sampled_groups.at(i) = group_fun( sampled_original_indices.at(i) );
-            }
 
             auto compute_avg_collisions = [&]( float scale ) -> float {
                 std::vector<PrefixMap<typename Output::Value>> pmaps( sample_repetitions );
                 Output hasher( offset, scale, dimensions, sample_repetitions );
-                PrefixMap<typename Output::Value>::populate_from( pmaps, fit_points, hasher );
+                PrefixMap<typename Output::Value>::populate_from( pmaps, points, hasher );
 
                 size_t collisions = 0;
                 for ( auto& pmap : pmaps ) {
                     auto cursor = pmap.create_pair_cursor_grouped(
                         hasher.get_concatenations(),
                         std::nullopt,
-                        [&]( uint32_t x ) { return sampled_groups.at(x); } );
+                        [&]( uint32_t x ) { return group_fun(x); } );
                     collisions += cursor.total_collisions();
                 }
                 return static_cast<float>( collisions ) / pmaps.size();

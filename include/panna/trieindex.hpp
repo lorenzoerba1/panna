@@ -36,6 +36,8 @@ namespace panna {
         Dataset current_query;
         // Hash tables used by LSH.
         std::vector<PrefixMap<THashValue>> lsh_maps;
+        // For each repetition, stores the prefix-1 bucket ids from previous rehashes.
+        std::vector<std::vector<std::vector<uint32_t>>> rehash_prefix_buckets;
         // How to build hash functions
         typename Hasher::Builder builder;
         // How to hash the points. Initialized upon the first call to "rebuild"
@@ -57,6 +59,7 @@ namespace panna {
 
             static_assert( std::is_same<Hasher, typename Hasher::Builder::Output>::value );
             lsh_maps.resize( repetitions );
+            rehash_prefix_buckets.resize( repetitions );
         }
 
         template <typename Archive>
@@ -171,12 +174,45 @@ namespace panna {
             hashed_points = dataset.size();
         }
 
+    private:
+        void record_current_prefix_buckets() {
+            if ( lsh_maps.empty() ) {
+                return;
+            }
+            if ( rehash_prefix_buckets.size() != lsh_maps.size() ) {
+                rehash_prefix_buckets.resize( lsh_maps.size() );
+            }
+            for ( size_t rep = 0; rep < lsh_maps.size(); rep++ ) {
+                std::vector<uint32_t> buckets;
+                buckets.reserve( dataset.size() );
+                lsh_maps.at(rep).fill_prefix_bucket_ids( 1, buckets );
+                rehash_prefix_buckets.at(rep).push_back( std::move( buckets ) );
+            }
+        }
+
+        bool seen_in_previous_rehashes( size_t repetition, uint32_t a_idx, uint32_t b_idx ) const {
+            if ( repetition >= rehash_prefix_buckets.size() ) {
+                return false;
+            }
+            const auto& history = rehash_prefix_buckets.at(repetition);
+            for ( const auto& buckets : history ) {
+                if ( a_idx < buckets.size() && b_idx < buckets.size() &&
+                     buckets.at(a_idx) == buckets.at(b_idx) ) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
     public:
 
         /// Rehash the index so that at the longest prefix there is a reasonable number of
         /// collisions of points from different groups.
         void rehash( std::function<uint32_t( uint32_t )> group_fun ) {
             Timer timer("reshashing");
+            if ( hasher.has_value() ) {
+                record_current_prefix_buckets();
+            }
             builder.fit(dataset, group_fun);
             hasher = builder.build( repetitions );
             for (auto & map : lsh_maps) {
@@ -331,6 +367,10 @@ namespace panna {
                         a_idx = tmp;
                     }
 
+                    if ( seen_in_previous_rehashes( repetition, a_idx, b_idx ) ) {
+                        continue;
+                    }
+
                     PointHandle a = dataset[a_idx];
                     PointHandle b = dataset[b_idx];
                     collision_cnt++;
@@ -393,6 +433,10 @@ namespace panna {
                         uint32_t tmp = b_idx;
                         b_idx = a_idx;
                         a_idx = tmp;
+                    }
+
+                    if ( seen_in_previous_rehashes( repetition, a_idx, b_idx ) ) {
+                        continue;
                     }
 
                     PointHandle a = dataset[std::get<0>( scratch.at(i) )];
