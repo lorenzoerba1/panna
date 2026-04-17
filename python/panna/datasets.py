@@ -13,6 +13,7 @@ import h5py
 import zipfile
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
+import argparse
 
 
 DATASETS_DIR = Path(os.environ.get("PANNA_DATA_DIR", "datasets"))
@@ -176,6 +177,34 @@ def available_datasets():
     return list(_DATASETS_INFO.keys())
 
 
+def _safe_l2_normalize_rows(data: np.ndarray, label: str) -> np.ndarray:
+    """Normalize rows with L2 norm, keeping zero/invalid rows at zero."""
+    out = np.array(data, dtype=np.float32, copy=True)
+    norms = np.linalg.norm(out, axis=1, keepdims=True)
+
+    # Rows with non-finite or non-positive norm cannot be normalized safely.
+    invalid_rows = (~np.isfinite(norms[:, 0])) | (norms[:, 0] <= 0.0)
+    invalid_count = int(np.count_nonzero(invalid_rows))
+    if invalid_count > 0:
+        logging.warning(
+            "safe normalization for %s: %d rows had non-finite/non-positive norm and were set to zero",
+            label,
+            invalid_count,
+        )
+
+    np.divide(out, norms, out=out, where=(~invalid_rows)[:, np.newaxis])
+    out[invalid_rows] = 0.0
+    out = np.nan_to_num(out, nan=0.0, posinf=0.0, neginf=0.0)
+    return out
+
+
+def _array_health_stats(data: np.ndarray) -> tuple[int, int]:
+    norms = np.linalg.norm(data, axis=1)
+    zero_norm_rows = int(np.count_nonzero(norms <= 0.0))
+    non_finite_values = int(np.count_nonzero(~np.isfinite(data)))
+    return zero_norm_rows, non_finite_values
+
+
 def load(
     name: str,
     pca_dimensions=None,
@@ -209,9 +238,9 @@ def load(
             test = pca.fit_transform(test)
 
     if normalize:
-        train /= np.linalg.norm(train, axis=1)[:,np.newaxis]
+        train = _safe_l2_normalize_rows(train, "train")
         if test is not None:
-            test /= np.linalg.norm(test, axis=1)[:,np.newaxis]
+            test = _safe_l2_normalize_rows(test, "test")
 
     if load_queries:
         return distance, train, test, distances
@@ -222,4 +251,55 @@ def load(
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    load("landmark-nomic-768-normalized")
+    parser = argparse.ArgumentParser(
+        description="Load PANNA datasets and print dimensions/health diagnostics."
+    )
+    parser.add_argument(
+        "--normalize",
+        action="store_true",
+        help="Apply safe L2 normalization before reporting stats.",
+    )
+    parser.add_argument(
+        "--center-mean",
+        action="store_true",
+        help="Center features before reporting stats.",
+    )
+    parser.add_argument(
+        "--standardize",
+        action="store_true",
+        help="Standardize features before reporting stats.",
+    )
+    args = parser.parse_args()
+
+    print("name,train_rows,dimension,test_rows,train_zero_norm_rows,train_non_finite,test_zero_norm_rows,test_non_finite")
+    for dataset_name in available_datasets():
+        try:
+            pca_dimensions = 4 if "pamap2" in dataset_name.lower() else None
+            loaded = load(
+                dataset_name,
+                pca_dimensions=pca_dimensions,
+                center_mean=args.center_mean,
+                load_queries=True,
+                normalize=args.normalize,
+                standardize=args.standardize,
+            )
+            if len(loaded) != 4:
+                raise RuntimeError(
+                    f"unexpected loader output arity for {dataset_name}: {len(loaded)}"
+                )
+            _, train, test, _ = loaded
+
+            train_zero, train_non_finite = _array_health_stats(train)
+            if test is not None:
+                test_zero, test_non_finite = _array_health_stats(test)
+                test_rows = test.shape[0]
+            else:
+                test_zero, test_non_finite = 0, 0
+                test_rows = 0
+
+            print(
+                f"{dataset_name},{train.shape[0]},{train.shape[1]},{test_rows},"
+                f"{train_zero},{train_non_finite},{test_zero},{test_non_finite}"
+            )
+        except Exception as exc:
+            print(f"{dataset_name},ERROR,{type(exc).__name__}:{exc}")

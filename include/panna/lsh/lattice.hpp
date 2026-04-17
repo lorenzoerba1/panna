@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 #include <numeric>
 #include <omp.h>
 #include <random>
@@ -277,6 +278,49 @@ namespace panna {
         std::vector<float> offset;
         float scaling_factor = 0.0;
         size_t dimensions = 0;
+
+        static constexpr float FIT_SAMPLE_RATIO = 0.2f;
+
+        static std::vector<uint32_t> sample_fit_indices( size_t n ) {
+            expect( n > 0 );
+            const size_t sample_size = std::max<size_t>( 1, static_cast<size_t>( std::ceil( n * FIT_SAMPLE_RATIO ) ) );
+            std::vector<uint32_t> all_indices( n );
+            std::iota( all_indices.begin(), all_indices.end(), 0 );
+            std::vector<uint32_t> sampled_indices;
+            sampled_indices.reserve( sample_size );
+            std::sample(
+                all_indices.begin(),
+                all_indices.end(),
+                std::back_inserter( sampled_indices ),
+                sample_size,
+                get_global_rng() );
+            return sampled_indices;
+        }
+
+        template <typename Hasher>
+        static void populate_from_sample(
+            std::vector<PrefixMap<typename LatticeLSH<K, Dataset, Distance>::Value>>& pmaps,
+            Dataset& points,
+            Hasher& hasher,
+            const std::vector<uint32_t>& sampled_indices ) {
+            std::vector<typename Hasher::Value> hashes;
+
+#pragma omp parallel for private( hashes )
+            for ( size_t i = 0; i < sampled_indices.size(); i++ ) {
+                const auto tid = omp_get_thread_num();
+                const uint32_t point_idx = sampled_indices.at( i );
+                hasher.hash( points[point_idx], hashes );
+                for ( size_t rep = 0; rep < pmaps.size(); rep++ ) {
+                    pmaps[rep].insert( tid, point_idx, hashes.at( rep ) );
+                }
+            }
+
+#pragma omp parallel for
+            for ( size_t rep = 0; rep < pmaps.size(); rep++ ) {
+                pmaps[rep].rebuild();
+            }
+        }
+
     public:
         using Output = LatticeLSH<K, Dataset, Distance>;
 
@@ -304,15 +348,18 @@ namespace panna {
                 throw std::invalid_argument( "cannot fit hash builder on an empty dataset" );
             }
             const size_t fit_n = points.size();
+            const auto sampled_indices = sample_fit_indices( fit_n );
+            const size_t sampled_n = sampled_indices.size();
             offset = mean_point(points);
             const float diameter = approximate_diameter<Distance>(points);
             const size_t sample_repetitions = 4;
             LOG_INFO("diameter", diameter);
+            LOG_INFO( "fit-n", fit_n, "sampled-fit-n", sampled_n );
 
             auto compute_avg_collisions = [&](float scale) -> float {
                 std::vector<PrefixMap<typename Output::Value>> pmaps(sample_repetitions);
                 Output hasher(offset, scale, dimensions, sample_repetitions);
-                PrefixMap<typename Output::Value>::populate_from(pmaps, points, hasher);
+                populate_from_sample( pmaps, points, hasher, sampled_indices );
 
                 size_t collisions = 0;
                 for (auto& pmap : pmaps) {
@@ -324,8 +371,8 @@ namespace panna {
             };
 
             // TODO: make these configurable to handle different scenarios
-            const float threshold_low = fit_n / 2.0;
-            const float threshold_high = fit_n * 2.0;
+            const float threshold_low = sampled_n / 2.0;
+            const float threshold_high = sampled_n * 2.0;
             LOG_INFO("threshold-low", threshold_low, "threshold_high", threshold_high);
 
             float low=0.0, high=diameter;
@@ -353,15 +400,18 @@ namespace panna {
                 throw std::invalid_argument( "cannot fit hash builder on an empty dataset" );
             }
             const size_t fit_n = points.size();
+            const auto sampled_indices = sample_fit_indices( fit_n );
+            const size_t sampled_n = sampled_indices.size();
             offset = mean_point( points );
             const float diameter = approximate_diameter<Distance>( points );
             const size_t sample_repetitions = 4;
             LOG_INFO( "diameter", diameter );
+            LOG_INFO( "fit-n", fit_n, "sampled-fit-n", sampled_n );
 
             auto compute_avg_collisions = [&]( float scale ) -> float {
                 std::vector<PrefixMap<typename Output::Value>> pmaps( sample_repetitions );
                 Output hasher( offset, scale, dimensions, sample_repetitions );
-                PrefixMap<typename Output::Value>::populate_from( pmaps, points, hasher );
+                populate_from_sample( pmaps, points, hasher, sampled_indices );
 
                 size_t collisions = 0;
                 for ( auto& pmap : pmaps ) {
@@ -375,8 +425,8 @@ namespace panna {
             };
 
             // TODO: make these configurable to handle different scenarios
-            const float threshold_low = std::sqrt(fit_n) / 2.0;
-            const float threshold_high = fit_n * 2.0;
+            const float threshold_low = std::sqrt( sampled_n ) / 2.0;
+            const float threshold_high = sampled_n * 2.0;
             LOG_INFO( "threshold-low", threshold_low, "threshold_high", threshold_high );
 
             float low = 2 * old_scaling_factor;

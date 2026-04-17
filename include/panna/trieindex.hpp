@@ -38,6 +38,9 @@ namespace panna {
         std::vector<PrefixMap<THashValue>> lsh_maps;
         // For each repetition, stores the prefix-1 bucket ids from previous rehashes.
         std::vector<std::vector<std::vector<uint32_t>>> rehash_prefix_buckets;
+        // Hashers used in completed rehash cycles, needed to account for
+        // different quantization widths in failure probability estimates.
+        std::vector<Hasher> rehash_history_hashers;
         // How to build hash functions
         typename Hasher::Builder builder;
         // How to hash the points. Initialized upon the first call to "rebuild"
@@ -179,6 +182,8 @@ namespace panna {
             if ( lsh_maps.empty() ) {
                 return;
             }
+            expect( hasher.has_value() );
+            rehash_history_hashers.push_back( *hasher );
             if ( rehash_prefix_buckets.size() != lsh_maps.size() ) {
                 rehash_prefix_buckets.resize( lsh_maps.size() );
             }
@@ -506,7 +511,24 @@ namespace panna {
         } // End search couples
 
         float fail_probability( float dist, size_t concat, size_t rep ) {
-            return failure_probability( *hasher, dist, concat, rep, lsh_maps.size() );
+            const float current_cycle_failure =
+                failure_probability( *hasher, dist, concat, rep, lsh_maps.size() );
+
+            // Each completed rehash cycle fully exhausts prefix=1 for all repetitions,
+            // but with its own quantization width (different hasher fit). We therefore
+            // multiply residual failures using the exact historical hasher of each cycle.
+            float history_failure = 1.0f;
+            for ( const auto& historical_hasher : rehash_history_hashers ) {
+                const size_t historical_reps = historical_hasher.get_repetitions();
+                history_failure *= failure_probability(
+                    historical_hasher,
+                    dist,
+                    1,
+                    historical_reps,
+                    historical_reps );
+            }
+
+            return current_cycle_failure * history_failure;
         }
 
         // FIXME: I don't think this belongs here, form an API standpoint
