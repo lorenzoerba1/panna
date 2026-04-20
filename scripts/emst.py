@@ -202,7 +202,10 @@ def already_run(key: dict) -> bool:
         return False
     with FileLock(LOCKFILE):
         df = pl.read_ndjson(DATABASE_FILE)
-        predicate = [pl.col(k) == v for k, v in key.items()]
+        predicate = [
+            pl.col(k).is_null() if v is None else (pl.col(k) == v)
+            for k, v in key.items()
+        ]
         return len(df.filter(predicate)) > 0
 
 

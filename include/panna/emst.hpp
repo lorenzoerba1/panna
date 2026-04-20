@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cstdlib>
 #include <iostream>
 #include <iterator>
 #include <limits>
@@ -356,6 +357,26 @@ namespace panna {
         size_t index_size_bytes = 0;
         std::vector<ExecutionProfileElement> profile;
 
+        static size_t get_worker_count( size_t max_repetitions ) {
+            const size_t hw = std::max<size_t>( 1, std::thread::hardware_concurrency() );
+            size_t workers = ( hw > 1 ) ? ( hw - 1 ) : 1;
+
+            // Cap default fan-out to avoid memory-bandwidth saturation on high-core hosts.
+            workers = std::min( workers, static_cast<size_t>( 32 ) );
+            workers = std::min( workers, std::max<size_t>( 1, max_repetitions ) );
+
+            if ( const char* env = std::getenv( "PANNA_EMST_THREADS" ); env != nullptr ) {
+                char* end = nullptr;
+                const unsigned long parsed = std::strtoul( env, &end, 10 );
+                if ( end != env && *end == '\0' && parsed > 0 ) {
+                    workers = static_cast<size_t>( parsed );
+                    workers = std::min( workers, std::max<size_t>( 1, max_repetitions ) );
+                }
+            }
+
+            return std::max<size_t>( 1, workers );
+        }
+
     public:
         EMST() {}
         /**
@@ -675,8 +696,10 @@ namespace panna {
             std::atomic<float> max_weight( std::numeric_limits<float>::infinity() );
             float tree_weight = 0;
             std::atomic_size_t count_distances( 0 ), count_collisions( 0 );
-            const size_t hardware_concurrency = std::thread::hardware_concurrency();
-            const size_t max_threads = ( hardware_concurrency > 1 ) ? hardware_concurrency - 1 : 1;
+            const size_t max_threads = get_worker_count( max_repetitions );
+            LOG_INFO( "msg", "parallelism config",
+                      "worker_threads", max_threads,
+                      "max_repetitions", max_repetitions );
 
             std::atomic_bool found( false );
             while ( !found.load() ) {
@@ -874,8 +897,10 @@ namespace panna {
 
            std::atomic<float> max_weight( std::numeric_limits<float>::infinity() );
             std::atomic_size_t count_distances( 0 ), count_collisions( 0 );
-            const size_t hardware_concurrency = std::thread::hardware_concurrency();
-            const size_t max_threads = ( hardware_concurrency > 1 ) ? hardware_concurrency - 1 : 1;
+            const size_t max_threads = get_worker_count( max_repetitions );
+            LOG_INFO( "msg", "parallelism config",
+                      "worker_threads", max_threads,
+                      "max_repetitions", max_repetitions );
 
             std::atomic_bool found( false );
             for ( size_t prefix = max_hashbits; prefix > 0 && !found; prefix-- ) {

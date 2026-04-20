@@ -99,8 +99,6 @@ def _load_chem(path: Path):
         data_path = path.parent / "ethylene_CO.txt"
         data = pd.read_csv(data_path, sep=r'\s+').to_numpy().astype(np.float32)
     data = np.nan_to_num(data)
-    # Remove duplicate rows
-    data = np.unique(data, axis=0)
     return data, None, None
         
 
@@ -224,7 +222,13 @@ def load(
     local_name = DATASETS_DIR / Path(urlparse(url).path).name
     _download(url, local_name)
     train, test, distances = loader(local_name)
-
+    # Remove duplicate rows (if any) from train set
+    train = np.unique(train, axis=0)
+    # Remove completely NaN and infinite values from train and test sets, don't substitute with numbers
+    train = train[~np.isnan(train).any(axis=1) & ~np.isinf(train).any(axis=1)]
+    if test is not None:
+        test = test[~np.isnan(test).any(axis=1) & ~np.isinf(test).any(axis=1)]
+    
     if center_mean or standardize:
         scaler = StandardScaler(with_std=standardize)
         train = scaler.fit_transform(train)
