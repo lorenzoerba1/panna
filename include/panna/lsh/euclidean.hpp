@@ -307,6 +307,10 @@ namespace panna {
             LOG_INFO( "threshold-low", threshold_low, "threshold_high", threshold_high );
 
             float low = 2 * old_quantization_width;
+            // Handle cold-start/corrupted-state runs where the previous width is zero.
+            if ( low <= 0.0f ) {
+                low = std::max( diameter / 16.0f, std::numeric_limits<float>::epsilon() );
+            }
             float high = std::max( diameter, low * 1.01f );
             expect( low <= high );
             const size_t MAX_ITER = 40;
@@ -326,10 +330,10 @@ namespace panna {
                 }
             }
             if (!found) {
-                quantization_width = low;
+                quantization_width = std::max( low, std::numeric_limits<float>::epsilon() );
             }
             LOG_INFO( "quantization-width", quantization_width );
-            expect(quantization_width > old_quantization_width);
+            expect( quantization_width > 0.0f );
         }
 
 

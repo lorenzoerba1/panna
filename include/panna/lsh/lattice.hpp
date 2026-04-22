@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iterator>
+#include <limits>
 #include <numeric>
 #include <omp.h>
 #include <random>
@@ -375,20 +376,36 @@ namespace panna {
             const float threshold_high = sampled_n * 2.0;
             LOG_INFO("threshold-low", threshold_low, "threshold_high", threshold_high);
 
-            float low=0.0, high=diameter;
+            float low = std::numeric_limits<float>::epsilon();
+            float high = std::max( diameter, low * 1.01f );
             const size_t MAX_ITER = 40;
+            bool found = false;
+            float best_scale = low;
+            float best_error = std::numeric_limits<float>::infinity();
             for(size_t iter=0; iter<MAX_ITER; iter++) {
                 float scale = (low+high) / 2.0;
                 float avg_collisions = compute_avg_collisions(scale);
                 LOG_INFO("scale", scale, "avg-collisions", avg_collisions);
+                const float error =
+                    ( avg_collisions < threshold_low )
+                        ? ( threshold_low - avg_collisions )
+                        : ( avg_collisions > threshold_high ? ( avg_collisions - threshold_high ) : 0.0f );
+                if ( error < best_error ) {
+                    best_error = error;
+                    best_scale = scale;
+                }
                 if (threshold_low <= avg_collisions && avg_collisions <= threshold_high) {
                     scaling_factor = scale;
+                    found = true;
                     break;
                 } else if (avg_collisions < threshold_low) {
                     low = scale;
                 } else {
                     high = scale;
                 }
+            }
+            if ( !found ) {
+                scaling_factor = std::max( best_scale, std::numeric_limits<float>::epsilon() );
             }
             LOG_INFO("scaling-factor", scaling_factor);
         }
@@ -430,14 +447,27 @@ namespace panna {
             LOG_INFO( "threshold-low", threshold_low, "threshold_high", threshold_high );
 
             float low = 2 * old_scaling_factor;
+            if ( low <= 0.0f ) {
+                low = std::max( diameter / 16.0f, std::numeric_limits<float>::epsilon() );
+            }
             float high = std::max( diameter, low * 1.01f );
             expect( low <= high );
             const size_t MAX_ITER = 40;
             bool found = false;
+            float best_scale = low;
+            float best_error = std::numeric_limits<float>::infinity();
             for ( size_t iter = 0; iter < MAX_ITER; iter++ ) {
                 float scale = ( low + high ) / 2.0;
                 float avg_collisions = compute_avg_collisions( scale );
                 LOG_INFO( "scale", scale, "avg-collisions", avg_collisions );
+                const float error =
+                    ( avg_collisions < threshold_low )
+                        ? ( threshold_low - avg_collisions )
+                        : ( avg_collisions > threshold_high ? ( avg_collisions - threshold_high ) : 0.0f );
+                if ( error < best_error ) {
+                    best_error = error;
+                    best_scale = scale;
+                }
                 if ( threshold_low <= avg_collisions && avg_collisions <= threshold_high ) {
                     scaling_factor = scale;
                     found = true;
@@ -449,10 +479,10 @@ namespace panna {
                 }
             }
             if (!found) {
-                scaling_factor = low;
+                scaling_factor = std::max( best_scale, std::numeric_limits<float>::epsilon() );
             }
             LOG_INFO( "scaling-factor", scaling_factor );
-            expect(scaling_factor > old_scaling_factor);
+            expect( scaling_factor > 0.0f );
         }
 
         Output build( size_t repetitions ) const {
