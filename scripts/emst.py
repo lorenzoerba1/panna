@@ -21,13 +21,16 @@ import argparse
 import multiprocessing
 import resource
 import fast_hdbscan
+import hashlib
+import gzip
 
 
 # We do not use an actual database, but store results in a newline-delimited json file,
 # because then it's more friendly to store it in git along with the code to keep track
 # of the history of the experiments, facilitating merges
-DATABASE_FILE = Path("emst.json")
-LOCKFILE = Path("emst.lock")
+DATABASE_DIR = Path("results")
+DATABASE_FILE = DATABASE_DIR / "emst.json"
+LOCKFILE = DATABASE_DIR / "emst.lock"
 TIMEOUT_S = 5 * 3600 # 5 hours timeout
 
 
@@ -115,6 +118,24 @@ def get_commit_date(git_version: str) -> str | None:
         return None
 
 
+class HashWriter:
+    """Computes the hash of an object as it's being written."""
+    def __init__(self):                                                                        
+        self.hasher = hashlib.sha256()
+    def write(self, data):                                                                             
+        self.hasher.update(data)                                                                       
+        return len(data)
+    def flush(self):
+        pass
+    def hexdigest(self):
+        return self.hasher.hexdigest()
+
+def profile_sha_path(profile_list):
+    h = HashWriter()
+    profile = pl.DataFrame(profile_list)
+    profile.write_parquet(h)
+    return str(DATABASE_DIR / (h.hexdigest() + ".pq"))
+
 
 def data_sha(array: np.ndarray) -> str:
     """return the string representing the sha512 code for the given numpy array"""
@@ -179,6 +200,7 @@ class Entry(object):
     memory_kb: int | None = None
     emst_weight: float | None = None
     detail: dict | None = None
+    profile_path: str | None = None
 
     def as_dict(self):
         return asdict(self)
@@ -341,8 +363,15 @@ def run_single(
         entry.detail = detail
 
 
-    # record the results by appending to the file
+    # record the results by appending to the file and by recording
+    # the detail in a parquet file by the side
     with FileLock(LOCKFILE):
+        if "profile" in entry.detail:
+            entry.profile_path = profile_sha_path(entry.detail["profile"])
+            profile = pl.DataFrame(entry.detail["profile"])
+            profile.write_parquet(entry.profile_path)
+            del entry.detail["profile"]
+
         with open(DATABASE_FILE, "a") as fp:
             json.dump(entry.as_dict(), fp)
             print(file=fp)
@@ -464,11 +493,42 @@ def merge_results(other_file: Path):
         df_unique = df.unique(subset=primary_keys, keep="first")
 
         df_unique.write_ndjson(DATABASE_FILE)
-           
+
+
+
+def convert_results(path: Path):
+
+    df = (
+        pl.read_ndjson(path)
+        .with_columns(
+            profile_path=pl.col("detail")
+            .struct.field("profile")
+            .map_elements(profile_sha_path, return_dtype=pl.String)
+        )
+    )
+    for profile, profile_path in df.select(
+        pl.col("detail").struct.field("profile").alias("profile"), "profile_path"
+    ).iter_rows():
+        if profile_path is not None:
+            profile = pl.DataFrame(profile)
+            profile.write_parquet(profile_path)
+        else:
+            assert profile is None
+
+    keep = [f.name for f in df.schema["detail"].fields if f.name != "profile"]
+    converted = df.with_columns(
+        pl.struct([pl.col("detail").struct.field(n) for n in keep]).alias("detail")
+    )
+    converted.write_ndjson(DATABASE_FILE)
+    
+
 
 def main():
     parser = argparse.ArgumentParser(description="EMST experiments script.")
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    convert_parser = subparsers.add_parser("convert", help="Convert data file")
+    convert_parser.add_argument("file", type=Path, help="path to the ndjson file to convert")
 
     # run command
     run_parser = subparsers.add_parser("run", help="Run experiments.")
@@ -505,6 +565,8 @@ def main():
         show_results()
     elif args.command == "merge":
         merge_results(args.file)
+    elif args.command == "convert":
+        convert_results(args.file)
 
 
 if __name__ == "__main__":

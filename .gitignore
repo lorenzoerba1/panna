@@ -39,3 +39,4 @@ bench
 /.cache
 __marimo__/
 *.tex
+emst.lock
