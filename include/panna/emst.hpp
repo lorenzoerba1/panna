@@ -948,8 +948,9 @@ namespace panna {
 
                     completed_repetitions++;
 
-                    std::vector<Edge> tree( running_result.read()->tree );
-                    CoreDistances core_distances(running_result.read()->neighborhoods);
+                    auto snapshot = running_result.read();
+                    std::vector<Edge> tree( snapshot->tree );
+                    CoreDistances core_distances(snapshot->neighborhoods);
                     for (auto & edge : update) {
                         core_distances.update(edge);
                     }
