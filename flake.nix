@@ -154,6 +154,7 @@
               numpy
               pandas
               polars
+              pyarrow
               h5py
               panna-python
               fast-hdbscan
@@ -197,6 +198,7 @@
                   numpy
                   pandas
                   polars
+                  pyarrow
                   matplotlib
                   seaborn
                   filelock
