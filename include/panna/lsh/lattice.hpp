@@ -120,7 +120,6 @@ namespace panna {
         float scaling_factor;
         size_t dimensions;
         size_t repetitions;
-        Dataset random_vectors; // TODO: remove
         RandomDotProducts random_dots;
         std::vector<float> offsets;
         // the corrections to apply to projections so that
@@ -130,44 +129,6 @@ namespace panna {
         std::vector<float> projection_bias;
         // scratch space
         std::vector<std::vector<float>> tl_scratch;
-
-        std::array<float, LATTICE_DIMENSIONS> project( typename Dataset::PointHandle point,
-                                                       size_t concatenation,
-                                                       size_t repetition ) const {
-            std::array<float, LATTICE_DIMENSIONS> out;
-            const size_t start = repetition * LATTICE_DIMENSIONS * K + concatenation * LATTICE_DIMENSIONS;
-            const size_t end = start + LATTICE_DIMENSIONS;
-            expect(end <= random_vectors.size());
-            for (size_t i=0; i<LATTICE_DIMENSIONS; i++) {
-                out[i] = dot_product(point, random_vectors[start+i]) / scaling_factor - corrections.at(start+i) + offsets.at(start+i);
-            }
-            // std::cout << "[ ";
-            // for(size_t i=0; i<LATTICE_DIMENSIONS; i++) {
-            //     std::cout << out[i] << " ";
-            // }
-            // std::cout << "]\n";
-            return out;
-        }
-
-        std::array<float, LATTICE_DIMENSIONS> project( const std::vector<float> & projections,
-                                                       size_t concatenation,
-                                                       size_t repetition ) const {
-            std::array<float, LATTICE_DIMENSIONS> out;
-            const size_t start = repetition * LATTICE_DIMENSIONS * K + concatenation * LATTICE_DIMENSIONS;
-            const size_t end = start + LATTICE_DIMENSIONS;
-            expect(end <= random_vectors.size());
-            for (size_t i=0; i<LATTICE_DIMENSIONS; i++) {
-                out.at(i) = projections.at(start + i) / scaling_factor - corrections.at( start + i ) +
-                         offsets.at( start + i );
-            }
-            // std::cout << "[ ";
-            // for(size_t i=0; i<LATTICE_DIMENSIONS; i++) {
-            //     std::cout << out[i] << " ";
-            // }
-            // std::cout << "]\n";
-            return out;
-        }
-
 
     public:
         LatticeLSH() {
@@ -189,14 +150,12 @@ namespace panna {
             scaling_factor( scaling_factor ),
             dimensions( dimensions ),
             repetitions( repetitions ),
-            random_vectors( dimensions ),
             random_dots( std::max( dimensions, repetitions * K * LATTICE_DIMENSIONS ) ),
             corrections(),
             projection_bias() {
             for ( size_t vec_idx = 0; vec_idx < repetitions * K * LATTICE_DIMENSIONS; vec_idx++ ) {
                 std::vector<float> dir = sample_random_normal_vector( dimensions, rng );
                 rescale( dir, 1.0 / std::sqrt( LATTICE_DIMENSIONS ) );
-                random_vectors.push_back( dir.begin(), dir.end() );
                 float offset = sample_random_01(rng);
                 float correction = dot_product(dir, data_offset) / scaling_factor;
                 offsets.push_back( offset );
@@ -215,7 +174,6 @@ namespace panna {
             ar( data_offset,
                 scaling_factor,
                 repetitions,
-                random_vectors,
                 offsets,
                 corrections,
                 projection_bias );

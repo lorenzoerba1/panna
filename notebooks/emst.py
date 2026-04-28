@@ -10,7 +10,7 @@
 
 import marimo
 
-__generated_with = "0.21.0"
+__generated_with = "0.23.2"
 app = marimo.App(width="medium")
 
 
@@ -28,7 +28,7 @@ def _():
 
 @app.cell
 def _(mo):
-    sel_algo_version = mo.ui.text(label="algorithm version", value="2")
+    sel_algo_version = mo.ui.text(label="algorithm version", value="3")
     sel_algo_version
     return (sel_algo_version,)
 
@@ -108,7 +108,7 @@ def _(approximate_full, cs):
 
     approximate_full_tbl = (
         approximate_full
-        .pivot(index=["dataset"], on="epsilon", values=["running_time_s", "relative_error"])
+        .pivot(index=["dataset"], on="epsilon", values=["running_time_s", "relative_error"], aggregate_function="mean")
         .style
         .fmt_number(columns=cs.starts_with("running_time"))
         .fmt_percent(columns=cs.starts_with("relative_error"))

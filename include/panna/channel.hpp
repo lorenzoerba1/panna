@@ -1,9 +1,10 @@
 #pragma once
 
-#include <deque>
 #include <mutex>
 #include <optional>
 #include <semaphore>
+#include <stdexcept>
+#include <vector>
 
 namespace panna {
     /// A communication channel between threads. It has a fixed size, and readers
@@ -16,8 +17,11 @@ namespace panna {
         bool closed;
         /// How many messages can be in flight at any one time?
         size_t capacity;
-        /// The actual messages
-        std::deque<T> messages;
+        /// Ring buffer storage for messages.
+        std::vector<std::optional<T>> messages;
+        size_t head;
+        size_t tail;
+        size_t size;
         /// Synchronization primitive: allows waiting if there is no place to
         /// write a new message
         std::counting_semaphore<> available_slots;
@@ -31,10 +35,16 @@ namespace panna {
         explicit Channel( size_t capacity ):
             closed( false ),
             capacity( capacity ),
-            messages( 0 ),
+            messages( capacity ),
+            head( 0 ),
+            tail( 0 ),
+            size( 0 ),
             available_slots( capacity ),
             available_messages( 0 ),
             mutex() {
+            if ( capacity == 0 ) {
+                throw std::invalid_argument( "channel capacity must be > 0" );
+            }
         }
 
         /// Send an items (moving it) and returns `true` if the message has been sent
@@ -50,7 +60,9 @@ namespace panna {
                 available_slots.release();
                 return false;
             }
-            messages.push_back(std::move(message));
+            messages.at(tail) = std::move(message);
+            tail = ( tail + 1 ) % capacity;
+            size++;
             // signal that there are messages available
             available_messages.release();
             return true;
@@ -60,12 +72,14 @@ namespace panna {
             // potentially wait for new messages to be available
             available_messages.acquire();
             std::lock_guard<std::mutex> lock(mutex);
-            if (messages.empty()) {
+            if ( size == 0 ) {
                 // the queue has been closed and emptied
                 return std::nullopt;
             }
-            T msg = std::move(messages.front());
-            messages.pop_front();
+            T msg = std::move( *messages.at( head ) );
+            messages.at( head ).reset();
+            head = ( head + 1 ) % capacity;
+            size--;
             // mark a slot as available
             available_slots.release();
             return msg;

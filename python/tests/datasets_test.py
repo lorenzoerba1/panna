@@ -45,7 +45,7 @@ if __name__ == "__main__":
     for path in paths:
         # Use new dataset loader API. Pass pca_dimensions=4 for PAMAP2-like datasets.
         stem = Path(path).stem
-        _, data = panna.datasets.load(name=stem, pca_dimensions=4 if 'pamap2' in stem.lower() else None)
+        _, data = panna.datasets.load(name=stem, pca_dimensions=4 if 'pamap2' in stem.lower() else None, normalize=True if "angular" in stem.lower() else False)
         data = np.array(data).astype(np.float32)
 
         emst = panna.EMST(data, delta=0.01, epsilon=0, family="lattice")
