@@ -46,7 +46,7 @@ namespace panna {
         explicit RunningResult(): tree(), filter( 0 ) {
         }
         explicit RunningResult( std::vector<Edge>&& tree, DSU&& filter ):
-            tree( tree ), filter( filter ) {
+            tree( std::move( tree ) ), filter( std::move( filter ) ) {
         }
     };
 
@@ -339,7 +339,9 @@ namespace panna {
         explicit MRRunningResult( std::vector<Edge>&& tree,
                                   DSU&& filter,
                                   CoreDistances&& neighborhoods ):
-            tree( tree ), filter( filter ), neighborhoods( neighborhoods ) {
+            tree( std::move( tree ) ),
+            filter( std::move( filter ) ),
+            neighborhoods( std::move( neighborhoods ) ) {
         }
     };
 
