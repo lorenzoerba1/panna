@@ -10,7 +10,7 @@
 
 import marimo
 
-__generated_with = "0.23.2"
+__generated_with = "0.23.4"
 app = marimo.App(width="medium")
 
 
@@ -44,7 +44,7 @@ def _(pl, sel_algo_version):
         "dataset_sample_seed"
     ]
     all_results = (
-        pl.read_ndjson("emst.json")
+        pl.read_ndjson("results/emst.json", infer_schema_length=None)
         .filter(pl.col("version") == sel_algo_version.value)
         .filter(pl.col("timestamp") == pl.col("timestamp").max().over(pkey))
         .with_columns(pl.col("dataset").str.replace("-[0-9]+-(euclidean|angular|normalized)", ""))
@@ -69,6 +69,18 @@ def _(all_results, pl):
         .sort("dataset", "algorithm", "repetitions")
     )
     exact_full.style
+    return
+
+
+@app.cell
+def _(all_results, pl):
+    (
+        all_results
+        .filter(pl.col("parameters").struct.field("epsilon") == 0.0)
+        # .filter(pl.col("dataset_sample_frac"))
+        .unnest("detail")
+        .filter(pl.col("flexibility@0.0").is_null().not_())
+    )
     return
 
 
@@ -137,14 +149,12 @@ def _(all_results, mo):
 
 @app.cell
 def _(all_results, pl, sel_dataset, sel_epsilon):
-    profile = all_results.filter(
+    profile_path = all_results.filter(
         pl.col("dataset") == sel_dataset.value,
         pl.col("parameters").struct.field("epsilon") == sel_epsilon.value,
         pl.col("dataset_sample_frac").is_null()
-    ).select(
-        pl.col("detail").struct.field("profile")
-    ).explode("profile").unnest("profile").with_columns(elapsed_s = pl.col("elapsed_ms") / 1000)
-
+    ).select("profile_path").to_dicts()[0]["profile_path"]
+    profile = pl.read_parquet(profile_path).with_columns(elapsed_s = pl.col("elapsed_ms") / 1000)
     (
         profile.select("elapsed_s", "emst_confirmed_weight", "emst_weight_lower_bound", "emst_total_weight")
             .unpivot(index="elapsed_s", variable_name="type", value_name="weight")

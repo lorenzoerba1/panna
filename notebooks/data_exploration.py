@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.18.4"
+__generated_with = "0.23.4"
 app = marimo.App()
 
 
@@ -10,19 +10,35 @@ def _():
     import panna
     import panna.datasets
     import numpy as np
-    return mo, np, panna
+    import fast_hdbscan
+    import time
+
+    return fast_hdbscan, mo, np, panna, time
 
 
 @app.cell
-def _(panna):
-    _, data = panna.datasets.load("ht")
+def _(np, panna):
+    def load(dataset="gist-960-euclidean", sample_frac=0.01):
+        _, data = panna.datasets.load(dataset)
+        if sample_frac is None:
+            return data
+        sample_seed = 1234
+        sample_size = int(sample_frac * data.shape[0])
+        print(f"sampling {sample_size} elements")
+        rng = np.random.default_rng(sample_seed)
+        indices = rng.choice(data.shape[0], sample_size)
+        data = data[indices]
+        print("loaded data")
+        return data
 
+    data = load("fashion-mnist-784-euclidean", sample_frac=None)
     return (data,)
 
 
 @app.cell
 def _():
     import matplotlib.pyplot as plt
+
     return (plt,)
 
 
@@ -30,7 +46,7 @@ def _():
 def _(data, panna):
     num_buckets = 1000
     min_distance=0.0
-    max_distance=20000.0
+    max_distance=12000.0
     samples=1000000
     counts, bounds = panna.distance_histogram(
         data, num_buckets, min_distance, max_distance, samples
@@ -44,22 +60,21 @@ def _(bounds, counts, distances, plt):
     plt.plot(bounds, counts)
     plt.axvline(maxsampled[1], color="red")
     plt.axvline(distances.max(), color="green")
+    plt.annotate("max tree edge", xy=(distances.max(), 50000))
+    plt.annotate("diameter", xy=(maxsampled[1], 50000))
     return
 
 
 @app.cell
-def _():
-    import fast_hdbscan
-    return (fast_hdbscan,)
-
-
-@app.cell
-def _(data, fast_hdbscan, mo):
+def _(data, fast_hdbscan, mo, time):
     @mo.cache
     def compute_emst(data):
-        return fast_hdbscan.hdbscan.compute_minimum_spanning_tree(data, min_samples=0)
+        start = time.time()
+        res = fast_hdbscan.hdbscan.compute_minimum_spanning_tree(data, min_samples=0)
+        end = time.time()
+        return res, end - start
 
-    res = compute_emst(data)
+    res, fast_hdbscan_elapsed_s = compute_emst(data)
     return (res,)
 
 
@@ -94,6 +109,13 @@ def _(distances):
 @app.cell
 def _(distances, plt):
     plt.plot(distances)
+    return
+
+
+@app.cell
+def _(data, panna):
+    algo = panna.EMST(data, epsilon=0.0, delta=0.1, repetitions=512, family="lattice")
+    myemst = algo.find_mst()
     return
 
 

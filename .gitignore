@@ -40,3 +40,4 @@ bench
 __marimo__/
 *.tex
 emst.lock
+.claude
