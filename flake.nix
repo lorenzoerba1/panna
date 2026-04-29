@@ -173,9 +173,9 @@
           contents = [
             python-interpreter
             pkgs.cacert
-            pkgs.	coreutils-full
+            pkgs.coreutils-full
           ];
-          diskSize = 1024 * 3; # necessary to fit the packages, otherwise the build fails
+          diskSize = 1024 * 10; # necessary to fit the packages, otherwise the build fails
         };
       in {
         packages.default = panna-python;
