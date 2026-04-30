@@ -21,7 +21,6 @@ import argparse
 import multiprocessing
 import resource
 import fast_hdbscan
-import hashlib
 import gzip
 
 
@@ -238,6 +237,25 @@ def tree_weight(data, edges):
     return float(ws.sum()), ws
 
 
+def save_tree(data: np.ndarray, edges: np.ndarray) -> Path:
+    xs = data[edges[:, 0]]
+    ys = data[edges[:, 1]]
+    ws = np.linalg.norm(xs - ys, axis=1)
+    m = hashlib.sha512()
+    m.update(edges[:,0].tobytes())
+    m.update(edges[:,1].tobytes())
+    m.update(ws.tobytes())
+    digest = m.hexdigest()
+    path = DATABASE_DIR / f"tree-{digest}.pq"
+    tree = pl.DataFrame(dict(
+        x=edges[:,0],
+        y=edges[:,1],
+        weight=ws
+    ))
+    tree.write_parquet(path)
+    return path
+
+
 def _run_ours(data, params):
     start = time.time()
     algo = panna.EMST(data, **params)
@@ -282,6 +300,8 @@ def worker(fn, data, params, queue, emst_stats=False):
                 f"mass-frac@{epsilon}": float(mass / npairs),
                 f"contrast@{epsilon}": float(contrast),
             }
+    tree_path = save_tree(data, res)
+    detail["tree_path"] = str(tree_path)
 
     _, detail_file_name = tempfile.mkstemp()
     with open(detail_file_name, "w") as fp:
