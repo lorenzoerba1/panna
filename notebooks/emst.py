@@ -28,7 +28,7 @@ def _():
 
 @app.cell
 def _(mo):
-    sel_algo_version = mo.ui.text(label="algorithm version", value="3")
+    sel_algo_version = mo.ui.text(label="algorithm version", value="4")
     sel_algo_version
     return (sel_algo_version,)
 

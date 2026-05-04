@@ -1201,7 +1201,7 @@ namespace panna {
                     }
                     auto edge = e.as_edge();
                     expect( edge.a != edge.b );
-                    expect( edge.weight > 0 );
+                    expect( edge.weight >= 0 );
                     tree.push_back( e.as_edge() );
                 } else {
                     // OPTIMIZE: we might be stashing some duplicates
