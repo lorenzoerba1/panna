@@ -21,7 +21,6 @@ import argparse
 import multiprocessing
 import resource
 import fast_hdbscan
-import hashlib
 import gzip
 
 
@@ -223,7 +222,7 @@ def already_run(key: dict) -> bool:
     if not DATABASE_FILE.is_file():
         return False
     with FileLock(LOCKFILE):
-        df = pl.read_ndjson(DATABASE_FILE)
+        df = pl.read_ndjson(DATABASE_FILE, infer_schema_length=None)
         predicate = [
             pl.col(k).is_null() if v is None else (pl.col(k) == v)
             for k, v in key.items()
@@ -236,6 +235,25 @@ def tree_weight(data, edges):
     ys = data[edges[:, 1]]
     ws = np.linalg.norm(xs - ys, axis=1)
     return float(ws.sum()), ws
+
+
+def save_tree(data: np.ndarray, edges: np.ndarray) -> Path:
+    xs = data[edges[:, 0]]
+    ys = data[edges[:, 1]]
+    ws = np.linalg.norm(xs - ys, axis=1)
+    m = hashlib.sha512()
+    m.update(edges[:,0].tobytes())
+    m.update(edges[:,1].tobytes())
+    m.update(ws.tobytes())
+    digest = m.hexdigest()
+    path = DATABASE_DIR / f"tree-{digest}.pq"
+    tree = pl.DataFrame(dict(
+        x=edges[:,0],
+        y=edges[:,1],
+        weight=ws
+    ))
+    tree.write_parquet(path)
+    return path
 
 
 def _run_ours(data, params):
@@ -263,6 +281,7 @@ def worker(fn, data, params, queue, emst_stats=False):
     weight, tree_weights = tree_weight(data, res)
     print(f"algorithm completed, taking {end - start} seconds and {peak_memory_kb} kb")
     if emst_stats:
+        print("computing statistics")
         diameter = panna.approximate_diameter(data)
         n = data.shape[0]
         npairs = n * (n - 1) // 2
@@ -270,7 +289,7 @@ def worker(fn, data, params, queue, emst_stats=False):
         bounds, counts, _mean_weight = compute_cumulative_distance_distribution(
             data, tree_weights.min(), diameter
         )
-        for epsilon in [0.0, 0.01, 0.1, 0.2]:
+        for epsilon in [0.0, 0.01, 0.1, 0.2, 0.5, 1.0]:
             flexibility = compute_flexibility(tree_weights, epsilon, diameter)
             threshold = tree_weights[-flexibility - 1]
             mass = compute_edge_mass(bounds, counts, threshold)
@@ -281,6 +300,8 @@ def worker(fn, data, params, queue, emst_stats=False):
                 f"mass-frac@{epsilon}": float(mass / npairs),
                 f"contrast@{epsilon}": float(contrast),
             }
+    tree_path = save_tree(data, res)
+    detail["tree_path"] = str(tree_path)
 
     _, detail_file_name = tempfile.mkstemp()
     with open(detail_file_name, "w") as fp:
@@ -397,7 +418,7 @@ def run_experiments(datasets=None):
                         "repetitions": 512,
                     },
                     sample_frac=sample_frac,
-                    emst_stats=sample_frac is None and epsilon == 0.0,
+                    emst_stats=epsilon == 0.0,
                 )
 
             if sample_frac is not None:
@@ -414,7 +435,7 @@ def show_results():
         print(f"Database file '{DATABASE_FILE}' not found.")
         return
     with FileLock(LOCKFILE):
-        df = pl.read_ndjson(DATABASE_FILE)
+        df = pl.read_ndjson(DATABASE_FILE, infer_schema_length=None)
 
         # Get the commit dates
         dates = (
@@ -478,7 +499,7 @@ def merge_results(other_file: Path):
         append(DATABASE_FILE, tmp)
         append(other_file, tmp)
 
-        df = pl.read_ndjson(tmp)
+        df = pl.read_ndjson(tmp, infer_schema_length=None)
         # From Entry.primary_key()
         primary_keys = [
             "version",
@@ -499,7 +520,7 @@ def merge_results(other_file: Path):
 def convert_results(path: Path):
 
     df = (
-        pl.read_ndjson(path)
+        pl.read_ndjson(path, infer_schema_length=None)
         .with_columns(
             profile_path=pl.col("detail")
             .struct.field("profile")
