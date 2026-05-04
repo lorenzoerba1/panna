@@ -39,4 +39,5 @@ bench
 /.cache
 __marimo__/
 *.tex
-emst.lock
+*.lock
+rsync.json
