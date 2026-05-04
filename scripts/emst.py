@@ -51,7 +51,7 @@ def get_git_version():
 def get_version(algorithm: str):
     from importlib.metadata import version
 
-    if algorithm == "k+":
+    if algorithm in ("k+", "k+scan"):
         return dict(version=panna.EMST.version, git_version=get_git_version())
     elif algorithm == "tutte":
         return dict(version=version("fast_hdbscan"), git_version="")
@@ -237,48 +237,74 @@ def tree_weight(data, edges):
     return float(ws.sum()), ws
 
 
-def save_tree(data: np.ndarray, edges: np.ndarray) -> Path:
-    xs = data[edges[:, 0]]
-    ys = data[edges[:, 1]]
-    ws = np.linalg.norm(xs - ys, axis=1)
+def save_tree(
+    data: np.ndarray,
+    edges: np.ndarray,
+    weights: np.ndarray | None = None,
+) -> Path:
+    if weights is None:
+        xs = data[edges[:, 0]]
+        ys = data[edges[:, 1]]
+        weights = np.linalg.norm(xs - ys, axis=1)
     m = hashlib.sha512()
     m.update(edges[:,0].tobytes())
     m.update(edges[:,1].tobytes())
-    m.update(ws.tobytes())
+    m.update(weights.tobytes())
     digest = m.hexdigest()
     path = DATABASE_DIR / f"tree-{digest}.pq"
     tree = pl.DataFrame(dict(
         x=edges[:,0],
         y=edges[:,1],
-        weight=ws
+        weight=weights
     ))
     tree.write_parquet(path)
     return path
 
 
-def _run_ours(data, params):
+def _run_ours(data, params, cluster: bool = False, cluster_k: int = 5):
     start = time.time()
     algo = panna.EMST(data, **params)
     elapsed_index_s = time.time() - start
+    if cluster:
+        tree_array, _core_array, _neighbors_array = algo.find_mst_dbscan(cluster_k)
+        elapsed_discovery_s = time.time() - start - elapsed_index_s
+        detail = dict(
+            index_s=elapsed_index_s,
+            discovery_s=elapsed_discovery_s,
+            cluster_k=cluster_k,
+        )
+        detail |= algo.stats()
+        edges = tree_array[:, 1:3].astype(np.int64)
+        tree_weights = tree_array[:, 0]
+        return edges, tree_weights, detail
     _, tree = algo.find_mst()
     elapsed_discovery_s = time.time() - start - elapsed_index_s
     detail = dict(index_s=elapsed_index_s, discovery_s=elapsed_discovery_s)
     detail |= algo.stats()
-    return tree, detail
+    return tree, None, detail
 
 
 def _run_tutte(data, params):
     print("run tutte institute algorithm")
     res = fast_hdbscan.hdbscan.compute_minimum_spanning_tree(data, **params)
-    return res[0].astype(np.int64), dict()
+    return res[0].astype(np.int64), None, dict()
 
 
-def worker(fn, data, params, queue, emst_stats=False):
+def _run_ours_with_options(data, params, cluster, cluster_k):
+    return _run_ours(data, params, cluster=cluster, cluster_k=cluster_k)
+
+
+def worker(fn, fn_args, queue, emst_stats=False):
     start = time.time()
-    res, detail = fn(data, params)
+    res, tree_weights_override, detail = fn(*fn_args)
     end = time.time()
     peak_memory_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    weight, tree_weights = tree_weight(data, res)
+    data = fn_args[0]
+    if tree_weights_override is None:
+        weight, tree_weights = tree_weight(data, res)
+    else:
+        tree_weights = np.asarray(tree_weights_override)
+        weight = float(tree_weights.sum())
     print(f"algorithm completed, taking {end - start} seconds and {peak_memory_kb} kb")
     if emst_stats:
         print("computing statistics")
@@ -300,7 +326,11 @@ def worker(fn, data, params, queue, emst_stats=False):
                 f"mass-frac@{epsilon}": float(mass / npairs),
                 f"contrast@{epsilon}": float(contrast),
             }
-    tree_path = save_tree(data, res)
+    tree_path = save_tree(
+        data,
+        res,
+        tree_weights if tree_weights_override is not None else None,
+    )
     detail["tree_path"] = str(tree_path)
 
     _, detail_file_name = tempfile.mkstemp()
@@ -319,6 +349,8 @@ def run_single(
     sample_frac: float | None,
     sample_seed: int = 1234,
     emst_stats: bool = False,
+    cluster: bool = False,
+    cluster_k: int = 5,
 ):
     # TODO: add the possibility to sample data, recording it to the primary key
     dataset = Path(dataset).stem
@@ -334,14 +366,19 @@ def run_single(
         indices = rng.choice(data.shape[0], sample_size)
         data = data[indices]
 
+    if cluster:
+        parameters = {**parameters, "cluster_k": cluster_k}
+
+    algo_name = "k+scan" if algorithm == "k+" and cluster else algorithm
+
     entry = Entry(
-        algorithm=algorithm,
+        algorithm=algo_name,
         parameters=parameters,
         dataset=dataset,
         dataset_sample_frac=sample_frac,
         dataset_sample_seed=sample_seed,
         dataset_sha=data_sha(data),
-        **get_version(algorithm),
+        **get_version(algo_name),
     )
     if already_run(entry.primary_key()):
         print(
@@ -350,7 +387,7 @@ def run_single(
         return
 
     runners = {
-        "k+": _run_ours,
+        "k+": _run_ours_with_options,
         "tutte": _run_tutte
     }
     if algorithm not in runners:
@@ -361,7 +398,11 @@ def run_single(
     # its memory usage. Use 'spawn' to avoid OpenMP-related fork issues.
     ctx = multiprocessing.get_context("spawn")
     queue = ctx.Queue()
-    proc = ctx.Process(target=worker, args=(runner, data, parameters, queue, emst_stats))
+    if algorithm == "k+":
+        runner_args = (data, parameters, cluster, cluster_k)
+    else:
+        runner_args = (data, parameters)
+    proc = ctx.Process(target=worker, args=(runner, runner_args, queue, emst_stats))
     proc.start()
     proc.join(timeout=TIMEOUT_S)
     if proc.exitcode is None:
@@ -398,7 +439,7 @@ def run_single(
             print(file=fp)
 
 
-def run_experiments(datasets=None):
+def run_experiments(datasets=None, cluster: bool = False, cluster_k: int = 5):
     if datasets is None:
         import panna.datasets
 
@@ -419,13 +460,16 @@ def run_experiments(datasets=None):
                     },
                     sample_frac=sample_frac,
                     emst_stats=epsilon == 0.0,
+                    cluster=cluster,
+                    cluster_k=cluster_k,
                 )
 
             if sample_frac is not None:
+                tutte_params = {"min_samples": 5 if cluster else 1}
                 run_single(
                     "tutte",
                     dataset,
-                    {},
+                    tutte_params,
                     sample_frac=sample_frac
                 )
 
@@ -482,7 +526,14 @@ def show_results():
             print("----- Sampled datasets ------")
             print(
                 df.filter(pl.col("machine") == m, pl.col("dataset_sample_frac").is_null().not_())
-                .select("dataset", "dataset_sample_frac", "algorithm", "parameters", "memory_kb", "running_time_s")
+                .select(
+                    "dataset",
+                    "dataset_sample_frac",
+                    "algorithm",
+                    "parameters",
+                    "memory_kb",
+                    "running_time_s",
+                )
                 .sort("*")
             )
 
@@ -559,6 +610,17 @@ def main():
         default=None,
         help="Dataset to run on. If not provided, all available datasets are used.",
     )
+    run_parser.add_argument(
+        "--cluster",
+        action="store_true",
+        help="Run the EMST clustering variant (uses find_mst_dbscan).",
+    )
+    run_parser.add_argument(
+        "--cluster-k",
+        type=int,
+        default=5,
+        help="Number of neighbors for the clustering variant (default: 5).",
+    )
 
     # show command
     subparsers.add_parser("show", help="Show results from emst.json.")
@@ -576,12 +638,15 @@ def main():
     args = parser.parse_args()
 
     if args.command == "run":
+        if args.dataset == "cluster" and not args.cluster:
+            args.cluster = True
+            args.dataset = None
         datasets_to_run = [args.dataset] if args.dataset else None
         if datasets_to_run:
             print(f"Running on specified datasets: {datasets_to_run}")
         else:
             print("Running on all available datasets.")
-        run_experiments(datasets_to_run)
+        run_experiments(datasets_to_run, cluster=args.cluster, cluster_k=args.cluster_k)
     elif args.command == "show":
         show_results()
     elif args.command == "merge":
