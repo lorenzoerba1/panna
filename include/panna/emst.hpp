@@ -24,6 +24,7 @@ namespace panna {
     // the underlying algorithm/implementation
     //
     // Changelog:
+    // 4: hash ancestor data structure, moved the connected components filter
     // 3: sampling on the tuning, all multiplications as AVX instructions
     // 2: unrolled Euclidean distance
     // 1: collect additional metrics (memory index and execution profile)
