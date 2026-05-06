@@ -28,13 +28,17 @@ def _():
 
 @app.cell
 def _(mo):
-    sel_algo_version = mo.ui.text(label="algorithm version", value="4")
-    sel_algo_version
+    sel_algo_version = mo.ui.dropdown(
+            ["0", "0.2.2", "1", "2", "3", "4"],
+            label="algorithm version",
+            value="4",
+        )
+    sel_algo_version 
     return (sel_algo_version,)
 
 
 @app.cell
-def _(pl, sel_algo_version):
+def _(mo, pl, sel_algo_version):
     pkey = [
         "algorithm",
         "parameters",
@@ -43,12 +47,20 @@ def _(pl, sel_algo_version):
         "dataset_sample_frac",
         "dataset_sample_seed"
     ]
-    all_results = (
-        pl.read_ndjson("results/emst.json", infer_schema_length=None)
+    full_results = (
+        pl.read_ndjson("new.json", infer_schema_length=None)
         .filter(pl.col("version") == sel_algo_version.value)
         .filter(pl.col("timestamp") == pl.col("timestamp").max().over(pkey))
         .with_columns(pl.col("dataset").str.replace("-[0-9]+-(euclidean|angular|normalized)", ""))
     )
+    algo_name = mo.ui.dropdown.from_series(full_results["algorithm"])
+    algo_name
+    return algo_name, full_results
+
+
+@app.cell
+def _(algo_name, full_results, pl):
+    all_results = full_results.filter(pl.col("algorithm") == algo_name.value)
     all_results
     return (all_results,)
 
