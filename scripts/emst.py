@@ -15,6 +15,7 @@ import numpy as np
 import time
 import json
 import tempfile
+import math
 from filelock import FileLock
 from datetime import datetime
 import argparse
@@ -139,6 +140,23 @@ def profile_sha_path(profile_list):
 def data_sha(array: np.ndarray) -> str:
     """return the string representing the sha512 code for the given numpy array"""
     return hashlib.sha512(array.tobytes()).hexdigest()
+
+
+def sanitize_for_json(obj):
+    if isinstance(obj, dict):
+        return {k: sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [sanitize_for_json(v) for v in obj]
+    if isinstance(obj, np.ndarray):
+        return sanitize_for_json(obj.tolist())
+    if isinstance(obj, np.integer):
+        return int(obj)
+    if isinstance(obj, np.floating):
+        val = float(obj)
+        return val if math.isfinite(val) else None
+    if isinstance(obj, float):
+        return obj if math.isfinite(obj) else None
+    return obj
 
 
 def compute_flexibility(tree, epsilon, diameter):
@@ -435,8 +453,8 @@ def run_single(
             del entry.detail["profile"]
 
         with open(DATABASE_FILE, "a") as fp:
-            json.dump(entry.as_dict(), fp)
-            print(file=fp)
+            line = json.dumps(sanitize_for_json(entry.as_dict()), allow_nan=False)
+            fp.write(line + "\n")
 
 
 def run_experiments(datasets=None, cluster: bool = False, cluster_k: int = 5):
