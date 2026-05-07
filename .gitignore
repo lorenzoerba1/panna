@@ -42,3 +42,5 @@ __marimo__/
 *.lock
 rsync.json
 .claude
+*pq
+new.json
