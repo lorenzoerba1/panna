@@ -48,7 +48,7 @@ def _(mo, pl, sel_algo_version):
         "dataset_sample_seed"
     ]
     full_results = (
-        pl.read_ndjson("new.json", infer_schema_length=None)
+        pl.read_ndjson("new2.json", infer_schema_length=None)
         .filter(pl.col("version") == sel_algo_version.value)
         .filter(pl.col("timestamp") == pl.col("timestamp").max().over(pkey))
         .with_columns(pl.col("dataset").str.replace("-[0-9]+-(euclidean|angular|normalized)", ""))

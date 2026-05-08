@@ -245,6 +245,9 @@ def already_run(key: dict) -> bool:
             pl.col(k).is_null() if v is None else (pl.col(k) == v)
             for k, v in key.items()
         ]
+        df = df.filter(
+            (pl.col("running_time_s").is_null()) | (pl.col("running_time_s") >= 0)
+        )
         return len(df.filter(predicate)) > 0
 
 
@@ -446,11 +449,13 @@ def run_single(
     # record the results by appending to the file and by recording
     # the detail in a parquet file by the side
     with FileLock(LOCKFILE):
-        if "profile" in entry.detail:
-            entry.profile_path = profile_sha_path(entry.detail["profile"])
-            profile = pl.DataFrame(entry.detail["profile"])
+        detail = entry.detail or {}
+        if "profile" in detail:
+            entry.profile_path = profile_sha_path(detail["profile"])
+            profile = pl.DataFrame(detail["profile"])
             profile.write_parquet(entry.profile_path)
-            del entry.detail["profile"]
+            del detail["profile"]
+        entry.detail = detail
 
         with open(DATABASE_FILE, "a") as fp:
             line = json.dumps(sanitize_for_json(entry.as_dict()), allow_nan=False)
