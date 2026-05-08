@@ -7,7 +7,6 @@
 #include <iterator>
 #include <limits>
 #include <vector>
-#include <unordered_map>
 #include <thread>
 
 #include "panna/billboard.hpp"
@@ -591,8 +590,8 @@ namespace panna {
                 std::vector<Edge> output;
                 std::vector<Edge> candidates;
                 candidates.reserve( 10 * dsu.size() );
-                std::unordered_map<uint64_t, Edge> best_by_component_pair;
-                best_by_component_pair.reserve( 10 * dsu.size() );
+                std::vector<std::pair<uint64_t, Edge>> candidate_pairs;
+                candidate_pairs.reserve( 10 * dsu.size() );
                 auto [cnt_dist, cnt_collisions] = table.search_pairs_different_groups(
                     repetition,
                     prefix,
@@ -614,19 +613,28 @@ namespace panna {
                             const uint32_t lo = std::min( ca, cb );
                             const uint32_t hi = std::max( ca, cb );
                             const uint64_t key = ( static_cast<uint64_t>( lo ) << 32 ) | hi;
-                            auto it = best_by_component_pair.find( key );
-                            if ( it == best_by_component_pair.end() || e.weight < it->second.weight ) {
-                                best_by_component_pair[key] = e;
-                            }
+                            candidate_pairs.emplace_back( key, e );
                         }
                         avg_denom += scratch.size();
                         return found.load(); // early stop if the solution has been found in the meantime
                     } );
-                candidates.reserve( best_by_component_pair.size() );
-                for ( auto&& [_, e] : best_by_component_pair ) {
-                    candidates.push_back( e );
-                }
-                if ( !candidates.empty() ) {
+                if ( !candidate_pairs.empty() ) {
+                    std::sort( candidate_pairs.begin(), candidate_pairs.end(),
+                               []( const auto& l, const auto& r ) {
+                                   if ( l.first != r.first ) {
+                                       return l.first < r.first;
+                                   }
+                                   return l.second.weight < r.second.weight;
+                               } );
+                    candidates.reserve( candidate_pairs.size() );
+                    uint64_t last_key = candidate_pairs.front().first;
+                    candidates.push_back( candidate_pairs.front().second );
+                    for ( size_t idx = 1; idx < candidate_pairs.size(); ++idx ) {
+                        if ( candidate_pairs.at( idx ).first != last_key ) {
+                            candidates.push_back( candidate_pairs.at( idx ).second );
+                            last_key = candidate_pairs.at( idx ).first;
+                        }
+                    }
                     std::sort( candidates.begin(), candidates.end() );
                     kruskal_new_edges( local_tree, candidates, dsu, output );
                 }
