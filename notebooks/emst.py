@@ -3,27 +3,30 @@
 #     "altair==6.0.0",
 #     "great-tables==0.21.0",
 #     "marimo",
-#     "numpy==2.4.3",
+#     "numpy==2.4.4",
+#     "polars==1.40.1",
+#     "seaborn==0.13.2",
 # ]
 # requires-python = ">=3.13"
 # ///
 
 import marimo
 
-__generated_with = "0.23.4"
+__generated_with = "0.23.6"
 app = marimo.App(width="medium")
 
 
 @app.cell
 def _():
     import marimo as mo
+    import numpy as np
     import polars as pl
     import polars.selectors as cs
     import great_tables
     from great_tables import GT
-    import altair as alt
+    import seaborn as sns
 
-    return cs, mo, pl
+    return cs, mo, pl, sns
 
 
 @app.cell
@@ -33,7 +36,7 @@ def _(mo):
             label="algorithm version",
             value="4",
         )
-    sel_algo_version 
+    sel_algo_version
     return (sel_algo_version,)
 
 
@@ -48,7 +51,7 @@ def _(mo, pl, sel_algo_version):
         "dataset_sample_seed"
     ]
     full_results = (
-        pl.read_ndjson("new.json", infer_schema_length=None)
+        pl.read_ndjson("results/emst.json", infer_schema_length=None)
         .filter(pl.col("version") == sel_algo_version.value)
         .filter(pl.col("timestamp") == pl.col("timestamp").max().over(pkey))
         .with_columns(pl.col("dataset").str.replace("-[0-9]+-(euclidean|angular|normalized)", ""))
@@ -84,15 +87,94 @@ def _(all_results, pl):
     return
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    # Dataset statistics
+    """)
+    return
+
+
 @app.cell
-def _(all_results, pl):
-    (
+def _(pl):
+    sizes = pl.DataFrame([
+        {"dataset": "fashion-mnist", "n": 60000, "d": 784},
+        {"dataset": "gist", "n": 1000000, "d": 960},
+        {"dataset": "glove", "n": 1183514, "d": 100},
+        {"dataset": "imagenet", "n": 1281167, "d": 512},
+        {"dataset": "landmark-nomic", "n": 760757, "d": 768},
+        {"dataset": "nytimes", "n": 290000, "d": 256},
+        {"dataset": "sift", "n": 1000000, "d": 128},
+        {"dataset": "simplewiki-openai", "n": 260372, "d": 3072},
+        {"dataset": "ht", "n": 928991, "d": 11},
+        {"dataset": "census", "n": 223223, "d": 500},
+        {"dataset": "pamap2", "n": 2872533, "d": 4},
+        {"dataset": "chem", "n": 4208261, "d": 12}
+    ])
+    return (sizes,)
+
+
+@app.cell
+def _(all_results, cs, pl, sizes):
+    dataset_stats = (
         all_results
+        .filter(pl.col("machine").struct.field("node_name") != "nixos")
         .filter(pl.col("parameters").struct.field("epsilon") == 0.0)
-        # .filter(pl.col("dataset_sample_frac"))
+        .filter(pl.col("dataset_sample_frac").is_null())
         .unnest("detail")
         .filter(pl.col("flexibility@0.0").is_null().not_())
+        .join(sizes, on="dataset", how="left")
+        .sort(pl.col("d"))
+        .with_columns(tree_edges = pl.col("n") - 1)
+        .with_columns(cs.starts_with("flexibility") / pl.col("tree_edges"))
     )
+    return (dataset_stats,)
+
+
+@app.cell
+def _(dataset_stats, mo):
+    tree_dataset = mo.ui.dropdown(dataset_stats["dataset"].to_list(), label="select dataset to show tree")
+    tree_dataset
+    return (tree_dataset,)
+
+
+@app.cell
+def _(dataset_stats, pl, sns, tree_dataset):
+    tree_info = dataset_stats.filter(pl.col("dataset") == tree_dataset.value).select("tree_path").to_dicts()[0]
+    sns.ecdfplot(
+        data=pl.read_parquet(tree_info["tree_path"]),
+        x="weight",
+    )
+    return
+
+
+@app.cell
+def _(cs, dataset_stats):
+    dataset_stats_tbl = (
+        dataset_stats
+        .select("dataset", "n", "d", "mass-frac@0.0", "mass-frac@0.5", "mass-frac@1.0", "flexibility@0.5", "flexibility@1.0")
+        .style
+        .fmt_percent(columns=cs.starts_with("mass"))
+        .fmt_percent(columns=cs.starts_with("flexibility"), decimals=3)
+        .fmt_number(columns=["n", "d"], decimals=0)
+        .tab_spanner(label="Edge mass (percent)", columns=cs.starts_with("mass"))
+        .cols_label_with(fn=lambda c: c.split("@")[-1], columns=cs.starts_with("mass"))
+        .tab_spanner(label="Edge flexibility", columns=cs.starts_with("flexibility"))
+        .cols_label_with(fn=lambda c: c.split("@")[-1], columns=cs.starts_with("flexibility"))
+    )
+
+    with open("notebooks/dataset-stats.tex", "w") as _fp:
+        print(dataset_stats_tbl.as_latex(), file=_fp)
+
+    dataset_stats_tbl
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    # Results
+    """)
     return
 
 
@@ -129,7 +211,6 @@ def _(all_results, pl):
 
 @app.cell
 def _(approximate_full, cs):
-
     approximate_full_tbl = (
         approximate_full
         .pivot(index=["dataset"], on="epsilon", values=["running_time_s", "relative_error"], aggregate_function="mean")
@@ -184,8 +265,31 @@ def _(mo):
     return
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    # Appendix: utilities
+    """)
+    return
+
+
 @app.cell
-def _():
+def _(all_results, pl):
+    def download_trees():
+        import subprocess as sp
+        trees = (
+            all_results
+            .filter(pl.col("machine").struct.field("node_name") != "nixos")
+            .filter(pl.col("parameters").struct.field("epsilon") == 0.0)
+            .filter(pl.col("dataset_sample_frac").is_null())
+            .unnest("detail")
+            .filter(pl.col("flexibility@0.0").is_null().not_())
+            .select("tree_path")["tree_path"].to_list()
+        )
+        for tree in trees:
+            cmd = ["rsync", "--progress", "ceccarello@login.dei.unipd.it:/nfsd/lovelace/monaco/" + tree, "results/"]
+            sp.run(cmd)
+
     return
 
 

@@ -35,6 +35,13 @@
         #   self = python;
         # };
 
+        libraryPath = with pkgs;
+          lib.makeLibraryPath [
+            # add other library packages here if needed
+            stdenv.cc.cc
+            stdenv.cc.libc
+          ];
+
         fast-hdbscan = python.pkgs.buildPythonPackage rec {
           pname = "fast_hdbscan";
           version = "0.2.2";
@@ -195,6 +202,7 @@
               (ps:
                 with ps; [
                   build
+                  marimo
                   numpy
                   pandas
                   polars
@@ -202,11 +210,11 @@
                   matplotlib
                   seaborn
                   filelock
-                  tornado
                   umap-learn
                   h5py
                   nanobind
                   icecream
+                  great-tables
                   scikit-build-core
                   certifi
                   sigmod-hdbscan.packages.${system}.default
@@ -236,6 +244,9 @@
             nanobench
           ];
 
+          shellHook = ''
+            export "LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${libraryPath}"
+          '';
           NIX_ENFORCE_NO_NATIVE = false;
         };
       }
