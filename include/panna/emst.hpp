@@ -590,8 +590,6 @@ namespace panna {
                 std::vector<Edge> output;
                 std::vector<Edge> candidates;
                 candidates.reserve( 10 * dsu.size() );
-                std::vector<std::pair<uint64_t, Edge>> candidate_pairs;
-                candidate_pairs.reserve( 10 * dsu.size() );
                 auto [cnt_dist, cnt_collisions] = table.search_pairs_different_groups(
                     repetition,
                     prefix,
@@ -608,33 +606,12 @@ namespace panna {
                             if (e.weight > max_distance) {
                                 max_distance = e.weight;
                             }
-                            const uint32_t ca = filter.cfind( e.a );
-                            const uint32_t cb = filter.cfind( e.b );
-                            const uint32_t lo = std::min( ca, cb );
-                            const uint32_t hi = std::max( ca, cb );
-                            const uint64_t key = ( static_cast<uint64_t>( lo ) << 32 ) | hi;
-                            candidate_pairs.emplace_back( key, e );
+                            candidates.push_back( e );
                         }
                         avg_denom += scratch.size();
                         return found.load(); // early stop if the solution has been found in the meantime
                     } );
-                if ( !candidate_pairs.empty() ) {
-                    std::sort( candidate_pairs.begin(), candidate_pairs.end(),
-                               []( const auto& l, const auto& r ) {
-                                   if ( l.first != r.first ) {
-                                       return l.first < r.first;
-                                   }
-                                   return l.second.weight < r.second.weight;
-                               } );
-                    candidates.reserve( candidate_pairs.size() );
-                    uint64_t last_key = candidate_pairs.front().first;
-                    candidates.push_back( candidate_pairs.front().second );
-                    for ( size_t idx = 1; idx < candidate_pairs.size(); ++idx ) {
-                        if ( candidate_pairs.at( idx ).first != last_key ) {
-                            candidates.push_back( candidate_pairs.at( idx ).second );
-                            last_key = candidate_pairs.at( idx ).first;
-                        }
-                    }
+                if ( !candidates.empty() ) {
                     std::sort( candidates.begin(), candidates.end() );
                     kruskal_new_edges( local_tree, candidates, dsu, output );
                 }
@@ -642,7 +619,7 @@ namespace panna {
                 // clang-format off
                 LOG_INFO("logger", "worker", "tid", tid, "repetition", repetition, "prefix", prefix,
                           "cnt_distances", cnt_dist, "cnt_collisions", cnt_collisions,
-                          "unique_component_pairs", candidates.size(),
+                          "candidate_edges", candidates.size(),
                           "average_distance", avg_distance,
                           "min_distance", min_distance,
                           "max_distance", max_distance);
@@ -1237,9 +1214,9 @@ namespace panna {
         }
 
         StoppingConditionInfo stopping_condition( std::vector<Edge> tree,
-                                                  size_t i,
-                                                  size_t j,
-                                                  const CoreDistances& core_distances ) {
+                              size_t i,
+                              size_t j,
+                              [[maybe_unused]] const CoreDistances& core_distances ) {
             float prob = 0.0f;
             float weight = 0.0f;
             size_t idx = 0;

@@ -1,4 +1,4 @@
 #pragma once
 
-constexpr char GIT_COMMIT_HASH[] = "0a9c5e9";
+constexpr char GIT_COMMIT_HASH[] = "d4fc68f";
 
