@@ -25,8 +25,9 @@ def _():
     import great_tables
     from great_tables import GT
     import seaborn as sns
+    import matplotlib.pyplot as plt
 
-    return cs, mo, pl, sns
+    return cs, mo, pl, plt, sns
 
 
 @app.cell
@@ -56,7 +57,7 @@ def _(mo, pl, sel_algo_version):
         .filter(pl.col("timestamp") == pl.col("timestamp").max().over(pkey))
         .with_columns(pl.col("dataset").str.replace("-[0-9]+-(euclidean|angular|normalized)", ""))
     )
-    algo_name = mo.ui.dropdown.from_series(full_results["algorithm"])
+    algo_name = mo.ui.dropdown.from_series(full_results["algorithm"], value="k+")
     algo_name
     return algo_name, full_results
 
@@ -98,24 +99,38 @@ def _(mo):
 @app.cell
 def _(pl):
     sizes = pl.DataFrame([
-        {"dataset": "fashion-mnist", "n": 60000, "d": 784},
-        {"dataset": "gist", "n": 1000000, "d": 960},
-        {"dataset": "glove", "n": 1183514, "d": 100},
-        {"dataset": "imagenet", "n": 1281167, "d": 512},
-        {"dataset": "landmark-nomic", "n": 760757, "d": 768},
-        {"dataset": "nytimes", "n": 290000, "d": 256},
-        {"dataset": "sift", "n": 1000000, "d": 128},
-        {"dataset": "simplewiki-openai", "n": 260372, "d": 3072},
-        {"dataset": "ht", "n": 928991, "d": 11},
-        {"dataset": "census", "n": 223223, "d": 500},
-        {"dataset": "pamap2", "n": 2872533, "d": 4},
-        {"dataset": "chem", "n": 4208261, "d": 12}
+        {"dataset": "fashion-mnist", "n": 60000, "d": 784, "diameter": 5726.4541015625},
+        {"dataset": "gist", "n": 1000000, "d": 960, "diameter": 9.485732078552246},
+        {"dataset": "glove", "n": 1183514, "d": 100, "diameter": 26.123464584350586},
+        {"dataset": "imagenet-clip", "n": 1281167, "d": 512, "diameter": 1.4205868244171143},
+        {"dataset": "landmark-nomic", "n": 760757, "d": 768, "diameter": 1.2240471839904785},
+        {"dataset": "nytimes", "n": 290000, "d": 256, "diameter": 1.7088205814361572},
+        {"dataset": "sift", "n": 1000000, "d": 128, "diameter": 719.6067504882812},
+        {"dataset": "simplewiki-openai", "n": 260372, "d": 3072, "diameter": 1.5124},
+        {"dataset": "ht", "n": 928991, "d": 11, "diameter": 378.7154541015625},
+        {"dataset": "census", "n": 223223, "d": 500, "diameter": 11.313708305358887},
+        {"dataset": "pamap2", "n": 2872533, "d": 4, "diameter": 663.171264648437},
+        {"dataset": "chem", "n": 4208261, "d": 12, "diameter": 81767.921875}
     ])
     return (sizes,)
 
 
 @app.cell
-def _(all_results, cs, pl, sizes):
+def _(pl):
+    mean_distances = (
+        pl.read_csv("results/avg-weight.csv")
+        .with_columns(
+            pl.col("dataset").str.replace(
+                "-[0-9]+-(euclidean|angular|normalized)", ""
+            )
+        )
+        .select("dataset", "mean_distance")
+    )
+    return (mean_distances,)
+
+
+@app.cell
+def _(all_results, cs, expected_cost_expr, mean_distances, pl, sizes):
     dataset_stats = (
         all_results
         .filter(pl.col("machine").struct.field("node_name") != "nixos")
@@ -124,27 +139,54 @@ def _(all_results, cs, pl, sizes):
         .unnest("detail")
         .filter(pl.col("flexibility@0.0").is_null().not_())
         .join(sizes, on="dataset", how="left")
+        .join(mean_distances, on="dataset", how="left")
         .sort(pl.col("d"))
         .with_columns(tree_edges = pl.col("n") - 1)
         .with_columns(cs.starts_with("flexibility") / pl.col("tree_edges"))
+        .with_columns(expected_cost = expected_cost_expr)
     )
     return (dataset_stats,)
 
 
 @app.cell
-def _(dataset_stats, mo):
-    tree_dataset = mo.ui.dropdown(dataset_stats["dataset"].to_list(), label="select dataset to show tree")
-    tree_dataset
-    return (tree_dataset,)
+def _(pl):
+    expected_cost_expr = pl.col("n")**(1/pl.col("contrast@0.0")**2) * pl.col("mass@0.0")
+    return (expected_cost_expr,)
 
 
 @app.cell
-def _(dataset_stats, pl, sns, tree_dataset):
-    tree_info = dataset_stats.filter(pl.col("dataset") == tree_dataset.value).select("tree_path").to_dicts()[0]
-    sns.ecdfplot(
-        data=pl.read_parquet(tree_info["tree_path"]),
-        x="weight",
-    )
+def _(dataset_stats, mo):
+    tree_dataset = mo.ui.dropdown(dataset_stats["dataset"].to_list(), label="select dataset to show tree", value="glove")
+    tree_dataset
+    return
+
+
+@app.cell
+def _(dataset_stats, pl, plt):
+    def plot_all_tree_weights():
+        """Plots the distribution of the weights of all trees"""
+        import os
+        datasets = dataset_stats.select("dataset").unique()["dataset"].to_list()
+        fig = plt.figure()
+        for dataset in datasets:
+            tree_info = dataset_stats.filter(pl.col("dataset") == dataset).select("tree_path").to_dicts()[0]
+            diameter = dataset_stats.filter(pl.col("dataset") == dataset)["diameter"][0]
+            avg_weight = dataset_stats.filter(pl.col("dataset") == dataset)["mean_distance"][0]
+            path = tree_info["tree_path"]
+            if not os.path.isfile(path):
+                continue
+            df = pl.read_parquet(tree_info["tree_path"]).with_row_index().with_columns(
+                rank = pl.col("index") / pl.col("index").max(),
+                weight = pl.col("weight") / diameter
+            )
+            plt.plot(df["rank"], df["weight"], label=dataset)
+            # plt.axhline(avg_weight / diameter)
+        
+        plt.legend()
+        plt.ylim(0,1)
+        plt.show()
+
+    plot_all_tree_weights()
     return
 
 
@@ -152,15 +194,23 @@ def _(dataset_stats, pl, sns, tree_dataset):
 def _(cs, dataset_stats):
     dataset_stats_tbl = (
         dataset_stats
-        .select("dataset", "n", "d", "mass-frac@0.0", "mass-frac@0.5", "mass-frac@1.0", "flexibility@0.5", "flexibility@1.0")
+        .select("dataset", "n", "d",# pl.col("expected_cost") / pl.col("n"),
+                "mass-frac@0.0", "mass-frac@0.5", "mass-frac@1.0",
+                # "flexibility@0.5", "flexibility@1.0",
+                "contrast@0.0", "contrast@0.5", "contrast@1.0")
+        # .sort("expected_cost")
         .style
+        # .fmt_number(columns=["expected_cost"])
         .fmt_percent(columns=cs.starts_with("mass"))
         .fmt_percent(columns=cs.starts_with("flexibility"), decimals=3)
         .fmt_number(columns=["n", "d"], decimals=0)
+        .fmt_number(columns=cs.starts_with("contrast"), decimals=2)
         .tab_spanner(label="Edge mass (percent)", columns=cs.starts_with("mass"))
-        .cols_label_with(fn=lambda c: c.split("@")[-1], columns=cs.starts_with("mass"))
-        .tab_spanner(label="Edge flexibility", columns=cs.starts_with("flexibility"))
-        .cols_label_with(fn=lambda c: c.split("@")[-1], columns=cs.starts_with("flexibility"))
+        .cols_label_with(fn=lambda c: "ε=" + c.split("@")[-1], columns=cs.starts_with("mass"))
+        # .tab_spanner(label="Edge flexibility", columns=cs.starts_with("flexibility"))
+        # .cols_label_with(fn=lambda c: c.split("@")[-1], columns=cs.starts_with("flexibility"))
+        .tab_spanner(label="Contrast", columns=cs.starts_with("contrast"))
+        .cols_label_with(fn=lambda c: "ε=" + c.split("@")[-1], columns=cs.starts_with("contrast"))
     )
 
     with open("notebooks/dataset-stats.tex", "w") as _fp:
@@ -179,17 +229,25 @@ def _(mo):
 
 
 @app.cell
-def _(all_results, pl):
+def _(all_results, dataset_stats, pl):
     approximate_full = (
         all_results
+        .filter(pl.col("machine").struct.field("node_name") == "lovelace")
         .filter(pl.col("dataset_sample_frac").is_null())
         .filter(pl.col("parameters").struct.field("repetitions") == 512)
+        # .group_by("dataset", "parameters")
+        # .mean(pl.col("*"))
+        .join(dataset_stats, on="dataset", how="full")
         .with_columns(
-            ground_weight = pl.col("emst_weight").min().over("dataset")
+            ground_weight = pl.col("emst_weight").min().over("dataset"),
+            num_edges = pl.col("n") * (pl.col("n") - 1) / 2
         )
         .with_columns(
             weight_factor= pl.col("emst_weight") / pl.col("emst_weight").min().over("dataset"),
             relative_error = (pl.col("emst_weight") - pl.col("ground_weight")) / pl.col("ground_weight")
+        )
+        .with_columns(
+            distcomps = pl.col("detail").struct.field("distance_count") / pl.col("num_edges")
         )
         .filter(pl.col("parameters").struct.field("epsilon") >= 0.0)
         .select(pl.col("dataset"), 
@@ -199,28 +257,44 @@ def _(all_results, pl):
                 pl.col("parameters")
                     .struct.field("epsilon").alias("epsilon"),
                 pl.col("running_time_s"),
-                pl.col("relative_error")
+                pl.col("relative_error"),
+                pl.col("distcomps")
         )
         .sort("dataset", "algorithm", "repetitions", "epsilon")
         .filter(pl.col("algorithm") == "k+")
-        .select("dataset", "epsilon", "running_time_s", "relative_error")
+        .select("dataset", "epsilon", "running_time_s", "relative_error", "distcomps")
     )
     approximate_full
     return (approximate_full,)
 
 
 @app.cell
+def _(approximate_full, sns):
+    sns.barplot(
+        data=approximate_full,
+        y="dataset",
+        x="running_time_s",
+        hue="epsilon",
+        ci=False
+    )
+    return
+
+
+@app.cell
 def _(approximate_full, cs):
     approximate_full_tbl = (
         approximate_full
-        .pivot(index=["dataset"], on="epsilon", values=["running_time_s", "relative_error"], aggregate_function="mean")
+        .pivot(index=["dataset"], on="epsilon", values=["running_time_s", "relative_error", "distcomps"], aggregate_function="mean")
         .style
         .fmt_number(columns=cs.starts_with("running_time"))
         .fmt_percent(columns=cs.starts_with("relative_error"))
-        .tab_spanner(label="Time (s)", columns=cs.starts_with("running_time"))
+        .fmt_percent(columns=cs.starts_with("distcomps"))
+        .tab_spanner(label="Time (n)", columns=cs.starts_with("running_time"))
         .tab_spanner(label="Relative error", columns=cs.starts_with("relative_error"))
+        .tab_spanner(label="Distance computations", columns=cs.starts_with("distcomps"))
         .cols_label_with(fn=lambda c: c.split("_")[-1], columns=cs.starts_with("running_time_s"))
         .cols_label_with(fn=lambda c: c.split("_")[-1], columns=cs.starts_with("relative_error"))
+        .cols_label_with(fn=lambda c: c.split("_")[-1], columns=cs.starts_with("distcomps"))
     )
 
     with open("notebooks/emst-epsilon.tex", "w") as fp:
@@ -275,7 +349,7 @@ def _(mo):
 
 @app.cell
 def _(all_results, pl):
-    def download_trees():
+    def download_trees(base="ceccarello@login.dei.unipd.it:/nfsd/lovelace/monaco/"):
         import subprocess as sp
         trees = (
             all_results
@@ -287,9 +361,10 @@ def _(all_results, pl):
             .select("tree_path")["tree_path"].to_list()
         )
         for tree in trees:
-            cmd = ["rsync", "--progress", "ceccarello@login.dei.unipd.it:/nfsd/lovelace/monaco/" + tree, "results/"]
+            cmd = ["rsync", "--progress", base + tree, "results/"]
             sp.run(cmd)
 
+    download_trees("algo:panna/")
     return
 
 
