@@ -6,7 +6,6 @@
 #include <iostream>
 #include <iterator>
 #include <limits>
-#include <unordered_map>
 #include <vector>
 #include <thread>
 
@@ -24,12 +23,16 @@ namespace panna {
     // the underlying algorithm/implementation
     //
     // Changelog:
+    // 5: remove the accumulation of the minimum edge between components,
+    //    as it scales quadratically with the number of components (very bad
+    //    at the beginning of the execution)
     // 4: hash ancestor data structure, moved the connected components filter
-    // 3: sampling on the tuning, all multiplications as AVX instructions
-    // 2: unrolled Euclidean distance
+    // 3: use a sample of the dataset for the computation of the scale of the hash
+    //    function. All multiplications use AVX instructions
+    // 2: unrolled Euclidean distance computation
     // 1: collect additional metrics (memory index and execution profile)
     //    that are available through Python wrapper
-    const std::string EMST_VERSION = "4";
+    const std::string EMST_VERSION = "5";
 
     struct StoppingConditionInfo {
         const float total_weight;
@@ -589,7 +592,8 @@ namespace panna {
                 DSU filter = rr->filter;
                 DSU dsu( filter );
                 std::vector<Edge> output;
-                std::unordered_map<uint64_t, Edge> best_by_component_pair;
+                std::vector<Edge> candidates;
+                candidates.reserve(10*dsu.size());
                 auto [cnt_dist, cnt_collisions] = table.search_pairs_different_groups(
                     repetition,
                     prefix,
@@ -606,28 +610,14 @@ namespace panna {
                             if (e.weight > max_distance) {
                                 max_distance = e.weight;
                             }
-                            const uint32_t ca = filter.cfind( e.a );
-                            const uint32_t cb = filter.cfind( e.b );
-                            const uint32_t lo = std::min( ca, cb );
-                            const uint32_t hi = std::max( ca, cb );
-                            const uint64_t key = ( static_cast<uint64_t>( lo ) << 32 ) | hi;
-                            auto it = best_by_component_pair.find( key );
-                            if ( it == best_by_component_pair.end() || e.weight < it->second.weight ) {
-                                best_by_component_pair[key] = e;
-                            }
                         }
                         avg_denom += scratch.size();
+
+                        std::sort( scratch.begin(), scratch.end() );
+                        kruskal_new_edges(local_tree, scratch, dsu, output);
+
                         return found.load(); // early stop if the solution has been found in the meantime
                     } );
-                std::vector<Edge> candidates;
-                candidates.reserve( best_by_component_pair.size() );
-                for ( auto&& [_, e] : best_by_component_pair ) {
-                    candidates.push_back( e );
-                }
-                if ( !candidates.empty() ) {
-                    std::sort( candidates.begin(), candidates.end() );
-                    kruskal_new_edges( local_tree, candidates, dsu, output );
-                }
                 float avg_distance = sum_distances / avg_denom;
                 // clang-format off
                 LOG_INFO("logger", "worker", "tid", tid, "repetition", repetition, "prefix", prefix,
@@ -636,38 +626,6 @@ namespace panna {
                           "min_distance", min_distance,
                           "max_distance", max_distance);
                 // clang-format on
-                /*
-                                            }
-                            const uint32_t ca = filter.cfind( e.a );
-                            const uint32_t cb = filter.cfind( e.b );
-                            const uint32_t lo = std::min( ca, cb );
-                            const uint32_t hi = std::max( ca, cb );
-                            const uint64_t key = ( static_cast<uint64_t>( lo ) << 32 ) | hi;
-                            auto it = best_by_component_pair.find( key );
-                            if ( it == best_by_component_pair.end() || e.weight < it->second.weight ) {
-                                best_by_component_pair[key] = e;
-                            }
-                        }
-                        avg_denom += scratch.size();
-                        return found.load(); // early stop if the solution has been found in the meantime
-                    } );
-                candidates.reserve( best_by_component_pair.size() );
-                for ( auto&& [_, e] : best_by_component_pair ) {
-                    candidates.push_back( e );
-                }
-                if ( !candidates.empty() ) {
-                    std::sort( candidates.begin(), candidates.end() );
-                    kruskal_new_edges( local_tree, candidates, dsu, output );
-                }
-                float avg_distance = sum_distances / avg_denom;
-                // clang-format off
-                LOG_INFO("logger", "worker", "tid", tid, "repetition", repetition, "prefix", prefix,
-                          "cnt_distances", cnt_dist, "cnt_collisions", cnt_collisions,
-                          "unique_component_pairs", candidates.size(),
-                          "average_distance", avg_distance,
-                          "min_distance", min_distance,
-                          "max_distance", max_distance);
-                */
                 count_distances += cnt_dist;
                 count_collisions += cnt_collisions;
                 expect(cnt_dist == cnt_collisions);
