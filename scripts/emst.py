@@ -314,9 +314,12 @@ def worker(fn, fn_args, queue, emst_stats=False):
         n = data.shape[0]
         npairs = n * (n - 1) // 2
         detail |= dict(diameter=float(diameter))
-        bounds, counts, _mean_weight = compute_cumulative_distance_distribution(
+        bounds, counts, mean_weight = compute_cumulative_distance_distribution(
             data, tree_weights.min(), diameter
         )
+        detail["mean_weight"] = float(mean_weight)
+        detail["n"] = int(data.shape[0])
+        detail["d"] = int(data.shape[1])
         for epsilon in [0.0, 0.01, 0.1, 0.2, 0.5, 1.0]:
             flexibility = compute_flexibility(tree_weights, epsilon, diameter)
             threshold = tree_weights[-flexibility - 1]
