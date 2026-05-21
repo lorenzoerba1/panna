@@ -352,12 +352,11 @@ def run_single(
     cluster: bool = False,
     cluster_k: int = 5,
 ):
-    # TODO: add the possibility to sample data, recording it to the primary key
     dataset = Path(dataset).stem
     _, data = panna.datasets.load(
         dataset,
         pca_dimensions=4 if "pamap2" in dataset else None,
-        normalize=False,
+        normalize="angular" in dataset,
     )
     if sample_frac is not None:
         sample_size = int(sample_frac * data.shape[0])
