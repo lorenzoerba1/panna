@@ -33,7 +33,7 @@ def _():
 @app.cell
 def _(mo):
     sel_algo_version = mo.ui.dropdown(
-            ["0", "0.2.2", "1", "2", "3", "4"],
+            ["0", "0.2.2", "1", "2", "3", "4", "5"],
             label="algorithm version",
             value="4",
         )
@@ -181,7 +181,7 @@ def _(dataset_stats, pl, plt):
             )
             plt.plot(df["rank"], df["weight"], label=dataset)
             # plt.axhline(avg_weight / diameter)
-        
+
         plt.legend()
         plt.ylim(0,1)
         plt.show()
