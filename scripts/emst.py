@@ -55,6 +55,8 @@ def get_version(algorithm: str):
         return dict(version=panna.EMST.version, git_version=get_git_version())
     elif algorithm == "tutte":
         return dict(version=version("fast_hdbscan"), git_version="")
+    else:
+        raise ValueError(f"unknown algorithm `{algorithm}`")
 
 
 def get_processor_name():
@@ -198,7 +200,7 @@ class Entry(object):
     running_time_s: float | None = None
     memory_kb: int | None = None
     emst_weight: float | None = None
-    detail: dict | None = None
+    detail: dict = dataclasses.field(default_factory=dict)
     profile_path: str | None = None
 
     def as_dict(self):
@@ -413,6 +415,7 @@ def run_single(
         entry.running_time_s = -TIMEOUT_S
     else:
         print("Process joined")
+        assert proc.exitcode == 0
         emst_weight, elapsed_s, peak_memory_kb, detail_file_name = queue.get()
         with open(detail_file_name) as fp:
             detail = json.load(fp)
@@ -471,70 +474,6 @@ def run_experiments(datasets=None, cluster: bool = False, cluster_k: int = 5):
                     tutte_params,
                     sample_frac=sample_frac
                 )
-
-
-def show_results():
-    if not DATABASE_FILE.is_file():
-        print(f"Database file '{DATABASE_FILE}' not found.")
-        return
-    with FileLock(LOCKFILE):
-        df = pl.read_ndjson(DATABASE_FILE, infer_schema_length=None)
-
-        # Get the commit dates
-        dates = (
-            df.unique("git_version")
-            .filter(
-                pl.col("git_version").str.len_chars() > 0,
-                pl.col("git_version") != "dirty",
-            )
-            .select(
-                "git_version",
-                pl.col("git_version")
-                .map_elements(get_commit_date)
-                .alias("commit_date"),
-            )
-            .drop_nulls()
-        )
-        df = df.join(dates, on="git_version", how="left")
-
-        # For each experiment, only retain the most recent run
-        df = df.filter(
-            pl.col("timestamp")
-            == pl.col("timestamp")
-            .max()
-            .over(
-                "algorithm",
-                "parameters",
-                "machine",
-                "dataset",
-                "dataset_sample_frac",
-                "dataset_sample_seed",
-                "dataset_sha",
-            )
-        )
-
-        machines = df.select("machine").unique()["machine"].to_list()
-        for m in machines:
-            print(f"===== Machine {m}")
-            print("----- Full datasets ------")
-            print(
-                df.filter(pl.col("machine") == m, pl.col("dataset_sample_frac").is_null())
-                .select("dataset", "algorithm", "parameters", "memory_kb", "running_time_s")
-            )
-
-            print("----- Sampled datasets ------")
-            print(
-                df.filter(pl.col("machine") == m, pl.col("dataset_sample_frac").is_null().not_())
-                .select(
-                    "dataset",
-                    "dataset_sample_frac",
-                    "algorithm",
-                    "parameters",
-                    "memory_kb",
-                    "running_time_s",
-                )
-                .sort("*")
-            )
 
 
 def merge_results(other_file: Path):
@@ -621,9 +560,6 @@ def main():
         help="Number of neighbors for the clustering variant (default: 5).",
     )
 
-    # show command
-    subparsers.add_parser("show", help="Show results from emst.json.")
-
     # merge command
     merge_parser = subparsers.add_parser(
         "merge", help="Merge another ndjson file into emst.json."
@@ -646,8 +582,6 @@ def main():
         else:
             print("Running on all available datasets.")
         run_experiments(datasets_to_run, cluster=args.cluster, cluster_k=args.cluster_k)
-    elif args.command == "show":
-        show_results()
     elif args.command == "merge":
         merge_results(args.file)
     elif args.command == "convert":
