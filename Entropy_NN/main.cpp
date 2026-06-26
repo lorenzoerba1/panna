@@ -9,7 +9,7 @@ g++ -std=c++20 Entropy_NN/main.cpp -Iinclude -Iexternal -O2 -fopenmp -o Entropy_
 ./Entropy_NN/main
 
 Con Cmake entropy_nn
-
+cambio
 per runnare il test di panna:
 ./tests
 
