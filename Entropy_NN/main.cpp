@@ -1,4 +1,16 @@
 /*
+per runnare la libreria: 
+$env:CXX = "g++"
+$env:CC = "gcc"
+
+PS C:\Users\dani0\Desktop\Lori_uniPD\tesi\panna\build> cmake .. -G "MinGW Makefiles" `
+   -DCMAKE_C_COMPILER=gcc `
+   -DCMAKE_CXX_COMPILER=g++ `
+   -DCMAKE_PREFIX_PATH="C:/msys64/ucrt64" `
+   -DPython_EXECUTABLE="C:/Users/dani0/AppData/Local/Python/bin/python.exe"
+
+mingw32-make
+
 per runnare senza CMake usare:
 g++ -std=c++17 Entropy_NN/main.cpp -Iinclude -Iexternal -O2 -fopenmp -o Entropy_NN/main
 
@@ -7,6 +19,7 @@ g++ -std=c++20 Entropy_NN/main.cpp -Iinclude -Iexternal -O2 -fopenmp -o Entropy_
 
 
 ./Entropy_NN/main
+python Entropy_NN/plot.py
 
 Con Cmake entropy_nn
 cambio
@@ -22,7 +35,7 @@ Spiegazione libreria:
 
 
 
-    -data.hpp contiene i tipi di rrappresentazione dei punti nello spazio: ::EuclideanPoints:: per i punti in uno spazio euclideo
+    -data.hpp contiene i tipi di rappresentazione dei punti nello spazio: ::EuclideanPoints:: per i punti in uno spazio euclideo
         ::UnitNormPoints:: per punti normalizzati, ::NormedPoints:: oer cosine/angular search
 
 
@@ -51,6 +64,7 @@ Prossime cose:
 #include "panna/lsh/euclidean.hpp"
 #include "panna/lsh/values.hpp"
 #include <cmath>
+#include <fstream>
 #include <unordered_map>
 #include <sstream>
 
@@ -58,13 +72,14 @@ Prossime cose:
 using namespace panna;
 using namespace std;
 
-size_t N = 10000;
-size_t d = 50;
-float R = 1000.0f;
+size_t N = 10;
+size_t d = 2;
+float R = 0.2f;
 float c = 2.0f;
 float delta = 0.05;
+const size_t min_iterations = 100;
 
-constexpr uint8_t K = 4;
+constexpr uint8_t K = 6;
 
 using Dataset  = EuclideanPoints;
 using Distance = EuclideanDistance;
@@ -77,8 +92,7 @@ using Value = Hasher::Value;
 
 
 
-float estimate_entropy(const unordered_map<string, size_t>& bucket_counter, size_t total_samples)
-{
+float estimate_entropy(const unordered_map<string, size_t>& bucket_counter, size_t total_samples){
     float entropy = 0.0f;
 
     for (const auto& [bucket, count] : bucket_counter) {
@@ -111,16 +125,14 @@ void displayVisitedBuckets(unordered_map<string, size_t> bucket_counter) {
 }
 
 //function to create hash tables
-void build_lsh_table(Dataset& points, size_t repetitions, Hasher& hasher, vector<PrefixMap<Value>>& tables)
-{
+void build_lsh_table(Dataset& points, size_t repetitions, Hasher& hasher, vector<PrefixMap<Value>>& tables){
     tables.resize(repetitions);
 
     PrefixMap<Value>::populate_from(tables, points, hasher);
 }
 
 
-void build_hasher(Dataset& points, size_t repetitions, Hasher& hasher)
-{
+void build_hasher(Dataset& points, size_t repetitions, Hasher& hasher){
     //mettere w a mano (deviazione standard gaussiana campionata)
     Builder builder(points.get_dimensions());
 
@@ -130,16 +142,14 @@ void build_hasher(Dataset& points, size_t repetitions, Hasher& hasher)
 }
 
 //gives a bucket a unique string value
-string bucket_to_string(const Value& h)
-{
+string bucket_to_string(const Value& h){
     stringstream ss;
     ss << h;
     return ss.str();
 }
 
 //Sample around the point q in a sphere of range radius
-EuclideanPoints sample_around(const EuclideanPointHandle& q, float radius)
-{
+EuclideanPoints sample_around(const EuclideanPointHandle& q, float radius){
     EuclideanPoints u(q.dimensions);
 
     // Direzione casuale
@@ -184,8 +194,7 @@ EuclideanPoints sample_around(const EuclideanPointHandle& q, float radius)
 
 
 //function to display points
-void displayPoint(int number_of_dimentions_displayed, EuclideanPointHandle p)
-{
+void displayPoint(int number_of_dimentions_displayed, EuclideanPointHandle p){
     for(size_t i = 0; i < 20; i++) {
         cout << p.vector[i] << " ";
     }
@@ -195,8 +204,7 @@ void displayPoint(int number_of_dimentions_displayed, EuclideanPointHandle p)
 
 
 
-vector<float> make_query(size_t d)
-{
+vector<float> make_query(size_t d){
     vector<float> q(d);
 
     for (size_t i = 0; i < d; i++) {
@@ -207,6 +215,109 @@ vector<float> make_query(size_t d)
 
     return q;
 }
+
+
+
+pair<uint32_t, float> brute_force_nn(const Dataset& points, const EuclideanPointHandle& query) {
+    uint32_t best_idx = 0;
+    float best_dist = numeric_limits<float>::infinity();
+
+    for (uint32_t i = 0; i < points.size(); i++) {
+
+        float dist = EuclideanDistance::compute(points[i], query);
+
+        if (dist < best_dist) {
+            best_dist = dist;
+            best_idx = i;
+        }
+    }
+
+    return {best_idx, best_dist};
+}
+
+
+
+void save_dataset(
+    const Dataset& points,
+    const string& filename = "Entropy_NN/dataset.csv")
+{
+    ofstream file(filename);
+
+    file << "x,y\n";
+
+    for(size_t i=0;i<points.size();i++) {
+
+        file
+            << points[i].vector[0] << ","
+            << points[i].vector[1]
+            << "\n";
+    }
+}
+
+
+void save_hash_functions(
+    const Hasher& hasher,
+    const std::string& filename = "Entropy_NN/hash_functions.csv"
+)
+{
+    std::ofstream file(filename);
+
+    file << "id,ax,ay,offset,width\n";
+
+    float w = hasher.get_quantization_width();
+
+    // K = numero di concatenazioni
+    for (size_t i = 0; i < K; i++) {
+
+        auto a = hasher.get_random_vector(i);
+
+        file
+            << i << ","
+            << a.vector[0] << ","
+            << a.vector[1] << ","
+            << hasher.get_offset(i) << ","
+            << w
+            << "\n";
+    }
+
+    file.close();
+}
+
+
+void save_query(
+    const EuclideanPointHandle& q,
+    float R,
+    float c)
+{
+    ofstream file("Entropy_NN/query.csv");
+
+    file << "x,y,R,cR\n";
+
+    file
+        << q.vector[0] << ","
+        << q.vector[1] << ","
+        << R << ","
+        << c*R << "\n";
+
+    file.close();
+}
+
+
+void save_bucket_visits(
+    const unordered_map<string,size_t>& bucket_counter,
+    const string& filename="Entropy_NN/bucket_visits.csv")
+{
+    ofstream file(filename);
+
+    file << "bucket,visits\n";
+
+    for(const auto& [bucket,count] : bucket_counter)
+        file << bucket << "," << count << "\n";
+}
+
+
+
+
 
 
 
@@ -260,29 +371,6 @@ int main() {
 
     cout << "\nQuery bucket: "<< q_hashes[0]<< " "<< endl;
 
-    /*
-    //retrieve point in the query
-
-    //cursor has the values with same hash of the query point
-    auto cursor = tables[0].create_cursor(q_hashes[0]);
-
-    //ranges is a vecto with all the indices of the hash with hash of the cursor
-    auto ranges = cursor.get_indices();
-
-    //since hash is ordered, we know thah all value with same hash are between first and last
-    auto begin = ranges[0].first;
-    auto end   = ranges[0].second;
-
-    cout << endl << "number of points in the same bucket " << end - begin << endl;
-    cout << "starting from " << *begin << " to " << *(end) << endl;
-    cout << "Points in same bucket:\n";
-
-    for (auto it = begin; it != end; ++it) {
-        uint32_t idx = *it;
-        cout << idx << " ";
-    }
-    cout << endl;
-    */
 
 
     //parte di sample intorno alla query
@@ -290,14 +378,13 @@ int main() {
     cout << "\n=========================\n";
     cout << "\nSTART SEARCHING\n";
     cout << "\n=========================\n";
-    const size_t min_iterations = 10;
     size_t t = 1;
     unordered_map<string, size_t> bucket_counter;
     bool found = false;
     float entropy = 0;
 
 
-    while (!found && (t < entropy * pow(2.0f, entropy) * log(1/delta)|| t < min_iterations)) {
+    while (!found && (t < entropy * pow(2.0f, entropy) * log(1/delta)|| t <= min_iterations)) {
 
         cout << "\n=========================\n";
         cout << "Iteration " << int(t) << endl;
@@ -374,14 +461,31 @@ int main() {
 
     //displayVisitedBuckets(bucket_counter);
 
-    cout << "\number of iterations t "<< t - 1<< "\n";
-    cout << "\nEntropy: " << pow(2.0f, entropy)* log(1/delta) * entropy << entropy << "\n";
+    cout << "\nnumber of iterations t "<< t - 1<< "\n";
+    cout << "\nEntropy: " << pow(2.0f, entropy)* log(1/delta) * entropy << "\n";
+
+
+    auto [nn_idx, nn_dist] = brute_force_nn(points, q_handle);
+
+    cout << "\nTrue nearest neighbour:\n";
+    cout << "Index = " << nn_idx << endl;
+    cout << "Distance = " << nn_dist << endl;
+    //the point will be auto nn_point = points[nn_idx];
 
 
 
 
 
 
+
+
+    save_dataset(points);
+
+    save_query(q_handle, R, c);
+
+    save_hash_functions(hasher);
+
+    save_bucket_visits(bucket_counter);
     cout << endl;
     return 0;
 }
